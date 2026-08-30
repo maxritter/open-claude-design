@@ -153,7 +153,9 @@ if ! command -v uv > /dev/null 2>&1; then
   tar -xzf "$STAGING_DIR/$uv_archive" -C "$STAGING_DIR/uv-extracted"
   uv_binary="$(find "$STAGING_DIR/uv-extracted" -type f -name uv -print -quit)"
   uvx_binary="$(find "$STAGING_DIR/uv-extracted" -type f -name uvx -print -quit)"
-  [ "$uv_binary" != "" ] && [ -x "$uv_binary" ] || fail "uv archive is incomplete"
+  if [ "$uv_binary" = "" ] || [ ! -x "$uv_binary" ]; then
+    fail "uv archive is incomplete"
+  fi
   case "$UV_ROOT" in
     "$HOME/.local/share/open-claude-design/uv") ;;
     *) fail "refusing unexpected managed uv destination" ;;
@@ -208,7 +210,9 @@ if ! node_is_compatible; then
   [ "$node_actual" = "$node_expected" ] || fail "Node.js archive checksum mismatch"
   tar -xzf "$STAGING_DIR/$node_archive" -C "$STAGING_DIR"
   node_extracted="$STAGING_DIR/node-v${SKILLS_NODE_VERSION}-${node_platform}-${node_arch}"
-  [ -x "$node_extracted/bin/node" ] && [ -x "$node_extracted/bin/npx" ] || fail "Node.js archive is incomplete"
+  if [ ! -x "$node_extracted/bin/node" ] || [ ! -x "$node_extracted/bin/npx" ]; then
+    fail "Node.js archive is incomplete"
+  fi
   case "$SKILLS_NODE_ROOT" in
     "$HOME/.local/share/open-claude-design/node") ;;
     *) fail "refusing unexpected managed Node.js destination" ;;

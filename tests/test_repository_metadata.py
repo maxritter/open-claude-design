@@ -26,7 +26,6 @@ def test_readme_keeps_activation_order_and_local_links_valid() -> None:
         "## Agent compatibility",
         "## Maintenance",
         "## Open for pull requests",
-        "## Star history",
         "## License",
     ]
     offsets = [readme.index(section) for section in ordered_sections]
@@ -55,7 +54,8 @@ def test_readme_promotes_the_one_line_installer_above_platforms() -> None:
         "or Anthropic API key required.**"
     )
     assert readme.index("<h1>Claude Design for any coding agent</h1>") < readme.index(subtitle) < readme.index(command)
-    assert "api.star-history.com" in readme
+    assert "img.shields.io/github/stars/maxritter/open-claude-design" in readme
+    assert "api.star-history.com" not in readme
 
 
 def test_issue_forms_are_structured_and_security_routes_privately() -> None:
