@@ -27,7 +27,9 @@ curl -fsSL https://github.com/maxritter/open-claude-design/releases/latest/downl
 
 </div>
 
-Open Claude Design connects your coding agent and real codebase to Claude Design's visual workspace. Ask normally—the right workflow loads automatically.
+Claude Design is excellent. The workflow around it can still feel like a relay between two products: open the visual workspace, export the generated prompt, return to the terminal, restore the context, then repeat after the next visual change.
+
+Open Claude Design removes that relay. It connects your coding agent and real codebase directly to Claude Design's visual workspace. Ask normally—the right workflow loads automatically.
 
 ## Quick start
 
@@ -43,6 +45,8 @@ Open Claude Design connects your coding agent and real codebase to Claude Design
 > Create a Claude Design version of this settings flow, using the real components and states from the codebase.
 
 ## One workflow, both sides
+
+Design decisions stop living in a separate side conversation. They become part of the same implementation and verification loop as the code.
 
 1. **Create from code.** Turn real components, tokens, assets, copy, and states into a Claude Design element.
 2. **Inspect visually.** Open the result in Claude Design, compare options, and tweak it directly in the visual UI.
