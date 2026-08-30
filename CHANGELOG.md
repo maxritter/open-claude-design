@@ -2,6 +2,13 @@
 
 All notable changes to Open Claude Design are documented here. Releases follow semantic versioning and are generated from conventional commits.
 
+## [1.0.2](https://github.com/maxritter/open-claude-design/compare/v1.0.1...v1.0.2) (2026-08-30)
+
+
+### Documentation
+
+* sharpen product workflow positioning ([e385007](https://github.com/maxritter/open-claude-design/commit/e385007e8ca09eaff1c99c5a3064c7c4c8bb3b91))
+
 ## [1.0.1](https://github.com/maxritter/open-claude-design/compare/v1.0.0...v1.0.1) (2026-08-30)
 
 

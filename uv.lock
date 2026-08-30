@@ -210,7 +210,7 @@ wheels = [
 
 [[package]]
 name = "open-claude-design"
-version = "1.0.1"  # x-release-please-version
+version = "1.0.2"  # x-release-please-version
 source = { editable = "." }
 
 [package.dev-dependencies]

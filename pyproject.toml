@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "open-claude-design"
-version = "1.0.1"
+version = "1.0.2"
 description = "Design-system-aware UI workflows and Claude Design access for coding agents"
 readme = "README.md"
 requires-python = ">=3.12"
