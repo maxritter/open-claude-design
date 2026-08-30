@@ -131,11 +131,17 @@ def test_v1_release_automation_is_gated_and_reproducible() -> None:
     security = (ROOT / ".github" / "workflows" / "security.yml").read_text(encoding="utf-8")
     release_config = json.loads((ROOT / "release-please-config.json").read_text(encoding="utf-8"))
     manifest = json.loads((ROOT / ".release-please-manifest.json").read_text(encoding="utf-8"))
+    lockfile = (ROOT / "uv.lock").read_text(encoding="utf-8")
     precommit = (ROOT / ".pre-commit-config.yaml").read_text(encoding="utf-8")
 
-    assert project["project"]["version"] == "1.0.0"
-    assert manifest == {".": "1.0.0"}
+    assert project["project"]["version"] == manifest["."]
     assert release_config["packages"]["."]["draft"] is True
+    assert {"type": "generic", "path": "uv.lock"} in release_config["packages"]["."]["extra-files"]
+    assert re.search(
+        rf'\[\[package\]\]\nname = "open-claude-design"\nversion = "{project["project"]["version"]}"'
+        r"  # x-release-please-version",
+        lockfile,
+    )
     assert "release-please-action@" in release
     assert "gh release edit" in release and "--draft=false" in release
     assert "environment: release" in bootstrap
