@@ -2,6 +2,13 @@
 
 All notable changes to Open Claude Design are documented here. Releases follow semantic versioning and are generated from conventional commits.
 
+## [1.0.1](https://github.com/maxritter/open-claude-design/compare/v1.0.0...v1.0.1) (2026-08-30)
+
+
+### Bug Fixes
+
+* preserve streamed installer input ([68102b3](https://github.com/maxritter/open-claude-design/commit/68102b3c6c95c381d910f7604b06e15101c38b3e))
+
 ## 1.0.0 - 2026-08-30
 
 ### Added
