@@ -1,4 +1,4 @@
-name: Bootstrap Release
+name: Manual Release
 
 on:
   workflow_dispatch:
@@ -12,7 +12,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: bootstrap-release
+  group: manual-release
   cancel-in-progress: false
 
 jobs:
@@ -108,7 +108,7 @@ jobs:
         with:
           name: open-claude-design-bootstrap-${{ inputs.version }}
           path: dist
-      - name: Create and publish the verified initial release
+      - name: Create and publish the verified release
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}

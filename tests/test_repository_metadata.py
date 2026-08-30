@@ -76,7 +76,7 @@ def test_install_and_uninstall_are_posix_release_assets() -> None:
     install = (ROOT / "install.sh").read_text(encoding="utf-8")
     uninstall = (ROOT / "uninstall.sh").read_text(encoding="utf-8")
     ci = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
-    release = (ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
+    release = (ROOT / ".github" / "workflows" / "release-bootstrap.yml").read_text(encoding="utf-8")
 
     assert install.startswith("#!/bin/sh\nset -eu\n")
     assert uninstall.startswith("#!/bin/sh\nset -eu\n")
@@ -124,26 +124,27 @@ def test_vscode_launch_builds_and_installs_the_local_release() -> None:
     assert configuration["console"] == "integratedTerminal"
 
 
-def test_v1_release_automation_is_gated_and_reproducible() -> None:
+def test_manual_release_is_gated_and_reproducible() -> None:
     project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
-    release = (ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
     bootstrap = (ROOT / ".github" / "workflows" / "release-bootstrap.yml").read_text(encoding="utf-8")
     security = (ROOT / ".github" / "workflows" / "security.yml").read_text(encoding="utf-8")
-    release_config = json.loads((ROOT / "release-please-config.json").read_text(encoding="utf-8"))
-    manifest = json.loads((ROOT / ".release-please-manifest.json").read_text(encoding="utf-8"))
+    package_config = (ROOT / "src" / "open_claude_design" / "config.py").read_text(encoding="utf-8")
     lockfile = (ROOT / "uv.lock").read_text(encoding="utf-8")
     precommit = (ROOT / ".pre-commit-config.yaml").read_text(encoding="utf-8")
 
-    assert project["project"]["version"] == manifest["."]
-    assert release_config["packages"]["."]["draft"] is True
-    assert {"type": "generic", "path": "uv.lock"} in release_config["packages"]["."]["extra-files"]
+    version = project["project"]["version"]
+    assert f'VERSION: Final = "{version}"' in package_config
     assert re.search(
-        rf'\[\[package\]\]\nname = "open-claude-design"\nversion = "{project["project"]["version"]}"'
-        r"  # x-release-please-version",
+        rf'\[\[package\]\]\nname = "open-claude-design"\nversion = "{version}"',
         lockfile,
     )
-    assert "release-please-action@" in release
-    assert "gh release edit" in release and "--draft=false" in release
+    assert not (ROOT / "release-please-config.json").exists()
+    assert not (ROOT / ".release-please-manifest.json").exists()
+    assert not (ROOT / ".github" / "workflows" / "release.yml").exists()
+    assert "workflow_dispatch:" in bootstrap
+    assert "push:" not in bootstrap
+    assert "gh release create" in bootstrap
+    assert "gh release edit" in bootstrap and "--draft=false" in bootstrap
     assert "environment: release" in bootstrap
     assert bootstrap.count("dist/CHANGELOG.md") >= 3
     assert "trivy-action@" in security
@@ -151,7 +152,7 @@ def test_v1_release_automation_is_gated_and_reproducible() -> None:
     assert "detect-private-key" in precommit
     assert "scripts/security-check.sh" in precommit
 
-    for workflow in (release, bootstrap, security):
+    for workflow in (bootstrap, security):
         refs = re.findall(r"uses:\s+[^@\s]+@([^\s#]+)", workflow)
         assert refs
         assert all(re.fullmatch(r"[0-9a-f]{40}", ref) for ref in refs)
