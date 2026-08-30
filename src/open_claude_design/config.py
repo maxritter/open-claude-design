@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Final
 
 PACKAGE_NAME: Final = "open-claude-design"
-VERSION: Final = "1.0.0"  # x-release-please-version
+VERSION: Final = "1.0.1"  # x-release-please-version
 
 CLAUDE_DESIGN_ENDPOINT: Final = "https://api.anthropic.com/v1/design/mcp"
 CLAUDE_DESIGN_OAUTH_AUTHORIZE_URL: Final = "https://claude.com/cai/oauth/authorize"
