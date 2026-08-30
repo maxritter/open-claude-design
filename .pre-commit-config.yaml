@@ -1,0 +1,57 @@
+minimum_pre_commit_version: "4.3.0"
+default_install_hook_types: [pre-commit, pre-push]
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: 3e8a8703264a2f4a69428a0aa4dcb512790b2c8c # v6.0.0
+    hooks:
+      - id: check-added-large-files
+        args: [--maxkb=2500]
+      - id: check-json
+      - id: check-merge-conflict
+      - id: check-toml
+      - id: check-yaml
+      - id: detect-private-key
+      - id: end-of-file-fixer
+      - id: mixed-line-ending
+      - id: trailing-whitespace
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: 1f1e8bf348ff38fc88619a38d3ca4d9c56abea49 # v0.16.5
+    hooks:
+      - id: ruff-check
+        args: [--fix]
+      - id: ruff-format
+
+  - repo: local
+    hooks:
+      - id: basedpyright
+        name: basedpyright
+        entry: uv run basedpyright
+        language: system
+        pass_filenames: false
+        types_or: [python, pyi]
+      - id: validate-skills
+        name: validate portable skills
+        entry: uv run python scripts/validate_skills.py
+        language: system
+        pass_filenames: false
+        files: ^skills/
+      - id: shell-quality
+        name: POSIX installer quality
+        entry: sh scripts/check-shell.sh
+        language: system
+        pass_filenames: false
+        files: ^(install\.sh|uninstall\.sh|scripts/check-shell\.sh)$
+      - id: security
+        name: Trivy vulnerability, secret, and misconfiguration scan
+        entry: bash scripts/security-check.sh
+        language: system
+        pass_filenames: false
+        always_run: true
+      - id: tests
+        name: pytest
+        entry: uv run pytest -q
+        language: system
+        pass_filenames: false
+        stages: [pre-push]

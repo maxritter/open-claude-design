@@ -1,0 +1,5 @@
+interface:
+  display_name: "UI Design"
+  short_description: "Create intentional product interfaces"
+policy:
+  allow_implicit_invocation: true

@@ -1,0 +1,75 @@
+{
+  "target": {
+    "type": "skill",
+    "path": "skills/open-claude-ui-design",
+    "name": "open-claude-ui-design"
+  },
+  "evals": [
+    {
+      "id": 4,
+      "name": "remote-variants-require-user-selection",
+      "prompt": "I asked for three Claude Design variants of a trip action. You rendered options 1a, 1b, and 1c in Fahrten - Entwurf.dc.html and prefer 1b. What happens next?",
+      "expected_output": "A decision handoff that makes the review location and approval boundary explicit.",
+      "expectations": [
+        "The response recommends an option but does not implement it as though the recommendation were approval.",
+        "It names the Claude Design project, project-relative file, and stable option or screen/frame ids, plus the durable project URL when available.",
+        "It asks the user which option or hybrid to continue with unless the user already delegated that decision."
+      ]
+    },
+    {
+      "id": 5,
+      "name": "selected-variant-is-finished-before-implementation",
+      "prompt": "The user selected variant 1a from three Claude Design homepage drafts and the original request included implementation. What happens before code changes begin?",
+      "expected_output": "A selected-design refinement gate that turns the draft into a complete verified contract before implementation.",
+      "expectations": [
+        "The response treats selection as the start of refinement rather than approval to implement the draft immediately.",
+        "It removes unselected variants from the active deliverable and completes 1a with real content, responsive views, primary interactions, and material states.",
+        "It renders and reads back the finished selected design before implementation, then proceeds because implementation was already part of the original request."
+      ]
+    },
+    {
+      "id": 6,
+      "name": "direct-design-request-uses-one-direction",
+      "prompt": "Redesign this existing settings page using its current components and then implement it. I did not ask for alternatives and the product objective is clear.",
+      "expected_output": "One complete product-consistent direction that is refined and verified before implementation without forcing an option round.",
+      "expectations": [
+        "The response creates one strong direction rather than generating three variants by default.",
+        "It grounds the design in the existing system, completes the responsive and interaction states, and verifies the design before implementation.",
+        "It uses comparative variants only if a material unresolved decision emerges, not merely because the live hi-fi guidance mentions options."
+      ]
+    },
+    {
+      "id": 1,
+      "name": "preserve-existing-system",
+      "prompt": "Redesign only the account-deletion region within the existing account settings screen in this self-contained brief; all surrounding settings already exist and are out of scope. Existing evidence: shared Button and FormField components; tokens define a cool neutral palette, 8px spacing, 6px radii, and quiet 180ms motion; screenshots show compact density. Keep the existing system, make deletion clearer, and describe the implementation without changing files.",
+      "expected_output": "A source-grounded redesign that preserves the supplied system, improves destructive-action hierarchy, and does not invent a replacement brand.",
+      "expectations": [
+        "The response explicitly preserves the supplied palette, spacing, radii, density, components, and motion instead of proposing a generic new aesthetic.",
+        "The deletion action becomes clear through hierarchy, semantics, confirmation, pre-commit cancellation, and retryable request failure rather than decorative color alone.",
+        "The response stays inside the deletion region, keeps surrounding settings/actions unnamed and unchanged, and uses placeholders or explicit verification gates instead of asserting consequences absent from the brief."
+      ]
+    },
+    {
+      "id": 2,
+      "name": "greenfield-direction-without-question-quota",
+      "prompt": "Propose a greenfield direction for a mobile-first tool that helps field engineers record equipment inspections offline. Audience and core flow are known; no brand exists. Give two distinct directions and recommend one. Do not create files.",
+      "expected_output": "Two concrete, audience-linked directions with a recommendation and no padded discovery questionnaire.",
+      "expectations": [
+        "Each direction specifies materially different type, palette tone, density, component treatment, and motion tied to field use.",
+        "The response recommends one direction with a product reason rather than presenting equivalent cosmetic options.",
+        "The response makes reasonable decisions from the supplied audience and flow without asking a fixed quota of questions."
+      ]
+    },
+    {
+      "id": 3,
+      "name": "prototype-sensitive-state",
+      "prompt": "Outline an interactive sign-in recovery prototype with email entry, verification code, loading, invalid-code recovery, and success. The prototype may persist the current screen across reloads. Do not create files.",
+      "expected_output": "A complete interaction map and executable verification plan that cover recovery while refusing to persist identity or authentication inputs.",
+      "expectations": [
+        "The flow includes entry, validation, loading, invalid-code recovery, navigation, and success with visible feedback.",
+        "Only non-sensitive navigation state is considered for persistence; email, verification code, and authentication data are not retained.",
+        "The delivered outline includes a verification plan requiring actual interaction, a representative failure, keyboard behavior, and re-snapshotting after state changes when the prototype is implemented."
+      ]
+    }
+  ]
+}

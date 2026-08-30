@@ -1,0 +1,5 @@
+interface:
+  display_name: "UI Design Review"
+  short_description: "Audit and polish a product interface"
+policy:
+  allow_implicit_invocation: true

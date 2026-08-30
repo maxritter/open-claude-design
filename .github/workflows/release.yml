@@ -1,0 +1,137 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release-please:
+    name: Prepare release PR or draft release
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+      version: ${{ steps.release.outputs.version }}
+      sha: ${{ steps.release.outputs.sha }}
+    steps:
+      - id: release
+        uses: googleapis/release-please-action@5c625bfb5d1ff62eadeeb3772007f7f66fdcf071 # v4.4.1
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  verify:
+    name: Verify draft release
+    if: needs.release-please.outputs.release_created == 'true'
+    needs: release-please
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ needs.release-please.outputs.sha }}
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@94527f2e458b27549849d47d273a16bec83a01e9 # v7
+        with:
+          python-version: "3.12"
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck shfmt devscripts dash
+      - run: uv sync --all-groups --locked
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run basedpyright
+      - run: uv run pytest -q
+      - run: uv run python scripts/validate_skills.py
+      - run: sh scripts/check-shell.sh
+      - name: Trivy release gate
+        uses: aquasecurity/trivy-action@b6643a29fecd7f34b3597bc6acb0a98b03d33ff8 # 0.33.1
+        env:
+          TRIVY_SKIP_VERSION_CHECK: "true"
+        with:
+          version: v0.72.0
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,secret,misconfig
+          severity: CRITICAL,HIGH
+          exit-code: "1"
+          ignore-unfixed: true
+          skip-dirs: .git,.venv,dist
+          trivyignores: .trivyignore
+          format: table
+      - run: bash scripts/build-release.sh
+      - name: Verify release version
+        env:
+          RELEASE_VERSION: ${{ needs.release-please.outputs.version }}
+        run: |
+          PACKAGE_VERSION="$(uv run python -c 'from open_claude_design import __version__; print(__version__)')"
+          test "$PACKAGE_VERSION" = "$RELEASE_VERSION"
+      - name: Smoke-test built installer
+        env:
+          OPEN_CLAUDE_DESIGN_SKIP_LOGIN: "1"
+          UV_TOOL_BIN_DIR: ${{ runner.temp }}/open-claude-design-bin
+          UV_TOOL_DIR: ${{ runner.temp }}/open-claude-design-tools
+        run: |
+          export PATH="$UV_TOOL_BIN_DIR:$PATH"
+          export OPEN_CLAUDE_DESIGN_PACKAGE
+          OPEN_CLAUDE_DESIGN_PACKAGE="$(find dist -maxdepth 1 -name 'open_claude_design-*-py3-none-any.whl' -print -quit)"
+          sh dist/install.sh --agents=claude-code,codex,opencode --scope=global --yes
+          open-claude-design doctor --agents=claude-code,codex,opencode --scope=global --offline --json
+          sh dist/uninstall.sh --yes
+      - name: Attest release artifacts
+        uses: actions/attest-build-provenance@96278af6caaf10aea03fd8d33a09a777ca52d62f # v3.2.0
+        with:
+          subject-path: |
+            dist/install.sh
+            dist/uninstall.sh
+            dist/open-claude-design.tar.gz
+            dist/open_claude_design-*.whl
+            dist/SHA256SUMS
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: open-claude-design-${{ needs.release-please.outputs.version }}
+          path: |
+            dist/install.sh
+            dist/uninstall.sh
+            dist/open-claude-design.tar.gz
+            dist/open_claude_design-*.whl
+            dist/SHA256SUMS
+          if-no-files-found: error
+
+  publish:
+    name: Publish verified release
+    if: needs.release-please.outputs.release_created == 'true'
+    needs: [release-please, verify]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: release
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: open-claude-design-${{ needs.release-please.outputs.version }}
+          path: dist
+      - name: Attach artifacts and publish the draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ needs.release-please.outputs.tag_name }}
+        run: |
+          gh release upload "$RELEASE_TAG" dist/* --clobber
+          gh release edit "$RELEASE_TAG" --draft=false

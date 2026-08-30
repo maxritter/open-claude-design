@@ -1,0 +1,106 @@
+name: Bug report
+description: Report reproducible unexpected behavior in Open Claude Design
+title: "[Bug]: "
+labels:
+  - bug
+  - needs-triage
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve Open Claude Design. Do not include credentials, plan tokens, short-lived preview URLs, or private project content.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected area
+      options:
+        - Installation or update
+        - Agent skill integration
+        - Claude Design authentication
+        - Project or file access
+        - Code/design synchronization
+        - Remote write or delete
+        - Preview or verification
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: Describe the failure and its impact.
+      placeholder: A concise description of the unexpected behavior.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: Include the smallest repeatable sequence and sanitized commands.
+      placeholder: |
+        1. Run ...
+        2. Ask the agent to ...
+        3. Observe ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected and actual behavior
+      placeholder: |
+        Expected: ...
+        Actual: ...
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Open Claude Design version
+      description: Output of `open-claude-design --version`.
+      placeholder: 1.0.0
+    validations:
+      required: true
+
+  - type: dropdown
+    id: operating-system
+    attributes:
+      label: Operating system
+      options:
+        - macOS
+        - Linux
+        - WSL2
+    validations:
+      required: true
+
+  - type: input
+    id: agent
+    attributes:
+      label: Coding agent
+      description: Name and version of the agent that was active.
+      placeholder: Codex 1.x, Claude Code 2.x, Cursor, OpenCode, etc.
+    validations:
+      required: true
+
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Sanitized diagnostics
+      description: Include relevant errors or `doctor --offline --json` output only after removing private paths and project data.
+      render: shell
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: I searched existing issues for duplicates.
+          required: true
+        - label: I reproduced this with the latest available release.
+          required: true
+        - label: I removed credentials, plan tokens, private project content, and short-lived URLs.
+          required: true

@@ -1,0 +1,31 @@
+{
+  "target": {
+    "type": "skill",
+    "path": "skills/open-claude-design-quality",
+    "name": "open-claude-design-quality"
+  },
+  "evals": [
+    {
+      "id": 1,
+      "name": "visual-change-preserves-product-system",
+      "prompt": "Improve the visual hierarchy of this existing billing summary using its current components, tokens, real copy, and themes. Describe the work without modifying files.",
+      "expected_output": "A product-grounded visual improvement that preserves the established system and includes runtime verification.",
+      "expectations": [
+        "The response inspects and preserves existing components, tokens, copy, assets, interaction states, and supported themes unless a specific change is justified.",
+        "The response improves hierarchy without inventing filler, a replacement brand, or cosmetic alternatives that do not change the design hypothesis.",
+        "The response requires real interaction and rendered narrow, wide, and theme checks rather than treating source inspection or tests as visual proof."
+      ]
+    },
+    {
+      "id": 2,
+      "name": "logic-only-change-stays-visual-neutral",
+      "prompt": "Fix the calculation used by this existing React price card. The rendered markup, copy, layout, and styling must remain unchanged. Describe the work without modifying files.",
+      "expected_output": "A logic-only implementation plan that does not turn the task into a design change.",
+      "expectations": [
+        "The response keeps the current rendered interface unchanged and does not propose visual cleanup or a redesign.",
+        "The response focuses verification on the calculation plus a check that the rendered output did not regress.",
+        "The response does not invoke a broad design exploration merely because the changed file is a UI component."
+      ]
+    }
+  ]
+}

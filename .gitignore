@@ -1,0 +1,15 @@
+.DS_Store
+.venv/
+.pytest_cache/
+.ruff_cache/
+.basedpyright/
+__pycache__/
+*.py[cod]
+dist/
+build/
+*.egg-info/
+.coverage
+htmlcov/
+.open-claude-design/
+.impeccable/critique/
+docs/plans/

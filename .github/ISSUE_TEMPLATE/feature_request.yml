@@ -1,0 +1,66 @@
+name: Feature request
+description: Propose a concrete Open Claude Design improvement
+title: "[Feature]: "
+labels:
+  - enhancement
+  - needs-triage
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Start with the user problem. A strong request explains the workflow that is difficult today before prescribing an implementation.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: Who needs this, in what situation, and what cannot they do well today?
+      placeholder: When I use ... I need ... because ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Desired outcome
+      description: Describe what should become possible from the user's perspective.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed approach
+      description: Optional implementation ideas, commands, or interaction details.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Product area
+      options:
+        - Agent compatibility
+        - Installation or update
+        - Claude Design capabilities
+        - Code/design synchronization
+        - Design creation quality
+        - Preview or verification
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives or workarounds
+      description: What have you tried, and why is it insufficient?
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: I searched existing issues for similar requests.
+          required: true
+        - label: This request describes one concrete problem rather than a bundle of unrelated features.
+          required: true

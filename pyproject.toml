@@ -1,0 +1,92 @@
+[build-system]
+requires = ["hatchling>=1.27.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "open-claude-design"
+version = "1.0.0"
+description = "Design-system-aware UI workflows and Claude Design access for coding agents"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { file = "LICENSE.md" }
+authors = [{ name = "Max Ritter", email = "mail@maxritter.net" }]
+keywords = ["agent-skills", "claude-code", "codex", "opencode", "ui-design", "design-system"]
+classifiers = [
+  "Development Status :: 5 - Production/Stable",
+  "Environment :: Console",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Operating System :: MacOS",
+  "Operating System :: POSIX :: Linux",
+]
+
+[project.urls]
+Repository = "https://github.com/maxritter/open-claude-design"
+Issues = "https://github.com/maxritter/open-claude-design/issues"
+
+[project.scripts]
+open-claude-design = "open_claude_design.cli:main"
+
+[dependency-groups]
+dev = [
+  "basedpyright>=1.31.4",
+  "hatchling>=1.27.0",
+  "pre-commit>=4.3.0",
+  "pyyaml>=6.0.2",
+  "pytest>=8.4.2",
+  "pytest-cov>=7.0.0",
+  "ruff>=0.12.11",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/open_claude_design"]
+
+[tool.hatch.build.targets.wheel.force-include]
+skills = "open_claude_design/data/skills"
+"LICENSE.md" = "open_claude_design/data/LICENSE.md"
+
+[tool.hatch.build.targets.sdist]
+include = [
+  "/src",
+  "/skills",
+  "/tests",
+  "/scripts",
+  "/docs/media",
+  "/install.sh",
+  "/uninstall.sh",
+  "/README.md",
+  "/PRODUCT.md",
+  "/CHANGELOG.md",
+  "/CONTRIBUTING.md",
+  "/SECURITY.md",
+  "/LICENSE.md",
+  "/AGENTS.md",
+  "/CLAUDE.md",
+  "/pyproject.toml",
+  "/uv.lock",
+]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+pythonpath = ["src", "."]
+markers = [
+  "unit: fast isolated tests",
+  "integration: tests that use external processes or services",
+]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.basedpyright]
+pythonVersion = "3.12"
+typeCheckingMode = "standard"
+include = ["src/open_claude_design", "scripts"]
+venvPath = "."
+venv = ".venv"
+executionEnvironments = [{ root = ".", extraPaths = ["src"] }]

@@ -1,0 +1,79 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@94527f2e458b27549849d47d273a16bec83a01e9 # v7
+        with:
+          python-version: "3.12"
+      - name: Install shell QA tools on Linux
+        if: runner.os == 'Linux'
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck shfmt devscripts dash
+      - name: Install shell QA tools on macOS
+        if: runner.os == 'macOS'
+        run: brew install shellcheck shfmt dash-shell checkbashisms
+      - run: uv sync --all-groups --locked
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run basedpyright
+      - run: uv run pytest -q
+      - run: uv run pre-commit validate-config
+      - run: uv run python scripts/validate_skills.py
+      - run: sh scripts/check-shell.sh
+      - run: bash scripts/build-release.sh
+      - name: Smoke-test release archive
+        env:
+          UV_TOOL_BIN_DIR: ${{ runner.temp }}/open-claude-design-bin
+          UV_TOOL_DIR: ${{ runner.temp }}/open-claude-design-tools
+          OPEN_CLAUDE_DESIGN_SKIP_LOGIN: "1"
+        run: |
+          export PATH="$UV_TOOL_BIN_DIR:$PATH"
+          export OPEN_CLAUDE_DESIGN_PACKAGE
+          OPEN_CLAUDE_DESIGN_PACKAGE="$(find dist -maxdepth 1 -name 'open_claude_design-*-py3-none-any.whl' -print -quit)"
+          sh install.sh --agents=claude-code,codex,opencode,cursor,kiro-cli,pi --scope=global --yes
+          open-claude-design doctor --agents=claude-code,codex,opencode,cursor,kiro-cli,pi --scope=global --offline --json
+          sh uninstall.sh --yes
+
+  package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: test
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@94527f2e458b27549849d47d273a16bec83a01e9 # v7
+        with:
+          python-version: "3.12"
+      - run: uv sync --all-groups --locked
+      - run: bash scripts/build-release.sh
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: open-claude-design-release
+          path: |
+            dist/install.sh
+            dist/uninstall.sh
+            dist/open-claude-design.tar.gz
+            dist/open_claude_design-*.whl
+            dist/SHA256SUMS

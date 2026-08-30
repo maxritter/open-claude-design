@@ -1,0 +1,15 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Open Claude Design: Build and run local installer",
+      "type": "debugpy",
+      "request": "launch",
+      "preLaunchTask": "Open Claude Design: Build release",
+      "cwd": "${workspaceFolder}",
+      "program": "${workspaceFolder}/scripts/run_local_installer.py",
+      "console": "integratedTerminal",
+      "justMyCode": true
+    }
+  ]
+}

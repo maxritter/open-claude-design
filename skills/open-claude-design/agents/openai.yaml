@@ -1,0 +1,5 @@
+interface:
+  display_name: "Claude Design"
+  short_description: "Access real Claude Design projects"
+policy:
+  allow_implicit_invocation: true

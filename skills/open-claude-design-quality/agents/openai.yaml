@@ -1,0 +1,5 @@
+interface:
+  display_name: "Design Quality"
+  short_description: "Keep visual changes product-grounded"
+policy:
+  allow_implicit_invocation: true

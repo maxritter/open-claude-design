@@ -1,0 +1,5 @@
+interface:
+  display_name: "Design System"
+  short_description: "Extract tokens and component contracts"
+policy:
+  allow_implicit_invocation: true
