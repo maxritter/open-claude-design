@@ -139,6 +139,7 @@ def test_v1_release_automation_is_gated_and_reproducible() -> None:
     assert "release-please-action@" in release
     assert "gh release edit" in release and "--draft=false" in release
     assert "environment: release" in bootstrap
+    assert bootstrap.count("dist/CHANGELOG.md") >= 3
     assert "trivy-action@" in security
     assert "dependency-review-action@" in security
     assert "detect-private-key" in precommit

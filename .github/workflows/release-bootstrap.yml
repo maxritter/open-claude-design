@@ -93,6 +93,7 @@ jobs:
             dist/open-claude-design.tar.gz
             dist/open_claude_design-*.whl
             dist/SHA256SUMS
+            dist/CHANGELOG.md
           if-no-files-found: error
 
   publish:
