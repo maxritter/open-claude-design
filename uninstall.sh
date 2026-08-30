@@ -83,12 +83,12 @@ fi
 
 step 1 "Removing agent integrations"
 if command -v open-claude-design > /dev/null 2>&1; then
-  if open-claude-design uninstall --scope global --yes > /dev/null 2>&1; then
+  if open-claude-design uninstall --scope global --yes < /dev/null > /dev/null 2>&1; then
     success "Five Open Claude Design skills removed"
   else
     info "The CLI could not remove every skill; trying the Agent Skills backend"
   fi
-  open-claude-design logout --yes > /dev/null 2>&1 || true
+  open-claude-design logout --yes < /dev/null > /dev/null 2>&1 || true
 fi
 
 if command -v npx > /dev/null 2>&1; then
@@ -98,7 +98,7 @@ if command -v npx > /dev/null 2>&1; then
     open-claude-design-system \
     open-claude-ui-design \
     open-claude-ui-review \
-    --global --yes > /dev/null 2>&1 || true
+    --global --yes < /dev/null > /dev/null 2>&1 || true
 elif [ -x "$MANAGED_NPX" ]; then
   PATH="$(dirname "$MANAGED_NPX"):$PATH"
   export PATH
@@ -108,15 +108,15 @@ elif [ -x "$MANAGED_NPX" ]; then
     open-claude-design-system \
     open-claude-ui-design \
     open-claude-ui-review \
-    --global --yes > /dev/null 2>&1 || true
+    --global --yes < /dev/null > /dev/null 2>&1 || true
 fi
 success "Agent integrations are clean"
 
 step 2 "Removing the CLI"
 if command -v uv > /dev/null 2>&1; then
-  uv tool uninstall "$PACKAGE_NAME" > /dev/null 2>&1 || true
+  uv tool uninstall "$PACKAGE_NAME" < /dev/null > /dev/null 2>&1 || true
 elif [ -x "$MANAGED_UV" ]; then
-  "$MANAGED_UV" tool uninstall "$PACKAGE_NAME" > /dev/null 2>&1 || true
+  "$MANAGED_UV" tool uninstall "$PACKAGE_NAME" < /dev/null > /dev/null 2>&1 || true
 fi
 rm -f "$HOME/.local/bin/open-claude-design"
 success "CLI removed"

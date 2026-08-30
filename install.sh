@@ -11,6 +11,14 @@ UV_VERSION="0.12.7"
 UV_ROOT="$HOME/.local/share/open-claude-design/uv"
 RULE="────────────────────────────────────────────────────────────"
 
+# The CLI is installed into uv's isolated tools directory. Ignore ambient
+# project/user configuration and private indexes so bootstrap resolution cannot
+# touch a project virtualenv or inherit unrelated package credentials.
+unset UV_INDEX UV_INDEX_URL UV_EXTRA_INDEX_URL UV_FIND_LINKS UV_CONFIG_FILE UV_KEYRING_PROVIDER
+UV_NO_CONFIG=1
+UV_DEFAULT_INDEX="https://pypi.org/simple"
+export UV_NO_CONFIG UV_DEFAULT_INDEX
+
 if [ -t 1 ] && [ "${NO_COLOR:-}" = "" ]; then
   CYAN='\033[38;5;44m'
   CORAL='\033[38;5;203m'
@@ -120,7 +128,14 @@ trap cleanup 0
 trap 'cleanup; exit 1' HUP INT TERM
 
 step 2 "Preparing private runtimes"
-if ! command -v uv > /dev/null 2>&1; then
+uv_is_compatible() {
+  command -v uv > /dev/null 2>&1 &&
+    uv tool install --help 2> /dev/null | grep -q -- '--default-index' &&
+    uv tool install --help 2> /dev/null | grep -q -- '--no-sources' &&
+    uv tool dir --bin > /dev/null 2>&1
+}
+
+if ! uv_is_compatible; then
   case "$(uname -s):$(uname -m)" in
     Darwin:arm64) uv_target="aarch64-apple-darwin" ;;
     Darwin:x86_64) uv_target="x86_64-apple-darwin" ;;
@@ -174,7 +189,7 @@ else
   success "Using uv $(uv --version | awk '{print $2}')"
 fi
 
-command -v uv > /dev/null 2>&1 || fail "uv installation completed but uv is not on PATH"
+uv_is_compatible || fail "compatible uv setup did not complete"
 
 node_is_compatible() {
   command -v node > /dev/null 2>&1 &&
@@ -250,10 +265,16 @@ else
   [ "$ACTUAL" = "$EXPECTED" ] || fail "release wheel checksum mismatch"
 fi
 
-uv tool install --force --quiet "$STAGING_DIR/$PACKAGE_NAME"
-PATH="$HOME/.local/bin:$PATH"
+uv tool install --no-config --default-index "$UV_DEFAULT_INDEX" --no-sources --force --quiet \
+  "$STAGING_DIR/$PACKAGE_NAME" < /dev/null
+UV_TOOL_BIN="$(uv tool dir --bin)"
+case "$UV_TOOL_BIN" in
+  /*) ;;
+  *) fail "uv returned an invalid tool executable directory" ;;
+esac
+PATH="$UV_TOOL_BIN:$PATH"
 export PATH
-command -v open-claude-design > /dev/null 2>&1 || fail "installed CLI is not on PATH; add $HOME/.local/bin"
+command -v open-claude-design > /dev/null 2>&1 || fail "installed CLI is not on PATH; add $UV_TOOL_BIN"
 success "CLI $(open-claude-design --version) installed"
 
 step 4 "Connecting your coding agents"
@@ -266,7 +287,7 @@ done
 if [ "$has_yes" -eq 0 ]; then
   set -- "$@" --yes
 fi
-if ! open-claude-design install "$@" --json > "$STAGING_DIR/agent-install.json"; then
+if ! open-claude-design install "$@" --json < /dev/null > "$STAGING_DIR/agent-install.json"; then
   cat "$STAGING_DIR/agent-install.json" >&2
   fail "coding-agent integration failed"
 fi
@@ -278,7 +299,15 @@ if open-claude-design status --json > /dev/null 2>&1; then
 elif [ "${OPEN_CLAUDE_DESIGN_SKIP_LOGIN:-0}" = "1" ] || [ "${CI:-}" = "true" ]; then
   info "Login skipped for this non-interactive install"
   info "Run: open-claude-design login"
-elif open-claude-design login && open-claude-design status --json > /dev/null 2>&1; then
+elif { : < /dev/tty; } 2> /dev/null; then
+  if open-claude-design login < /dev/tty && open-claude-design status --json > /dev/null 2>&1; then
+    success "Claude Design connected"
+  else
+    info "The CLI and agent workflows are installed"
+    info "Finish later with: open-claude-design login"
+    info "Claude Design currently requires Pro, Max, Team, or Enterprise access"
+  fi
+elif open-claude-design login < /dev/null && open-claude-design status --json > /dev/null 2>&1; then
   success "Claude Design connected"
 else
   info "The CLI and agent workflows are installed"

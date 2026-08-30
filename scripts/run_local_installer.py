@@ -31,9 +31,11 @@ def run_local_installer(root: Path, arguments: Sequence[str] = ()) -> None:
     environment.pop("VSCODE_INSPECTOR_OPTIONS", None)
     environment["OPEN_CLAUDE_DESIGN_PACKAGE"] = str(find_release_wheel(dist))
     subprocess.run(
-        ["sh", str(installer), *arguments],
+        ["sh", "-s", "--", *arguments],
         cwd=root,
         env=environment,
+        input=installer.read_text(encoding="utf-8"),
+        text=True,
         check=True,
     )
 
