@@ -27,6 +27,7 @@ from urllib.parse import parse_qs, urlencode, urlparse
 from open_claude_design.config import (
     CLAUDE_DESIGN_BROWSER_LOGIN_ENV,
     CLAUDE_DESIGN_CREDENTIAL_MAX_BYTES,
+    CLAUDE_DESIGN_KEYCHAIN_BATCH_LINE_MAX_BYTES,
     CLAUDE_DESIGN_OAUTH_AUTHORIZE_URL,
     CLAUDE_DESIGN_OAUTH_CLIENT_ID,
     CLAUDE_DESIGN_OAUTH_MANUAL_REDIRECT_URL,
@@ -190,10 +191,16 @@ def _read_keychain(
     )
     if result.returncode != 0:
         return None
+    stored = result.stdout.rstrip("\n")
     try:
-        payload = json.loads(result.stdout)
+        payload = json.loads(stored)
     except json.JSONDecodeError as error:
-        raise DesignAuthError("Open Claude Design's Keychain credential is not valid JSON.") from error
+        # _write_keychain stores the credential base64-wrapped; a credential written by
+        # an earlier version is still raw JSON, so both forms have to keep loading.
+        try:
+            payload = json.loads(base64.b64decode(stored, validate=True).decode("utf-8"))
+        except (ValueError, UnicodeDecodeError):
+            raise DesignAuthError("Open Claude Design's Keychain credential is not valid JSON.") from error
     if not isinstance(payload, dict):
         raise DesignAuthError("Open Claude Design's Keychain credential must contain a JSON object.")
     return payload
@@ -237,24 +244,35 @@ def _write_keychain(
     payload: dict[str, object],
     runner: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
 ) -> None:
+    # `add-generic-password -w` with the secret on stdin cannot carry a credential:
+    # its prompt reads through readpassphrase(3), which silently keeps only the first
+    # 128 bytes and still exits 0, and it reads /dev/tty instead of stdin whenever a
+    # controlling terminal exists, so an interactive login blocks on a password prompt.
+    # `security -i` takes the whole command on stdin instead, which has neither
+    # behaviour. The credential is base64-wrapped so it stays a single unquoted token
+    # for the batch parser; _read_keychain unwraps it.
     serialized = json.dumps(payload, separators=(",", ":"))
+    encoded = base64.b64encode(serialized.encode("utf-8")).decode("ascii")
+    command = (
+        "add-generic-password -U "
+        f'-a "{CLAUDE_DESIGN_STANDALONE_KEYCHAIN_ACCOUNT}" '
+        f'-s "{CLAUDE_DESIGN_STANDALONE_KEYCHAIN_SERVICE}" '
+        f"-w {encoded}\n"
+    )
+    if len(command.encode("utf-8")) > CLAUDE_DESIGN_KEYCHAIN_BATCH_LINE_MAX_BYTES:
+        # Past the batch line limit `security` would split the credential and echo a
+        # fragment of it back as an "unknown command" error. Refuse instead.
+        raise DesignAuthError("The Design credential is too large for the macOS Keychain batch interface.")
     result = runner(
-        [
-            "/usr/bin/security",
-            "add-generic-password",
-            "-U",
-            "-a",
-            CLAUDE_DESIGN_STANDALONE_KEYCHAIN_ACCOUNT,
-            "-s",
-            CLAUDE_DESIGN_STANDALONE_KEYCHAIN_SERVICE,
-            "-w",
-        ],
-        input=f"{serialized}\n{serialized}\n",
+        ["/usr/bin/security", "-i"],
+        input=command,
         capture_output=True,
         text=True,
         shell=False,
         timeout=30,
         check=False,
+        # No controlling terminal, so `security` can never fall back to a /dev/tty prompt.
+        start_new_session=True,
     )
     if result.returncode != 0:
         raise DesignAuthError("Could not save the Design credential to macOS Keychain.")

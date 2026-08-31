@@ -24,6 +24,10 @@ CLAUDE_DESIGN_OAUTH_REFRESH_MARGIN_SECONDS: Final = 2 * 60
 CLAUDE_DESIGN_OAUTH_RESPONSE_MAX_BYTES: Final = 1024 * 1024
 CLAUDE_DESIGN_STANDALONE_KEYCHAIN_SERVICE: Final = "Open Claude Design-credentials"
 CLAUDE_DESIGN_STANDALONE_KEYCHAIN_ACCOUNT: Final = "open-claude-design"
+# `security -i` reads one batch command per line and discards whatever exceeds 4096
+# bytes, re-parsing the remainder as a new command. _write_keychain refuses to write
+# rather than let a credential be split across that boundary.
+CLAUDE_DESIGN_KEYCHAIN_BATCH_LINE_MAX_BYTES: Final = 4096
 CLAUDE_DESIGN_STANDALONE_CREDENTIAL_PARTS: Final = (".config", "open-claude-design", "credentials.json")
 CLAUDE_DESIGN_DURABLE_PREVIEW_HOSTS: Final = frozenset({"claude.ai", "www.claude.ai"})
 CLAUDE_DESIGN_SERVE_PREVIEW_HOST_SUFFIX: Final = "claudeusercontent.com"

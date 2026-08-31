@@ -9,6 +9,7 @@ import stat
 import subprocess
 import threading
 import urllib.request
+from collections.abc import Callable
 from email.message import Message
 from pathlib import Path
 from typing import Any
@@ -18,6 +19,7 @@ import pytest
 
 import open_claude_design.auth as auth
 from open_claude_design.config import (
+    CLAUDE_DESIGN_KEYCHAIN_BATCH_LINE_MAX_BYTES,
     CLAUDE_DESIGN_OAUTH_CLIENT_ID,
     CLAUDE_DESIGN_OAUTH_MANUAL_REDIRECT_URL,
     CLAUDE_DESIGN_OAUTH_SCOPES,
@@ -303,6 +305,27 @@ def test_refresh_uses_stored_client_and_rotates_credential(tmp_path: Path) -> No
     assert requests[0]["refresh_token"] == "old-refresh"
 
 
+def _fake_keychain(
+    store: dict[str, str],
+) -> Callable[..., subprocess.CompletedProcess[str]]:
+    """Model the `security` batch write and password read this module relies on."""
+
+    def runner(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        if command[1:] == ["-i"]:
+            line = str(kwargs["input"])
+            if len(line.encode("utf-8")) > CLAUDE_DESIGN_KEYCHAIN_BATCH_LINE_MAX_BYTES:
+                return subprocess.CompletedProcess(command, 1, "", "security: unknown command")
+            store["password"] = line.rstrip("\n").rsplit(" -w ", 1)[1]
+            return subprocess.CompletedProcess(command, 0, "", "")
+        if "find-generic-password" in command:
+            if "password" not in store:
+                return subprocess.CompletedProcess(command, 44, "", "")
+            return subprocess.CompletedProcess(command, 0, f"{store['password']}\n", "")
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    return runner
+
+
 def test_keychain_write_keeps_tokens_out_of_argv() -> None:
     calls: list[tuple[list[str], dict[str, object]]] = []
 
@@ -319,8 +342,52 @@ def test_keychain_write_keeps_tokens_out_of_argv() -> None:
     command, kwargs = calls[0]
     assert "secret-access" not in " ".join(command)
     assert "secret-refresh" not in " ".join(command)
-    assert str(kwargs["input"]).count("secret-access") == 2
+    assert "secret-access" not in str(kwargs["input"])
     assert kwargs["shell"] is False
+    # `security` must not be able to reach a terminal, or it prompts instead of reading stdin.
+    assert kwargs["start_new_session"] is True
+
+
+def test_keychain_roundtrips_a_credential_larger_than_the_prompt_buffer() -> None:
+    # `add-generic-password -w` keeps only the first 128 bytes of a piped secret, so a
+    # real credential has to survive a write/read cycle well past that boundary.
+    payload = {
+        "designOauth": {
+            "accessToken": "a" * 1200,
+            "refreshToken": "r" * 600,
+            "scopes": list(CLAUDE_DESIGN_OAUTH_SCOPES),
+        }
+    }
+    runner = _fake_keychain({})
+
+    auth.save_standalone_credential(payload, platform="darwin", runner=runner)
+    stored = auth._read_keychain(runner)
+
+    assert stored == payload
+
+
+def test_keychain_read_still_loads_a_legacy_plain_json_credential() -> None:
+    payload = {"designOauth": {"accessToken": "legacy-access"}}
+    runner = _fake_keychain({"password": json.dumps(payload, separators=(",", ":"))})
+
+    assert auth._read_keychain(runner) == payload
+
+
+def test_keychain_read_rejects_an_unreadable_credential() -> None:
+    runner = _fake_keychain({"password": "not-json-and-not-base64-json"})
+
+    with pytest.raises(auth.DesignAuthError, match="not valid JSON"):
+        auth._read_keychain(runner)
+
+
+def test_keychain_write_refuses_a_credential_past_the_batch_line_limit() -> None:
+    oversized = {"designOauth": {"accessToken": "a" * CLAUDE_DESIGN_KEYCHAIN_BATCH_LINE_MAX_BYTES}}
+
+    def runner(command: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        pytest.fail("an oversized credential must not reach `security`")
+
+    with pytest.raises(auth.DesignAuthError, match="too large"):
+        auth.save_standalone_credential(oversized, platform="darwin", runner=runner)
 
 
 def test_token_request_sends_a_product_user_agent(tmp_path: Path) -> None:
