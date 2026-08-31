@@ -2,7 +2,24 @@
 
 All notable changes to Open Claude Design are documented here. Releases follow semantic versioning and are generated from conventional commits.
 
-## [1.0.1](https://github.com/maxritter/open-claude-design/compare/v1.0.0...v1.0.1) (2026-08-30)
+## [1.0.2](https://github.com/maxritter/open-claude-design/compare/v1.0.1...v1.0.2) (2026-08-31)
+
+### Added
+
+- `uninstall.sh --scope project|global` so project-scoped skill installs can be removed; the Agent Skills fallback now honors the selected scope.
+- Shell-profile PATH guidance after installation when the login shell would not resolve `open-claude-design`.
+- Members, sharing, and conversation-sync workflow guidance in the `open-claude-design` skill, grounded in the live tool contracts.
+
+### Fixed
+
+- The uninstaller reports honestly when skill removal could not be confirmed instead of always printing success, skips the network fallback when the CLI already removed the skills, and cleans the credential-lock directory on macOS as well as Linux.
+- `install.sh --dry-run` no longer claims workflows were installed.
+- The installer and uninstaller strip forced ANSI color (`FORCE_COLOR`/`CLICOLOR_FORCE`, exported by `uv run` and some CI systems) from captured `uv tool dir --bin` output, which previously aborted installation with "uv returned an invalid tool executable directory".
+- The release-manifest wheel filter rejects path separators, so a tampered `SHA256SUMS` cannot direct downloads outside the staging directory.
+
+### Security
+
+- CI now runs the full pre-commit hook set (including private-key detection) and tests Python 3.12 and 3.13; the shell quality gate covers every repository script.
 
 
 ### Bug Fixes
