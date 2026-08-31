@@ -18,6 +18,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
+        python-version: ["3.12", "3.13"]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     steps:
@@ -26,7 +27,7 @@ jobs:
           persist-credentials: false
       - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python-version }}
       - name: Install shell QA tools on Linux
         if: runner.os == 'Linux'
         run: sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck shfmt devscripts dash
@@ -38,7 +39,7 @@ jobs:
       - run: uv run ruff format --check .
       - run: uv run basedpyright
       - run: uv run pytest -q
-      - run: uv run pre-commit validate-config
+      - run: uv run pre-commit run --all-files --show-diff-on-failure
       - run: uv run python scripts/validate_skills.py
       - run: sh scripts/check-shell.sh
       - run: bash scripts/build-release.sh

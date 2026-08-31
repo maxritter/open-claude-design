@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if ! command -v trivy >/dev/null 2>&1; then
-  echo "Trivy is not installed; skipping the local scan. CI remains the security gate."
-  echo "Install locally with: brew install trivy"
+if ! command -v trivy > /dev/null 2>&1; then
+  echo "WARNING: Trivy is not installed, so the local security scan DID NOT RUN." >&2
+  echo "WARNING: CI remains the security gate. Install locally with: brew install trivy" >&2
   exit 0
 fi
 

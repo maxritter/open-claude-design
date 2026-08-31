@@ -42,7 +42,7 @@ repos:
         entry: sh scripts/check-shell.sh
         language: system
         pass_filenames: false
-        files: ^(install\.sh|uninstall\.sh|scripts/check-shell\.sh)$
+        files: ^(install\.sh|uninstall\.sh|scripts/(check-shell|build-release|security-check)\.sh)$
       - id: security
         name: Trivy vulnerability, secret, and misconfiguration scan
         entry: bash scripts/security-check.sh
