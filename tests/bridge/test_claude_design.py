@@ -365,6 +365,12 @@ class StubClient:
                 "inputSchema": {"type": "object"},
                 "annotations": {"readOnlyHint": False},
             },
+            {
+                "name": "copy_files",
+                "description": "Copy project files.",
+                "inputSchema": {"type": "object"},
+                "annotations": {"readOnlyHint": False, "destructiveHint": True},
+            },
         ]
 
     def call_tool(self, name: str, arguments: dict[str, object]) -> dict[str, object]:
@@ -803,9 +809,28 @@ def test_cmd_design_requires_valid_object_arguments() -> None:
 
 
 class FileStubClient(StubClient):
+    def __init__(self) -> None:
+        super().__init__()
+        self.written: dict[str, str] = {}
+
     def call_tool(self, name: str, arguments: dict[str, object]) -> dict[str, object]:
         self.calls.append((name, arguments))
         if name == "read_file":
+            path = str(arguments["path"])
+            if path in self.written:
+                body = self.written[path]
+                escaped = body.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                return {
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": (
+                                f'<untrusted-project-content path="{path}" etag="124">\n'
+                                f"{escaped}</untrusted-project-content>"
+                            ),
+                        }
+                    ]
+                }
             return {
                 "content": [
                     {
@@ -820,11 +845,15 @@ class FileStubClient(StubClient):
                 ]
             }
         if name == "finalize_plan":
+            writes = arguments.get("writes")
+            assert isinstance(writes, list)
             return {
                 "content": [
                     {
                         "type": "text",
-                        "text": json.dumps({"plan_token": "auto-plan", "base_etags": {"Example.dc.html": "123"}}),
+                        "text": json.dumps(
+                            {"plan_token": "auto-plan", "base_etags": {str(path): "123" for path in writes}}
+                        ),
                     }
                 ]
             }
@@ -845,11 +874,156 @@ class FileStubClient(StubClient):
         if name == "write_files":
             files = arguments.get("files")
             assert isinstance(files, list)
+            for item in files:
+                if isinstance(item, dict) and isinstance(item.get("path"), str) and isinstance(item.get("data"), str):
+                    self.written[item["path"]] = item["data"]
             etags = {
                 item["path"]: "124" for item in files if isinstance(item, dict) and isinstance(item.get("path"), str)
             }
             return {"content": [{"type": "text", "text": "ok"}], "etags": etags}
         return {"content": [{"type": "text", "text": "ok"}], "etags": {"Example.dc.html": "124"}}
+
+
+class VerifiedPushStubClient(StubClient):
+    def __init__(
+        self,
+        *,
+        include_support: bool = True,
+        preview_url: str | None = "https://claude.ai/design/p/project-1",
+    ) -> None:
+        super().__init__()
+        self.remote: dict[str, tuple[str, str]] = {}
+        if include_support:
+            self.remote["support.js"] = ("support-1", "runtime")
+        self.preview_url = preview_url
+
+    def call_tool(self, name: str, arguments: dict[str, object]) -> dict[str, object]:
+        self.calls.append((name, arguments))
+        if name == "list_files":
+            parent = str(arguments.get("path", ""))
+            entries = [
+                {"path": path, "type": "file", "etag": etag, "size": len(body.encode())}
+                for path, (etag, body) in sorted(self.remote.items())
+                if (Path(path).parent.as_posix() if "/" in path else "") == parent
+            ]
+            return {"structuredContent": entries}
+        if name == "finalize_plan":
+            writes = arguments.get("writes")
+            assert isinstance(writes, list)
+            return {
+                "structuredContent": {
+                    "plan_token": "auto-plan",
+                    "base_etags": {path: self.remote.get(str(path), ("0", ""))[0] for path in writes},
+                }
+            }
+        if name == "write_files":
+            files = arguments.get("files")
+            assert isinstance(files, list)
+            etags: dict[str, str] = {}
+            for item in files:
+                assert isinstance(item, dict)
+                path = str(item["path"])
+                body = str(item["data"])
+                etag = "written-1"
+                self.remote[path] = (etag, body)
+                etags[path] = etag
+            return {"structuredContent": {"status": "written", "paths": sorted(etags), "etags": etags}}
+        if name == "read_file":
+            path = str(arguments["path"])
+            etag, body = self.remote[path]
+            escaped = body.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+            return {
+                "content": [
+                    {
+                        "type": "text",
+                        "text": (
+                            f'<untrusted-project-content path="{path}" etag="{etag}">\n'
+                            f"{escaped}</untrusted-project-content>"
+                        ),
+                    }
+                ]
+            }
+        if name == "render_preview":
+            if self.preview_url is None:
+                return {"structuredContent": {}}
+            return {
+                "structuredContent": {
+                    "open_url": self.preview_url,
+                    "serve_url": "https://preview.claudeusercontent.com/render",
+                }
+            }
+        raise AssertionError(f"unexpected tool call: {name}")
+
+
+class VerifiedCopyStubClient(FileStubClient):
+    def __init__(self, *, include_support: bool = True) -> None:
+        super().__init__()
+        self.include_support = include_support
+
+    def call_tool(self, name: str, arguments: dict[str, object]) -> dict[str, object]:
+        if name == "list_files":
+            self.calls.append((name, arguments))
+            entries = [
+                {"path": "Example.dc.html", "type": "file", "etag": "copied-1", "size": 20},
+            ]
+            if self.include_support:
+                entries.append({"path": "support.js", "type": "file", "etag": "support-1", "size": 7})
+            return {"structuredContent": entries}
+        if name == "copy_files":
+            self.calls.append((name, arguments))
+            return {
+                "structuredContent": {
+                    "status": "completed",
+                    "copied": ["Example.dc.html"],
+                    "etags": {"Example.dc.html": "copied-1"},
+                }
+            }
+        if name == "render_preview":
+            self.calls.append((name, arguments))
+            return {
+                "structuredContent": {
+                    "open_url": "https://claude.ai/design/p/project-1",
+                    "serve_url": "https://preview.claudeusercontent.com/render",
+                }
+            }
+        return super().call_tool(name, arguments)
+
+
+class VerifiedFolderCopyStubClient(FileStubClient):
+    def call_tool(self, name: str, arguments: dict[str, object]) -> dict[str, object]:
+        if name == "list_files":
+            self.calls.append((name, arguments))
+            return {
+                "structuredContent": [
+                    {
+                        "path": "Checkout/Payment.dc.html",
+                        "type": "file",
+                        "etag": "copied-1",
+                        "size": 20,
+                    },
+                    {"path": "Checkout/support.js", "type": "file", "etag": "support-1", "size": 7},
+                ]
+            }
+        if name == "copy_files":
+            self.calls.append((name, arguments))
+            return {
+                "structuredContent": {
+                    "status": "completed",
+                    "etags": {
+                        "Checkout/Payment.dc.html": "copied-1",
+                        "Checkout/support.js": "support-1",
+                    },
+                }
+            }
+        if name == "render_preview":
+            self.calls.append((name, arguments))
+            return {
+                "structuredContent": {
+                    "open_url": "https://claude.ai/design/p/project-1",
+                    "serve_url": "https://preview.claudeusercontent.com/render",
+                }
+            }
+        return super().call_tool(name, arguments)
 
 
 def test_planned_call_keeps_support_plan_token_internal(capsys: pytest.CaptureFixture[str]) -> None:
@@ -870,6 +1044,161 @@ def test_planned_call_keeps_support_plan_token_internal(capsys: pytest.CaptureFi
     assert client.calls[-1][1]["plan_token"] == "auto-plan"
     output = capsys.readouterr().out
     assert "auto-plan" not in output
+
+
+def test_planned_copy_requires_a_verified_preview_for_copied_dc_files(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    client = VerifiedCopyStubClient()
+    args = Namespace(
+        design_command="planned-call",
+        tool="copy_files",
+        project_id="project-1",
+        args=('{"files":[{"src":"Template.dc.html","dest":"Example.dc.html","if_match":"123"}]}'),
+        writes=["Example.dc.html"],
+        allow_write=True,
+        allow_destructive=True,
+        open_browser=False,
+        json=True,
+    )
+
+    assert run_design_command(args, client_factory=lambda: client) == 0
+    output = json.loads(capsys.readouterr().out)
+    assert output["verification"] == {
+        "verified": True,
+        "previews": [
+            {
+                "path": "Example.dc.html",
+                "open_url": "https://claude.ai/design/p/project-1",
+                "opened": False,
+            }
+        ],
+    }
+    assert [name for name, _arguments in client.calls] == [
+        "finalize_plan",
+        "copy_files",
+        "list_files",
+        "render_preview",
+    ]
+
+
+def test_planned_copy_returns_unknown_when_copied_dc_support_is_missing(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    client = VerifiedCopyStubClient(include_support=False)
+    args = Namespace(
+        design_command="planned-call",
+        tool="copy_files",
+        project_id="project-1",
+        args=('{"files":[{"src":"Template.dc.html","dest":"Example.dc.html","if_match":"123"}]}'),
+        writes=["Example.dc.html"],
+        allow_write=True,
+        allow_destructive=True,
+        open_browser=False,
+        json=True,
+    )
+
+    assert run_design_command(args, client_factory=lambda: client) == 2
+    output = json.loads(capsys.readouterr().out)
+    assert output["mutated"] is True
+    assert output["verification"]["verified"] is False
+    assert "support.js" in output["verification"]["error"]
+
+
+def test_planned_folder_copy_verifies_nested_dc_preview(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    client = VerifiedFolderCopyStubClient()
+    args = Namespace(
+        design_command="planned-call",
+        tool="copy_files",
+        project_id="project-1",
+        args=(
+            '{"files":[{"src":"Template","dest":"Checkout","leaf_if_match":'
+            '{"Checkout/Payment.dc.html":"0","Checkout/support.js":"0"}}]}'
+        ),
+        writes=["Checkout"],
+        allow_write=True,
+        allow_destructive=True,
+        open_browser=False,
+        json=True,
+    )
+
+    assert run_design_command(args, client_factory=lambda: client) == 0
+    output = json.loads(capsys.readouterr().out)
+    assert output["verification"] == {
+        "verified": True,
+        "previews": [
+            {
+                "path": "Checkout/Payment.dc.html",
+                "open_url": "https://claude.ai/design/p/project-1",
+                "opened": False,
+            }
+        ],
+    }
+
+
+def test_planned_copy_refuses_success_without_copied_file_etags(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    class MissingEtagsCopyStub(VerifiedCopyStubClient):
+        def call_tool(self, name: str, arguments: dict[str, object]) -> dict[str, object]:
+            if name == "copy_files":
+                self.calls.append((name, arguments))
+                return {"structuredContent": {"status": "completed", "copied": ["Example.dc.html"]}}
+            return super().call_tool(name, arguments)
+
+    client = MissingEtagsCopyStub()
+    args = Namespace(
+        design_command="planned-call",
+        tool="copy_files",
+        project_id="project-1",
+        args=('{"files":[{"src":"Template.dc.html","dest":"Example.dc.html","if_match":"123"}]}'),
+        writes=["Example.dc.html"],
+        allow_write=True,
+        allow_destructive=True,
+        open_browser=False,
+        json=True,
+    )
+
+    assert run_design_command(args, client_factory=lambda: client) == 2
+    output = json.loads(capsys.readouterr().out)
+    assert output["verification"]["verified"] is False
+    assert "etags" in output["verification"]["error"]
+
+
+def test_planned_copy_rejects_noncanonical_returned_leaf_before_preview(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    class UnsafeLeafCopyStub(VerifiedFolderCopyStubClient):
+        def call_tool(self, name: str, arguments: dict[str, object]) -> dict[str, object]:
+            if name == "copy_files":
+                self.calls.append((name, arguments))
+                return {
+                    "structuredContent": {
+                        "status": "completed",
+                        "etags": {"Checkout/../Evil.dc.html": "copied-1"},
+                    }
+                }
+            return super().call_tool(name, arguments)
+
+    client = UnsafeLeafCopyStub()
+    args = Namespace(
+        design_command="planned-call",
+        tool="copy_files",
+        project_id="project-1",
+        args=('{"files":[{"src":"Template","dest":"Checkout","leaf_if_match":{"Checkout/Payment.dc.html":"0"}}]}'),
+        writes=["Checkout"],
+        allow_write=True,
+        allow_destructive=True,
+        open_browser=False,
+        json=True,
+    )
+
+    assert run_design_command(args, client_factory=lambda: client) == 2
+    output = json.loads(capsys.readouterr().out)
+    assert "verification" not in output
+    assert [name for name, _arguments in client.calls] == ["finalize_plan", "copy_files"]
 
 
 class DeleteStubClient(StubClient):
@@ -1209,14 +1538,14 @@ def test_design_push_reads_local_file_inside_process_and_requires_etag_and_plan(
     capsys: pytest.CaptureFixture[str],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    source = tmp_path / "Example.dc.html"
+    source = tmp_path / "Example.txt"
     source.write_text("<div>local bytes</div>\n", encoding="utf-8")
     client = FileStubClient()
     args = Namespace(
         design_command="push",
         project_id="project-1",
-        files=[f"Example.dc.html={source}"],
-        if_matches=["Example.dc.html=123"],
+        files=[f"Example.txt={source}"],
+        if_matches=["Example.txt=123"],
         plan_token="-",
         allow_write=True,
         json=True,
@@ -1224,23 +1553,178 @@ def test_design_push_reads_local_file_inside_process_and_requires_etag_and_plan(
     monkeypatch.setattr(sys, "stdin", io.StringIO("signed-plan\n"))
 
     assert run_design_command(args, client_factory=lambda: client, workspace_root=tmp_path) == 0
-    assert client.calls == [
-        (
-            "write_files",
-            {
-                "project_id": "project-1",
-                "plan_token": "signed-plan",
-                "files": [
-                    {
-                        "path": "Example.dc.html",
-                        "data": "<div>local bytes</div>\n",
-                        "if_match": "123",
-                    }
-                ],
-            },
-        )
-    ]
+    assert client.calls[0] == (
+        "write_files",
+        {
+            "project_id": "project-1",
+            "plan_token": "signed-plan",
+            "files": [
+                {
+                    "path": "Example.txt",
+                    "data": "<div>local bytes</div>\n",
+                    "if_match": "123",
+                }
+            ],
+        },
+    )
+    assert client.calls[1] == ("read_file", {"project_id": "project-1", "path": "Example.txt"})
     assert "local bytes" not in capsys.readouterr().out
+
+
+def test_design_push_refuses_dc_file_without_same_directory_support_before_write(tmp_path: Any) -> None:
+    source = tmp_path / "Example.dc.html"
+    source.write_text("<x-dc>design</x-dc>\n", encoding="utf-8")
+    client = VerifiedPushStubClient(include_support=False)
+    args = Namespace(
+        design_command="push",
+        project_id="project-1",
+        files=[f"Example.dc.html={source}"],
+        if_matches=["Example.dc.html=0"],
+        plan_token=None,
+        allow_write=True,
+        open_browser=False,
+        json=True,
+    )
+
+    with pytest.raises(ClaudeDesignSafetyError, match="support.js"):
+        run_design_command(args, client_factory=lambda: client, workspace_root=tmp_path)
+
+    assert [name for name, _arguments in client.calls] == ["finalize_plan", "list_files"]
+
+
+def test_design_push_reads_back_and_renders_every_dc_file(
+    tmp_path: Any,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    source = tmp_path / "Example.dc.html"
+    source.write_text("<x-dc>design</x-dc>\n", encoding="utf-8")
+    client = VerifiedPushStubClient()
+    args = Namespace(
+        design_command="push",
+        project_id="project-1",
+        files=[f"Example.dc.html={source}"],
+        if_matches=["Example.dc.html=0"],
+        plan_token=None,
+        allow_write=True,
+        open_browser=False,
+        json=True,
+    )
+
+    assert run_design_command(args, client_factory=lambda: client, workspace_root=tmp_path) == 0
+    output = json.loads(capsys.readouterr().out)
+    assert output["verification"] == {
+        "verified": True,
+        "files": [{"path": "Example.dc.html", "etag": "written-1", "bytes": 20}],
+        "previews": [
+            {
+                "path": "Example.dc.html",
+                "open_url": "https://claude.ai/design/p/project-1",
+                "opened": False,
+            }
+        ],
+    }
+    assert [name for name, _arguments in client.calls] == [
+        "finalize_plan",
+        "list_files",
+        "write_files",
+        "read_file",
+        "render_preview",
+    ]
+
+
+def test_design_push_returns_unknown_when_preview_cannot_be_created(
+    tmp_path: Any,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    source = tmp_path / "Example.dc.html"
+    source.write_text("<x-dc>design</x-dc>\n", encoding="utf-8")
+    client = VerifiedPushStubClient(preview_url=None)
+    args = Namespace(
+        design_command="push",
+        project_id="project-1",
+        files=[f"Example.dc.html={source}"],
+        if_matches=["Example.dc.html=0"],
+        plan_token=None,
+        allow_write=True,
+        open_browser=False,
+        json=True,
+    )
+
+    assert run_design_command(args, client_factory=lambda: client, workspace_root=tmp_path) == 2
+    output = json.loads(capsys.readouterr().out)
+    assert output["mutated"] is True
+    assert output["verification"]["verified"] is False
+    assert "durable preview" in output["verification"]["error"]
+
+
+def test_design_push_open_uses_short_lived_preview_but_returns_only_durable_url(
+    tmp_path: Any,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = tmp_path / "Example.dc.html"
+    source.write_text("<x-dc>design</x-dc>\n", encoding="utf-8")
+    client = VerifiedPushStubClient()
+    opened: list[str] = []
+    monkeypatch.setattr(claude_design, "_open_preview_url", opened.append)
+    args = Namespace(
+        design_command="push",
+        project_id="project-1",
+        files=[f"Example.dc.html={source}"],
+        if_matches=["Example.dc.html=0"],
+        plan_token=None,
+        allow_write=True,
+        open_browser=True,
+        json=True,
+    )
+
+    assert run_design_command(args, client_factory=lambda: client, workspace_root=tmp_path) == 0
+    raw = capsys.readouterr().out
+    output = json.loads(raw)
+    assert opened == ["https://preview.claudeusercontent.com/render"]
+    assert output["verification"]["previews"][0] == {
+        "path": "Example.dc.html",
+        "open_url": "https://claude.ai/design/p/project-1",
+        "opened": True,
+    }
+    assert "claudeusercontent.com" not in raw
+
+
+def test_design_push_browser_failure_keeps_durable_preview_and_returns_unknown(
+    tmp_path: Any,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = tmp_path / "Example.dc.html"
+    source.write_text("<x-dc>design</x-dc>\n", encoding="utf-8")
+    client = VerifiedPushStubClient()
+
+    def fail_open(_url: str) -> None:
+        raise ClaudeDesignSafetyError("synthetic browser open failure")
+
+    monkeypatch.setattr(claude_design, "_open_preview_url", fail_open)
+    args = Namespace(
+        design_command="push",
+        project_id="project-1",
+        files=[f"Example.dc.html={source}"],
+        if_matches=["Example.dc.html=0"],
+        plan_token=None,
+        allow_write=True,
+        open_browser=True,
+        json=True,
+    )
+
+    assert run_design_command(args, client_factory=lambda: client, workspace_root=tmp_path) == 2
+    output = json.loads(capsys.readouterr().out)
+    assert output["verification"]["verified"] is False
+    assert output["verification"]["previews"] == [
+        {
+            "path": "Example.dc.html",
+            "open_url": "https://claude.ai/design/p/project-1",
+            "opened": False,
+        }
+    ]
+    assert "browser open failure" in output["verification"]["error"]
 
 
 def test_design_push_refuses_missing_write_authority(tmp_path: Any) -> None:
@@ -1356,14 +1840,14 @@ def test_design_push_allows_explicit_external_source_without_symlinks(
 ) -> None:
     workspace = tmp_path / "workspace"
     workspace.mkdir()
-    external = tmp_path / "Example=external.dc.html"
+    external = tmp_path / "Example=external.txt"
     external.write_text("authorized import", encoding="utf-8")
     client = FileStubClient()
     args = Namespace(
         design_command="push",
         project_id="project-1",
-        files=[f"Example.dc.html={external}"],
-        if_matches=["Example.dc.html=123"],
+        files=[f"Example.txt={external}"],
+        if_matches=["Example.txt=123"],
         plan_token="-",
         allow_write=True,
         external_local_paths=[str(external)],
@@ -1413,7 +1897,7 @@ def test_design_push_allows_parent_segments_that_stay_inside_workspace(
     designs = workspace / "designs"
     nested.mkdir(parents=True)
     designs.mkdir()
-    source = designs / "Example.dc.html"
+    source = designs / "Example.txt"
     source.write_text("inside workspace", encoding="utf-8")
     monkeypatch.chdir(nested)
     monkeypatch.setattr(sys, "stdin", io.StringIO("signed-plan\n"))
@@ -1421,8 +1905,8 @@ def test_design_push_allows_parent_segments_that_stay_inside_workspace(
     args = Namespace(
         design_command="push",
         project_id="project-1",
-        files=["Example.dc.html=../designs/Example.dc.html"],
-        if_matches=["Example.dc.html=123"],
+        files=["Example.txt=../designs/Example.txt"],
+        if_matches=["Example.txt=123"],
         plan_token="-",
         allow_write=True,
         external_local_paths=[],
@@ -1469,14 +1953,14 @@ def test_design_push_mints_exact_path_plan_and_checks_fresh_etags(
     tmp_path: Any,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    source = tmp_path / "Example.dc.html"
+    source = tmp_path / "Example.txt"
     source.write_text("fresh content", encoding="utf-8")
     client = FileStubClient()
     args = Namespace(
         design_command="push",
         project_id="project-1",
-        files=[f"Example.dc.html={source}"],
-        if_matches=["Example.dc.html=123"],
+        files=[f"Example.txt={source}"],
+        if_matches=["Example.txt=123"],
         plan_token=None,
         allow_write=True,
         json=True,
@@ -1485,7 +1969,7 @@ def test_design_push_mints_exact_path_plan_and_checks_fresh_etags(
     assert run_design_command(args, client_factory=lambda: client, workspace_root=tmp_path) == 0
     assert client.calls[0] == (
         "finalize_plan",
-        {"project_id": "project-1", "scope": "paths", "writes": ["Example.dc.html"], "deletes": []},
+        {"project_id": "project-1", "scope": "paths", "writes": ["Example.txt"], "deletes": []},
     )
     assert client.calls[1][0] == "write_files"
     assert client.calls[1][1]["plan_token"] == "auto-plan"
@@ -1680,8 +2164,24 @@ def test_remote_paths_must_be_canonical(remote_path: str) -> None:
             },
         ),
         (
-            ["planned-call", "copy_files", "project-1", "--args", "{}", "--write", "a.dc.html", "--allow-write"],
-            {"tool": "copy_files", "project_id": "project-1", "writes": ["a.dc.html"], "allow_write": True},
+            [
+                "planned-call",
+                "copy_files",
+                "project-1",
+                "--args",
+                "{}",
+                "--write",
+                "a.dc.html",
+                "--allow-write",
+                "--open",
+            ],
+            {
+                "tool": "copy_files",
+                "project_id": "project-1",
+                "writes": ["a.dc.html"],
+                "allow_write": True,
+                "open_browser": True,
+            },
         ),
         (
             ["preview", "project-1", "screen.dc.html", "--open"],
@@ -1696,8 +2196,34 @@ def test_remote_paths_must_be_canonical(remote_path: str) -> None:
             {"remote_path": "screen.dc.html", "output": "local.html", "force": True, "external_local_paths": []},
         ),
         (
-            ["push", "project-1", "--file", "a=./a", "--if-match", "a=123", "--plan-token", "-", "--allow-write"],
-            {"files": ["a=./a"], "if_matches": ["a=123"], "plan_token": "-", "allow_write": True},
+            [
+                "push",
+                "project-1",
+                "--file",
+                "a=./a",
+                "--if-match",
+                "a=123",
+                "--plan-token",
+                "-",
+                "--allow-write",
+                "--open",
+            ],
+            {
+                "files": ["a=./a"],
+                "if_matches": ["a=123"],
+                "plan_token": "-",
+                "allow_write": True,
+                "open_browser": True,
+            },
+        ),
+        (
+            ["sync", "apply", "0123456789abcdef0123456789abcdef", "--allow-write", "--open"],
+            {
+                "sync_command": "apply",
+                "review_id": "0123456789abcdef0123456789abcdef",
+                "allow_write": True,
+                "open_browser": True,
+            },
         ),
         (
             [

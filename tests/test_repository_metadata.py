@@ -46,7 +46,6 @@ def test_readme_keeps_activation_order_and_local_links_valid() -> None:
         "<h1>Claude Design for any coding agent</h1>",
         "## Quick start",
         "## One workflow, both sides",
-        "## Why Claude Design is the design tool to beat",
         "## What you can do",
         "## Works with Impeccable",
         "> [!TIP]",
@@ -69,7 +68,8 @@ def test_readme_keeps_activation_order_and_local_links_valid() -> None:
     assert all((ROOT / target).is_file() for target in local_targets)
     assert (ROOT / "docs" / "media" / "open-claude-design-hero.png").is_file()
     assert (ROOT / "docs" / "media" / "claude-design-ui.webp").is_file()
-    assert readme.index("docs/media/claude-design-ui.webp") < readme.index("## Quick start")
+    assert readme.index("## Quick start") < readme.index("docs/media/claude-design-ui.webp")
+    assert readme.index("docs/media/claude-design-ui.webp") < readme.index("## One workflow, both sides")
 
 
 def test_readme_promotes_the_one_line_installer_above_platforms() -> None:
@@ -160,6 +160,7 @@ def test_manual_release_is_gated_and_reproducible() -> None:
     package_config = (ROOT / "src" / "open_claude_design" / "config.py").read_text(encoding="utf-8")
     lockfile = (ROOT / "uv.lock").read_text(encoding="utf-8")
     precommit = (ROOT / ".pre-commit-config.yaml").read_text(encoding="utf-8")
+    build_release = (ROOT / "scripts" / "build-release.sh").read_text(encoding="utf-8")
 
     version = project["project"]["version"]
     assert f'VERSION: Final = "{version}"' in package_config
@@ -180,8 +181,25 @@ def test_manual_release_is_gated_and_reproducible() -> None:
     assert "dependency-review-action@" in security
     assert "detect-private-key" in precommit
     assert "scripts/security-check.sh" in precommit
+    assert '"/data/skills/" in name and "/tests/" in name' in build_release
 
     for workflow in (bootstrap, security):
         refs = re.findall(r"uses:\s+[^@\s]+@([^\s#]+)", workflow)
         assert refs
         assert all(re.fullmatch(r"[0-9a-f]{40}", ref) for ref in refs)
+
+
+def test_wheel_force_include_matches_runtime_skill_files_without_benchmarks() -> None:
+    project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    force_include = project["tool"]["hatch"]["build"]["targets"]["wheel"]["force-include"]
+    actual = {source: target for source, target in force_include.items() if source.startswith("skills/")}
+    expected = {
+        path.relative_to(ROOT).as_posix(): (
+            "open_claude_design/data/skills/" + path.relative_to(ROOT / "skills").as_posix()
+        )
+        for path in sorted((ROOT / "skills").rglob("*"))
+        if path.is_file() and "tests" not in path.relative_to(ROOT / "skills").parts
+    }
+
+    assert actual == expected
+    assert not any("/tests/" in target for target in actual.values())

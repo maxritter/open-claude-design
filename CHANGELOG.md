@@ -2,6 +2,14 @@
 
 All notable changes to Open Claude Design are documented here. Releases follow semantic versioning and are generated from conventional commits.
 
+## [1.1.2](https://github.com/maxritter/open-claude-design/compare/v1.1.1...v1.1.2) (2026-08-31)
+
+### Fixed
+
+- Design creation now fails closed when a `.dc.html` file has no same-directory server-provided `support.js`, when exact post-write readback differs, or when Claude Design cannot produce a durable preview. Successful `push`, `copy_files`, and code-to-design sync results include verified preview URLs; `--open` additionally opens the isolated render without exposing its short-lived URL.
+- Agent skill installation and updates now perform a second byte-for-byte readback for every requested agent after the skills backend reports success, preventing one valid integration from masking a partial, stale, or missing one.
+- Release wheels contain only runtime skill files; benchmark `tests/evals.json` payloads are excluded and the build now fails if they reappear.
+
 ## [1.1.1](https://github.com/maxritter/open-claude-design/compare/v1.1.0...v1.1.1) (2026-08-31)
 
 ### Fixed

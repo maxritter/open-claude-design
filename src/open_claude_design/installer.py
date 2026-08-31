@@ -204,6 +204,38 @@ def _installed_skill_state(paths: dict[str, Path]) -> dict[str, bool]:
     return {skill: skill in paths and _runtime_tree_matches(skill, paths[skill]) for skill in SKILLS}
 
 
+def _verified_install_state(
+    runtime: SkillsRuntime,
+    root: Path,
+    agents: tuple[str, ...],
+    scope: Scope,
+) -> tuple[dict[str, bool], dict[str, dict[str, bool]], list[str]]:
+    """Verify byte-complete skills independently for every requested agent."""
+    targets = AGENTS if agents == ("*",) else agents
+    if not targets:
+        listed, paths = _installed_skills(runtime, root, (), scope)
+        state = _installed_skill_state(paths)
+        errors = [] if listed.returncode == 0 else [(listed.stderr or "skills list failed").strip()[-500:]]
+        return state, {}, errors
+
+    aggregate = {skill: True for skill in SKILLS}
+    agent_state: dict[str, dict[str, bool]] = {}
+    errors: list[str] = []
+    for agent in targets:
+        listed, paths = _installed_skills(runtime, root, (agent,), scope)
+        state = _installed_skill_state(paths)
+        agent_state[agent] = state
+        for skill, ready in state.items():
+            aggregate[skill] = aggregate[skill] and listed.returncode == 0 and ready
+        if listed.returncode != 0:
+            detail = (listed.stderr or listed.stdout or "skills list failed").strip()[-500:]
+            errors.append(f"{agent}: {detail}")
+        elif not all(state.values()):
+            missing = [skill for skill, ready in state.items() if not ready]
+            errors.append(f"{agent}: missing, stale, or incomplete {', '.join(missing)}")
+    return aggregate, agent_state, errors
+
+
 def _agent_flags(agents: tuple[str, ...]) -> list[str]:
     return [item for agent in agents for item in ("--agent", agent)]
 
@@ -257,10 +289,9 @@ def run_skills_action(
             "executed": False,
         }
 
-    if action in {"install", "update"} and agents != ("*",):
-        listed, paths = _installed_skills(runtime, root, agents, scope)
-        current = _installed_skill_state(paths)
-        if listed.returncode == 0 and all(current.values()):
+    if action in {"install", "update"}:
+        current, current_agents, current_errors = _verified_install_state(runtime, root, agents, scope)
+        if not current_errors and all(current.values()):
             return {
                 "action": action,
                 "scope": scope,
@@ -271,6 +302,8 @@ def run_skills_action(
                 "node_source": runtime.source,
                 "executed": False,
                 "unchanged": True,
+                "verified": True,
+                "agent_state": current_agents,
             }
 
     with tempfile.TemporaryDirectory(prefix="open-claude-design-skills-") as temporary:
@@ -292,7 +325,16 @@ def run_skills_action(
     if result.returncode != 0:
         detail = (result.stderr or result.stdout or "skills CLI failed").strip()
         raise InstallError(detail[-1000:])
-    return {
+    verified_agents: dict[str, dict[str, bool]] = {}
+    if action in {"install", "update"}:
+        verified, verified_agents, verification_errors = _verified_install_state(runtime, root, agents, scope)
+        if verification_errors or not all(verified.values()):
+            missing = [skill for skill, ready in verified.items() if not ready]
+            raise InstallError(
+                "Agent skill installation reported success but could not be verified byte-for-byte. "
+                f"Missing, stale, or incomplete: {', '.join(missing) or 'unknown'}. " + "; ".join(verification_errors)
+            )
+    payload: dict[str, object] = {
         "action": action,
         "scope": scope,
         "agents": list(agents) or ["auto-detect"],
@@ -302,6 +344,10 @@ def run_skills_action(
         "node_source": runtime.source,
         "executed": True,
     }
+    if action in {"install", "update"}:
+        payload["verified"] = True
+        payload["agent_state"] = verified_agents
+    return payload
 
 
 def doctor(
@@ -316,18 +362,20 @@ def doctor(
     root = (project_root or Path.cwd()).resolve()
     try:
         runtime = resolve_skills_runtime(home)
-        doctor_agents = () if agents == ("*",) else agents
-        listed, paths = _installed_skills(runtime, root, doctor_agents, scope)
-        skill_state = _installed_skill_state(paths)
+        skill_state, agent_state, errors = _verified_install_state(runtime, root, agents, scope)
         installer_status: dict[str, object] = {
-            "ready": listed.returncode == 0 and all(skill_state.values()),
+            "ready": not errors and all(skill_state.values()),
             "backend": f"{SKILLS_CLI_PACKAGE}@{SKILLS_CLI_VERSION}",
             "node": ".".join(str(part) for part in runtime.version),
             "node_source": runtime.source,
             "skills": skill_state,
         }
-        if listed.returncode != 0:
-            installer_status["error"] = (listed.stderr or "skills list failed").strip()[-500:]
+        if agent_state:
+            installer_status["agents"] = {
+                agent: {"ready": all(state.values()), "skills": state} for agent, state in agent_state.items()
+            }
+        if errors:
+            installer_status["error"] = "; ".join(errors)
         elif not all(skill_state.values()):
             missing = [skill for skill, ready in skill_state.items() if not ready]
             installer_status["error"] = f"Missing, stale, or incomplete skills: {', '.join(missing)}"

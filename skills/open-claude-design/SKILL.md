@@ -10,7 +10,7 @@ Use Claude Design as an external design workspace without loading its tool catal
 
 ## Use one transport
 
-Use the `open-claude-design` CLI from every coding agent, including Claude Code. This keeps discovery, path boundaries, etag checks, backups, capability redaction, and verification identical across hosts. Do not bypass it with a native Claude Design connector.
+Use the `open-claude-design` CLI from every coding agent, including Claude Code. This keeps discovery, path boundaries, etag checks, backups, capability redaction, and verification identical across hosts. Do not bypass it with a native Claude Design connector: a write from another transport has not passed the runtime, readback, or durable-preview safeguards and cannot be reported complete.
 
 Start every remote task with `open-claude-design status --json`. If authentication is missing or expired on a desktop host, tell the user that the first-use browser connection is opening, run `open-claude-design login`, then retry status after it succeeds. In CI, SSH, or a headless/dev-container runtime, do not run automatic or manual login inside the agent session: tell the user to run `open-claude-design login --manual` in their own interactive terminal, open its URL on a host browser, and paste the returned code into that terminal—not into the coding-agent chat. The browser flow is independent of the coding agent and API keys; never print, log, reconstruct, or ask the user to copy its tokens.
 
@@ -25,12 +25,12 @@ open-claude-design tools --json
 open-claude-design describe <tool-name> --json
 open-claude-design authoring-context <project-id> [--design-system <design-system-id>] --skill <hifi-design|frontend-design> --json
 open-claude-design call <tool-name> --args '<json-object>' --json
-open-claude-design planned-call <copy_files|create_support_js> <project-id> --args '<json-object>' --write '<path>' --allow-write --json
+open-claude-design planned-call <copy_files|create_support_js> <project-id> --args '<json-object>' --write '<path>' --allow-write [--open] --json
 open-claude-design files <project-id> --path '<dir>' --depth -1 --json
 open-claude-design pull <project-id> <remote-path> --output <scratch-path> --json
-open-claude-design preview <project-id> <remote-path> --json
+open-claude-design preview <project-id> <remote-path> --open --json
 open-claude-design sync review <project-id> --direction <to-design|to-code> --pair '<remote-path>=<local-path>' --json
-open-claude-design sync apply <review-id> --allow-write --json
+open-claude-design sync apply <review-id> --allow-write [--open] --json
 open-claude-design sync finish <review-id> --json
 ```
 
@@ -56,9 +56,9 @@ For authorized file writes:
 - Read `references/tool-workflows.md`.
 - Fetch Claude Design's current prompt once before the first remote content write in the task. Fetch `hifi-design` or `frontend-design` once only when creating or substantially redesigning a visual artifact; exact synchronization and narrowly specified edits do not need a second design procedure.
 - Read the affected files in full and retain their etags.
-- Move local file bytes with `open-claude-design push`, which reads them inside the bridge, mints an exact-path `finalize_plan` token internally, and compares its fresh base etags before writing.
-- For server-side copies or support runtime creation, use `planned-call`; it mints and consumes the exact-path plan internally.
-- Read back the affected paths and render the durable preview after the write.
+- Move local file bytes with `open-claude-design push`, which reads them inside the bridge, mints an exact-path `finalize_plan` token internally, and compares its fresh base etags before writing. Add `--open` on a desktop host.
+- For server-side copies or support runtime creation, use `planned-call`; it mints and consumes the exact-path plan internally. Add `--open` when a copy can land HTML.
+- Treat `verification.verified: true` plus one durable `open_url` per HTML path as part of write success. The CLI checks same-directory `support.js` before `.dc.html` writes, reads local text back byte-for-byte, and renders every HTML path. Exit `2`, a missing preview, or `verification.verified: false` means the mutation is not verified and must be reconciled—not reported complete.
 
 Before beginning a multi-step remote mutation, run `open-claude-design status --json`. The CLI refuses to start a write when the credential is too close to expiry. A successful preflight is not permission to hide a later authentication failure.
 
@@ -89,7 +89,7 @@ An authentication failure during a remote task is an immediate user-visible bloc
 
 ## Completion
 
-Report which project and paths were read or changed and the read-back or preview evidence. Any skipped, stale, unknown, or authentication-blocked operation remains explicit in the final state. Do not report synchronization complete until `sync finish` advances the verified ledger. When the task continues into repository implementation, hand the immutable review snapshot to the matching design skill rather than duplicating its design procedure here.
+Report which project and paths were read or changed and the CLI's exact read-back and durable-preview evidence. A renderable write without `verification.verified: true` and an `open_url` for every HTML path is incomplete. Any skipped, stale, unknown, browser-open, or authentication-blocked operation remains explicit in the final state. Do not report synchronization complete until `sync finish` advances the verified ledger. When the task continues into repository implementation, hand the immutable review snapshot to the matching design skill rather than duplicating its design procedure here.
 
 ## When not to use
 

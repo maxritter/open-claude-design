@@ -1311,7 +1311,13 @@ def _paths_from_mutation_value(value: dict[str, Any]) -> set[str]:
             paths.update(item for item in items if isinstance(item, str))
     files = value.get("files")
     if isinstance(files, list):
-        paths.update(item["path"] for item in files if isinstance(item, dict) and isinstance(item.get("path"), str))
+        for item in files:
+            if not isinstance(item, dict):
+                continue
+            for key in ("path", "dest"):
+                path = item.get(key)
+                if isinstance(path, str):
+                    paths.add(path)
     etags = value.get("etags")
     if isinstance(etags, dict):
         paths.update(path for path in etags if isinstance(path, str))
@@ -1352,7 +1358,23 @@ def _mutation_result_matches_request(
 
     expected_paths = _paths_from_mutation_value(arguments)
     returned_paths = _paths_from_mutation_value(value)
-    if returned_paths and returned_paths != expected_paths:
+    if tool == "copy_files" and returned_paths:
+        try:
+            for path in returned_paths:
+                _validate_remote_path(path)
+        except ValueError:
+            return False
+        if not expected_paths or not all(
+            any(path == destination or path.startswith(f"{destination}/") for destination in expected_paths)
+            for path in returned_paths
+        ):
+            return False
+        if not all(
+            any(path == destination or path.startswith(f"{destination}/") for path in returned_paths)
+            for destination in expected_paths
+        ):
+            return False
+    elif returned_paths and returned_paths != expected_paths:
         return False
     if tool in {"write_files", "delete_files"} and expected_paths and returned_paths != expected_paths:
         return False
@@ -1480,9 +1502,149 @@ def _open_preview_url(url: str) -> None:
             check=False,
         )
     except (OSError, subprocess.SubprocessError) as error:
-        raise ClaudeDesignSafetyError("Could not open the durable Claude Design preview.") from error
+        raise ClaudeDesignSafetyError("Could not open the isolated Claude Design preview.") from error
     if result.returncode != 0:
-        raise ClaudeDesignSafetyError("Could not open the durable Claude Design preview.")
+        raise ClaudeDesignSafetyError("Could not open the isolated Claude Design preview.")
+
+
+def _support_path_for_design(path: str) -> str:
+    parent = PurePosixPath(path).parent.as_posix()
+    return "support.js" if parent == "." else f"{parent}/support.js"
+
+
+def _require_design_support(client: Any, project_id: str, paths: list[str]) -> None:
+    """Refuse a Design Component write unless its directory has the server runtime."""
+    design_paths = sorted({path for path in paths if path.endswith(".dc.html")})
+    parents = sorted(
+        {
+            "" if PurePosixPath(path).parent.as_posix() == "." else PurePosixPath(path).parent.as_posix()
+            for path in design_paths
+        }
+    )
+    available: set[str] = set()
+    for parent in parents:
+        result = client.call_tool(
+            "list_files",
+            {"project_id": project_id, "path": parent, "depth": 1},
+        )
+        entries = _tool_result_value(result, tool="list_files")
+        if not isinstance(entries, list):
+            raise ClaudeDesignProtocolError("Claude Design list_files returned no array during preview preflight.")
+        for item in entries:
+            if not isinstance(item, dict) or item.get("type") != "file" or not isinstance(item.get("path"), str):
+                continue
+            try:
+                available.add(_validate_remote_path(item["path"]))
+            except ValueError as error:
+                raise ClaudeDesignProtocolError(
+                    "Claude Design list_files returned a noncanonical path during preview preflight."
+                ) from error
+    missing = [
+        f"{path} -> {_support_path_for_design(path)}"
+        for path in design_paths
+        if _support_path_for_design(path) not in available
+    ]
+    if missing:
+        raise ClaudeDesignSafetyError(
+            "Refusing to create an unpreviewable .dc.html file. Create the server-provided support.js in the "
+            "same directory first with planned-call create_support_js: " + ", ".join(missing)
+        )
+
+
+def _expected_write_bytes(payload: dict[str, object]) -> dict[str, bytes | None]:
+    files = payload.get("files")
+    if not isinstance(files, list):
+        raise ClaudeDesignProtocolError("The guarded write payload contains no files.")
+    expected: dict[str, bytes | None] = {}
+    for item in files:
+        if not isinstance(item, dict) or not isinstance(item.get("path"), str):
+            raise ClaudeDesignProtocolError("The guarded write payload contains an invalid file entry.")
+        path = item["path"]
+        data = item.get("data")
+        if not isinstance(data, str):
+            raise ClaudeDesignProtocolError(f"The guarded write payload contains no data for {path}.")
+        if item.get("encoding") == "base64":
+            if path.endswith((".html", ".dc.html")):
+                raise ClaudeDesignSafetyError(f"Renderable Claude Design files must be UTF-8 text: {path}")
+            expected[path] = None
+        else:
+            expected[path] = data.encode("utf-8")
+    return expected
+
+
+def _verify_written_files(
+    client: Any,
+    project_id: str,
+    expected: dict[str, bytes | None],
+    *,
+    open_browser: bool,
+) -> dict[str, object]:
+    """Read back written text and require a durable preview for every HTML deliverable."""
+    files: list[dict[str, object]] = []
+    try:
+        for path, expected_bytes in sorted(expected.items()):
+            if expected_bytes is None:
+                files.append({"path": path, "bytes": None, "readback": "write-evidence-only"})
+                continue
+            result = client.call_tool("read_file", {"project_id": project_id, "path": path})
+            decoded, etag = _decode_read_file_result(result)
+            actual = decoded.encode("utf-8")
+            if actual != expected_bytes:
+                raise ClaudeDesignProtocolError(f"Claude Design readback did not match the written bytes: {path}")
+            files.append({"path": path, "etag": etag, "bytes": len(actual)})
+    except (ClaudeDesignError, ValueError) as error:
+        return {
+            "verified": False,
+            "files": files,
+            "previews": [],
+            "error": str(error),
+        }
+    preview_verification = _verify_remote_previews(
+        client,
+        project_id,
+        list(expected),
+        open_browser=open_browser,
+        check_support=False,
+    )
+    return {"files": files, **preview_verification}
+
+
+def _verify_remote_previews(
+    client: Any,
+    project_id: str,
+    paths: list[str],
+    *,
+    open_browser: bool,
+    check_support: bool,
+) -> dict[str, object]:
+    """Require a valid durable preview for every renderable remote path."""
+    renderable = sorted({path for path in paths if path.endswith(".html")})
+    previews: list[dict[str, object]] = []
+    try:
+        if check_support:
+            _require_design_support(client, project_id, renderable)
+        for path in renderable:
+            preview = _tool_result_object(
+                client.call_tool("render_preview", {"project_id": project_id, "path": path}),
+                tool="render_preview",
+            )
+            open_url = preview.get("open_url")
+            if not isinstance(open_url, str) or not open_url:
+                raise ClaudeDesignProtocolError(f"Claude Design returned no durable preview after writing: {path}")
+            _validate_durable_preview_url(open_url)
+            preview_result: dict[str, object] = {"path": path, "open_url": open_url, "opened": False}
+            previews.append(preview_result)
+            if open_browser:
+                serve_url = preview.get("serve_url")
+                if not isinstance(serve_url, str) or not serve_url:
+                    raise ClaudeDesignProtocolError(
+                        f"Claude Design returned no short-lived browser preview after writing: {path}"
+                    )
+                _open_preview_url(serve_url)
+                preview_result["opened"] = True
+    except (ClaudeDesignError, ValueError) as error:
+        return {"verified": False, "previews": previews, "error": str(error)}
+    return {"verified": True, "previews": previews}
 
 
 def _planned_call_payload(args: argparse.Namespace, client: Any) -> dict[str, object]:
@@ -2185,19 +2347,26 @@ def _sync_mark_stale(
     return CLAUDE_DESIGN_SYNC_STALE_EXIT_CODE
 
 
-def _sync_mark_unknown(root: Path, receipt: dict[str, Any], *, message: str, json_mode: bool) -> int:
+def _sync_mark_unknown(
+    root: Path,
+    receipt: dict[str, Any],
+    *,
+    message: str,
+    json_mode: bool,
+    verification: dict[str, object] | None = None,
+) -> int:
     receipt["state"] = "unknown"
     receipt["updated_at"] = int(time.time())
     receipt = _sync_save_receipt(root, receipt)
-    _print_design_result(
-        {
-            "review_id": receipt["review_id"],
-            "state": "unknown",
-            "mutated": receipt.get("mutated", False),
-            "error": message,
-        },
-        json_mode=json_mode,
-    )
+    payload: dict[str, object] = {
+        "review_id": receipt["review_id"],
+        "state": "unknown",
+        "mutated": receipt.get("mutated", False),
+        "error": message,
+    }
+    if verification is not None:
+        payload["verification"] = verification
+    _print_design_result(payload, json_mode=json_mode)
     return CLAUDE_DESIGN_SYNC_UNKNOWN_EXIT_CODE
 
 
@@ -2210,6 +2379,7 @@ def _sync_apply_to_design(
 ) -> int:
     _require_write_window(client)
     expected_etags = {str(pair["remote_path"]): str(pair["remote_etag"]) for pair in receipt["pairs"]}
+    _require_design_support(client, str(receipt["project_id"]), sorted(expected_etags))
     planned = _tool_result_object(
         client.call_tool(
             "finalize_plan",
@@ -2289,7 +2459,6 @@ def _sync_apply_to_design(
         )
 
     applied_remote: list[dict[str, Any]] = []
-    open_urls: list[str] = []
     try:
         for remote_path, expected in sorted(expected_bytes.items()):
             readback = client.call_tool(
@@ -2308,26 +2477,31 @@ def _sync_apply_to_design(
             applied_remote.append(
                 {"remote_path": remote_path, "remote_etag": etag, "remote_sha256": content_sha256(data)}
             )
-            if remote_path.endswith((".html", ".dc.html")):
-                preview = _tool_result_object(
-                    client.call_tool(
-                        "render_preview",
-                        {"project_id": receipt["project_id"], "path": remote_path},
-                    ),
-                    tool="render_preview",
-                )
-                open_url = preview.get("open_url")
-                if not isinstance(open_url, str) or not open_url:
-                    return _sync_mark_unknown(
-                        root,
-                        receipt,
-                        message=f"Claude Design returned no durable preview after syncing: {remote_path}",
-                        json_mode=args.json,
-                    )
-                _validate_durable_preview_url(open_url)
-                open_urls.append(open_url)
     except (ClaudeDesignError, ValueError) as error:
         return _sync_mark_unknown(root, receipt, message=str(error), json_mode=args.json)
+    verification = _verify_remote_previews(
+        client,
+        str(receipt["project_id"]),
+        list(expected_bytes),
+        open_browser=getattr(args, "open_browser", False),
+        check_support=False,
+    )
+    if verification.get("verified") is not True:
+        return _sync_mark_unknown(
+            root,
+            receipt,
+            message=str(verification.get("error", "Claude Design preview verification failed.")),
+            json_mode=args.json,
+            verification=verification,
+        )
+    previews = verification.get("previews")
+    open_urls: list[str] = []
+    if isinstance(previews, list):
+        open_urls = [
+            str(item["open_url"])
+            for item in previews
+            if isinstance(item, dict) and isinstance(item.get("open_url"), str)
+        ]
     receipt["state"] = "awaiting_verification"
     receipt["updated_at"] = int(time.time())
     receipt["applied_remote"] = applied_remote
@@ -2338,6 +2512,7 @@ def _sync_apply_to_design(
             "state": "awaiting_verification",
             "mutated": True,
             "open_urls": open_urls,
+            "verification": verification,
         },
         json_mode=args.json,
     )
@@ -2645,10 +2820,44 @@ def run_design_command(
         root = _design_workspace_root(workspace_root)
         client = client_factory()
         _require_write_window(client)
+        remote_paths = list(_parse_mappings(args.files, option="--file"))
+        for remote_path in remote_paths:
+            _validate_remote_path(remote_path)
         payload = _local_write_payload(args, client, workspace_root=root)
+        expected = _expected_write_bytes(payload)
+        _require_design_support(client, args.project_id, remote_paths)
         result = client.call_tool("write_files", payload)
-        _print_design_result({"tool": "write_files", "result": result}, json_mode=args.json)
-        return _tool_exit_code(result, tool="write_files", mutation=True, arguments=payload)
+        exit_code = _tool_exit_code(result, tool="write_files", mutation=True, arguments=payload)
+        if exit_code != 0:
+            _print_design_result(
+                {
+                    "tool": "write_files",
+                    "mutated": True,
+                    "result": result,
+                    "verification": {
+                        "verified": False,
+                        "error": "Claude Design did not return complete evidence for the guarded write.",
+                    },
+                },
+                json_mode=args.json,
+            )
+            return exit_code
+        verification = _verify_written_files(
+            client,
+            args.project_id,
+            expected,
+            open_browser=getattr(args, "open_browser", False),
+        )
+        _print_design_result(
+            {
+                "tool": "write_files",
+                "mutated": True,
+                "result": result,
+                "verification": verification,
+            },
+            json_mode=args.json,
+        )
+        return 0 if verification.get("verified") is True else 2
 
     if command == "preview":
         _validate_remote_path(args.remote_path)
@@ -2746,8 +2955,37 @@ def run_design_command(
         _require_write_window(client)
         payload = _planned_call_payload(args, client)
         result = client.call_tool(args.tool, payload)
-        _print_design_result({"tool": args.tool, "result": result}, json_mode=args.json)
-        return _tool_exit_code(result, tool=args.tool, mutation=True, arguments=payload)
+        exit_code = _tool_exit_code(result, tool=args.tool, mutation=True, arguments=payload)
+        verification: dict[str, object] | None = None
+        if exit_code == 0 and args.tool == "copy_files":
+            value = _tool_result_object(result, tool="copy_files")
+            etags = value.get("etags")
+            if not isinstance(etags, dict) or not etags:
+                verification = {
+                    "verified": False,
+                    "previews": [],
+                    "error": "Claude Design returned no copied-file etags for preview verification.",
+                }
+            else:
+                copied_paths = sorted(path for path in etags if isinstance(path, str))
+                verification = _verify_remote_previews(
+                    client,
+                    args.project_id,
+                    copied_paths,
+                    open_browser=getattr(args, "open_browser", False),
+                    check_support=True,
+                )
+            if verification.get("verified") is not True:
+                exit_code = 2
+        output: dict[str, object] = {
+            "tool": args.tool,
+            "mutated": exit_code in {0, 2},
+            "result": result,
+        }
+        if verification is not None:
+            output["verification"] = verification
+        _print_design_result(output, json_mode=args.json)
+        return exit_code
     if command != "call":
         raise ValueError("Choose status, tools, describe, call, or planned-call.")
 
@@ -2892,6 +3130,12 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Required for copy_files because existing destinations may be replaced.",
     )
+    planned_parser.add_argument(
+        "--open",
+        dest="open_browser",
+        action="store_true",
+        help="Open each copied HTML preview in the local system browser.",
+    )
     planned_parser.add_argument("--json", action="store_true", help="Output compact JSON.")
 
     preview_parser = subparsers.add_parser(
@@ -2968,6 +3212,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Authorize this exact source outside the current worktree; repeat per operand.",
     )
     push_parser.add_argument("--allow-write", action="store_true", help="Required remote-write acknowledgement.")
+    push_parser.add_argument(
+        "--open",
+        dest="open_browser",
+        action="store_true",
+        help="Open each freshly rendered HTML preview in the local system browser.",
+    )
     push_parser.add_argument("--json", action="store_true", help="Output compact JSON metadata.")
 
     sync_parser = subparsers.add_parser(
@@ -3000,6 +3250,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--allow-write",
         action="store_true",
         help="Required after the user approved this exact review.",
+    )
+    sync_apply.add_argument(
+        "--open",
+        dest="open_browser",
+        action="store_true",
+        help="Open each synchronized HTML preview in the local system browser.",
     )
     sync_apply.add_argument("--json", action="store_true", help="Output compact revision metadata.")
 

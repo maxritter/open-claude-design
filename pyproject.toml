@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "open-claude-design"
-version = "1.1.1"
+version = "1.1.2"
 description = "Design-system-aware UI workflows and Claude Design access for coding agents"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -43,7 +43,30 @@ dev = [
 packages = ["src/open_claude_design"]
 
 [tool.hatch.build.targets.wheel.force-include]
-skills = "open_claude_design/data/skills"
+"skills/open-claude-design-quality/LICENSE.md" = "open_claude_design/data/skills/open-claude-design-quality/LICENSE.md"
+"skills/open-claude-design-quality/SKILL.md" = "open_claude_design/data/skills/open-claude-design-quality/SKILL.md"
+"skills/open-claude-design-quality/agents/openai.yaml" = "open_claude_design/data/skills/open-claude-design-quality/agents/openai.yaml"
+"skills/open-claude-design-system/LICENSE.md" = "open_claude_design/data/skills/open-claude-design-system/LICENSE.md"
+"skills/open-claude-design-system/SKILL.md" = "open_claude_design/data/skills/open-claude-design-system/SKILL.md"
+"skills/open-claude-design-system/agents/openai.yaml" = "open_claude_design/data/skills/open-claude-design-system/agents/openai.yaml"
+"skills/open-claude-design-system/references/components.md" = "open_claude_design/data/skills/open-claude-design-system/references/components.md"
+"skills/open-claude-design-system/references/tokens.md" = "open_claude_design/data/skills/open-claude-design-system/references/tokens.md"
+"skills/open-claude-design/LICENSE.md" = "open_claude_design/data/skills/open-claude-design/LICENSE.md"
+"skills/open-claude-design/SKILL.md" = "open_claude_design/data/skills/open-claude-design/SKILL.md"
+"skills/open-claude-design/agents/openai.yaml" = "open_claude_design/data/skills/open-claude-design/agents/openai.yaml"
+"skills/open-claude-design/references/tool-workflows.md" = "open_claude_design/data/skills/open-claude-design/references/tool-workflows.md"
+"skills/open-claude-ui-design/LICENSE.md" = "open_claude_design/data/skills/open-claude-ui-design/LICENSE.md"
+"skills/open-claude-ui-design/SKILL.md" = "open_claude_design/data/skills/open-claude-ui-design/SKILL.md"
+"skills/open-claude-ui-design/agents/openai.yaml" = "open_claude_design/data/skills/open-claude-ui-design/agents/openai.yaml"
+"skills/open-claude-ui-design/references/discovery-and-direction.md" = "open_claude_design/data/skills/open-claude-ui-design/references/discovery-and-direction.md"
+"skills/open-claude-ui-design/references/exploration.md" = "open_claude_design/data/skills/open-claude-ui-design/references/exploration.md"
+"skills/open-claude-ui-design/references/prototype.md" = "open_claude_design/data/skills/open-claude-ui-design/references/prototype.md"
+"skills/open-claude-ui-review/LICENSE.md" = "open_claude_design/data/skills/open-claude-ui-review/LICENSE.md"
+"skills/open-claude-ui-review/SKILL.md" = "open_claude_design/data/skills/open-claude-ui-review/SKILL.md"
+"skills/open-claude-ui-review/agents/openai.yaml" = "open_claude_design/data/skills/open-claude-ui-review/agents/openai.yaml"
+"skills/open-claude-ui-review/references/accessibility.md" = "open_claude_design/data/skills/open-claude-ui-review/references/accessibility.md"
+"skills/open-claude-ui-review/references/interaction-and-verification.md" = "open_claude_design/data/skills/open-claude-ui-review/references/interaction-and-verification.md"
+"skills/open-claude-ui-review/references/visual-quality.md" = "open_claude_design/data/skills/open-claude-ui-review/references/visual-quality.md"
 "LICENSE.md" = "open_claude_design/data/LICENSE.md"
 
 [tool.hatch.build.targets.sdist]

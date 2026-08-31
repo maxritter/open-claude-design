@@ -66,7 +66,7 @@ Design decisions stop living in a separate side conversation. They become part o
 
 - **Full Claude Design access.** Projects, files, previews, design systems, conversations, comments, members, and sharing.
 - **Current guidance, lean context.** Live authoring context is cached on disk and loaded only when needed.
-- **Verified remote changes.** Writes are rendered, inspected, and read back before synchronization completes.
+- **Fail-closed design creation.** Root-level and nested `.dc.html` files keep their requested paths, are rejected without same-directory `support.js`, and must produce a durable preview URL after exact readback instead of leaving an unviewable design behind.
 
 ## Works with Impeccable
 
@@ -100,7 +100,7 @@ The installer auto-detects installed agents. Use `--all-agents` only when every 
 | **Conversations and comments** (4) | Read a conversation · update a conversation · list comments · acknowledge comments |
 | **Members and sharing** (5) | List members · add a member · remove a member · change a member role · update sharing |
 
-Remote access is read-only by default; changes require explicit authorization. File writes, copies, deletes, support JavaScript, previews, and authoring plans never run as generic calls — they are only reachable through the guarded `push`, `delete`, `planned-call`, and `preview` helpers, which keep plan tokens, etag checks, backups, and verification inside one process.
+Remote access is read-only by default; changes require explicit authorization. File writes, copies, deletes, support JavaScript, previews, and authoring plans never run as generic calls — they are only reachable through the guarded `push`, `delete`, `planned-call`, and `preview` helpers, which keep plan tokens, etag checks, backups, and verification inside one process. `push` requires exact readback; both local writes and server-side copies return success for renderable files only after runtime validation and durable preview creation. `--open` also opens the isolated render locally.
 
 **Five automatically invoked Agent Skills:**
 
@@ -119,7 +119,8 @@ Remote access is read-only by default; changes require explicit authorization. F
 | **Reconnect your Claude account** | `open-claude-design login` |
 | **Disconnect your Claude account** | `open-claude-design logout` |
 | **Check the connection** | `open-claude-design status --json` |
-| **Verify the full installation** | `open-claude-design doctor --json` |
+| **Verify detected agent installs** | `open-claude-design doctor --json` |
+| **Verify every supported agent** | `open-claude-design doctor --all-agents --json` |
 | **List the packaged skills** | `open-claude-design list` |
 | **Update Open Claude Design** | `open-claude-design update --scope global --yes` |
 | **Uninstall Open Claude Design** | `curl -fsSL https://github.com/maxritter/open-claude-design/releases/latest/download/uninstall.sh \| sh` |

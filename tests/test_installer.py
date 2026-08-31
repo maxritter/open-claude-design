@@ -10,7 +10,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 import open_claude_design.installer as installer_module
-from open_claude_design.config import SKILL_NAMES, SKILLS_CLI_VERSION
+from open_claude_design.config import FEATURED_AGENT_IDS, SKILL_NAMES, SKILLS_CLI_VERSION
 from open_claude_design.installer import (
     InstallError,
     SkillsRuntime,
@@ -62,9 +62,14 @@ def test_install_uses_one_pinned_skills_cli_for_every_agent(
     _resolve: MagicMock,
     tmp_path: Path,
 ) -> None:
+    list_calls = 0
+
     def execute(command: list[str], **kwargs: object) -> SimpleNamespace:
+        nonlocal list_calls
         if command[3] == "list":
-            return SimpleNamespace(returncode=0, stdout="[]", stderr="")
+            list_calls += 1
+            stdout = "[]" if list_calls == 1 else _installed_payload(tmp_path)
+            return SimpleNamespace(returncode=0, stdout=stdout, stderr="")
         source = Path(command[4])
         assert source.is_dir()
         assert (source / "skills" / "open-claude-design-quality" / "SKILL.md").is_file()
@@ -84,7 +89,7 @@ def test_install_uses_one_pinned_skills_cli_for_every_agent(
         capture_output=True,
     )
 
-    command = run.call_args_list[-1].args[0]
+    command = next(call.args[0] for call in run.call_args_list if call.args[0][3] == "add")
     assert command[:4] == [
         "/runtime/bin/npx",
         "--yes",
@@ -95,6 +100,63 @@ def test_install_uses_one_pinned_skills_cli_for_every_agent(
     assert "--global" in command
     assert "--copy" in command
     assert result["skills"] == list(SKILL_NAMES)
+    assert result["verified"] is True
+
+
+@patch("open_claude_design.installer.resolve_skills_runtime", return_value=_runtime())
+@patch("open_claude_design.installer.subprocess.run")
+def test_install_rejects_backend_success_when_runtime_skills_are_not_installed(
+    run: MagicMock,
+    _resolve: MagicMock,
+    tmp_path: Path,
+) -> None:
+    def execute(command: list[str], **_kwargs: object) -> SimpleNamespace:
+        if command[3] == "list":
+            return SimpleNamespace(returncode=0, stdout="[]", stderr="")
+        return SimpleNamespace(returncode=0, stdout="installed", stderr="")
+
+    run.side_effect = execute
+
+    with pytest.raises(InstallError, match="could not be verified"):
+        run_skills_action(
+            "install",
+            ("codex",),
+            "global",
+            project_root=tmp_path,
+            yes=True,
+            capture_output=True,
+        )
+
+
+@patch("open_claude_design.installer.resolve_skills_runtime", return_value=_runtime())
+@patch("open_claude_design.installer.subprocess.run")
+def test_install_rejects_success_when_one_requested_agent_remains_unconnected(
+    run: MagicMock,
+    _resolve: MagicMock,
+    tmp_path: Path,
+) -> None:
+    installed = False
+
+    def execute(command: list[str], **_kwargs: object) -> SimpleNamespace:
+        nonlocal installed
+        if command[3] == "add":
+            installed = True
+            return SimpleNamespace(returncode=0, stdout="installed", stderr="")
+        agent = command[command.index("--agent") + 1]
+        stdout = _installed_payload(tmp_path) if installed and agent == "codex" else "[]"
+        return SimpleNamespace(returncode=0, stdout=stdout, stderr="")
+
+    run.side_effect = execute
+
+    with pytest.raises(InstallError, match="cursor"):
+        run_skills_action(
+            "install",
+            ("codex", "cursor"),
+            "global",
+            project_root=tmp_path,
+            yes=True,
+            capture_output=True,
+        )
 
 
 @patch("open_claude_design.installer.resolve_skills_runtime", return_value=_runtime())
@@ -173,7 +235,7 @@ def test_doctor_reads_installed_state_through_the_same_backend(
 
 @patch("open_claude_design.installer.resolve_skills_runtime", return_value=_runtime())
 @patch("open_claude_design.installer.subprocess.run")
-def test_doctor_all_agents_lists_the_complete_scope_without_a_literal_wildcard(
+def test_doctor_all_agents_verifies_every_agent_without_a_literal_wildcard(
     run: MagicMock,
     _resolve: MagicMock,
     tmp_path: Path,
@@ -182,11 +244,12 @@ def test_doctor_all_agents_lists_the_complete_scope_without_a_literal_wildcard(
 
     result = doctor(("*",), "global", project_root=tmp_path)
 
-    command = run.call_args.args[0]
-    assert "--agent" not in command
-    assert "*" not in command
-    assert "--global" in command
+    commands = [call.args[0] for call in run.call_args_list]
+    assert len(commands) == len(FEATURED_AGENT_IDS)
+    assert {command[command.index("--agent") + 1] for command in commands} == set(FEATURED_AGENT_IDS)
+    assert all("*" not in command and "--global" in command for command in commands)
     assert result["agent_skills"]["ready"] is True
+    assert set(result["agent_skills"]["agents"]) == set(FEATURED_AGENT_IDS)
 
 
 @patch("open_claude_design.installer.resolve_skills_runtime", return_value=_runtime())

@@ -10,6 +10,7 @@ from pathlib import Path
 
 import pytest
 
+import open_claude_design.bridge as claude_design
 from open_claude_design.bridge import (
     ClaudeDesignAuthError,
     ClaudeDesignProtocolError,
@@ -27,6 +28,7 @@ class SyncStubClient:
         self.calls: list[tuple[str, dict[str, object]]] = []
         self.remote: dict[str, tuple[str, str]] = {
             "Example.dc.html": ("remote-1", "<main>remote</main>\n"),
+            "support.js": ("support-1", "runtime\n"),
         }
         self.write_preflights = 0
         self.fail_reads = False
@@ -448,6 +450,16 @@ def test_sync_to_design_applies_reviewed_bytes_once_and_finishes_verified_ledger
     assert applied["state"] == "awaiting_verification"
     assert applied["mutated"] is True
     assert applied["open_urls"] == ["https://claude.ai/design/p/project-1"]
+    assert applied["verification"] == {
+        "verified": True,
+        "previews": [
+            {
+                "path": "Example.dc.html",
+                "open_url": "https://claude.ai/design/p/project-1",
+                "opened": False,
+            }
+        ],
+    }
     assert client.remote["Example.dc.html"] == ("remote-2", "<main>local</main>\n")
     assert client.write_preflights == 1
 
@@ -464,6 +476,7 @@ def test_sync_to_design_applies_reviewed_bytes_once_and_finishes_verified_ledger
     assert [name for name, _arguments in client.calls] == [
         "list_files",
         "read_file",
+        "list_files",
         "finalize_plan",
         "write_files",
         "read_file",
@@ -483,6 +496,70 @@ def test_sync_to_design_applies_reviewed_bytes_once_and_finishes_verified_ledger
     assert [name for name, _arguments in client.calls] == ["list_files"]
 
 
+def test_sync_to_design_open_verifies_the_browser_preview(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    local = tmp_path / "Example.dc.html"
+    local.write_text("<main>local</main>\n", encoding="utf-8")
+    client = SyncStubClient()
+    assert run_design_command(_review_args(local), client_factory=lambda: client, workspace_root=tmp_path) == 0
+    review_id = _receipt_id(capsys)
+    opened: list[str] = []
+    monkeypatch.setattr(claude_design, "_open_preview_url", opened.append)
+
+    apply_args = Namespace(
+        design_command="sync",
+        sync_command="apply",
+        review_id=review_id,
+        allow_write=True,
+        open_browser=True,
+        json=True,
+    )
+    assert run_design_command(apply_args, client_factory=lambda: client, workspace_root=tmp_path) == 0
+    applied = json.loads(capsys.readouterr().out)
+    assert opened == ["https://preview.claudeusercontent.com/short-lived"]
+    assert applied["verification"]["previews"][0]["opened"] is True
+
+
+def test_sync_browser_failure_keeps_durable_preview_and_marks_receipt_unknown(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    local = tmp_path / "Example.dc.html"
+    local.write_text("<main>local</main>\n", encoding="utf-8")
+    client = SyncStubClient()
+    assert run_design_command(_review_args(local), client_factory=lambda: client, workspace_root=tmp_path) == 0
+    review_id = _receipt_id(capsys)
+
+    def fail_open(_url: str) -> None:
+        raise ClaudeDesignSafetyError("synthetic browser open failure")
+
+    monkeypatch.setattr(claude_design, "_open_preview_url", fail_open)
+    apply_args = Namespace(
+        design_command="sync",
+        sync_command="apply",
+        review_id=review_id,
+        allow_write=True,
+        open_browser=True,
+        json=True,
+    )
+
+    assert run_design_command(apply_args, client_factory=lambda: client, workspace_root=tmp_path) == 2
+    applied = json.loads(capsys.readouterr().out)
+    assert applied["state"] == "unknown"
+    assert applied["verification"]["previews"] == [
+        {
+            "path": "Example.dc.html",
+            "open_url": "https://claude.ai/design/p/project-1",
+            "opened": False,
+        }
+    ]
+    assert "browser open failure" in applied["error"]
+
+
 def test_sync_to_design_supports_approved_remote_file_creation(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
@@ -491,6 +568,7 @@ def test_sync_to_design_supports_approved_remote_file_creation(
     local.write_text("<main>new design</main>\n", encoding="utf-8")
     client = SyncStubClient()
     client.remote.clear()
+    client.remote["support.js"] = ("support-1", "runtime\n")
     assert run_design_command(_review_args(local), client_factory=lambda: client, workspace_root=tmp_path) == 0
     review_id = _receipt_id(capsys)
 
@@ -504,6 +582,32 @@ def test_sync_to_design_supports_approved_remote_file_creation(
     assert run_design_command(apply_args, client_factory=lambda: client, workspace_root=tmp_path) == 0
     assert json.loads(capsys.readouterr().out)["state"] == "awaiting_verification"
     assert client.remote["Example.dc.html"] == ("remote-1", "<main>new design</main>\n")
+
+
+def test_sync_to_design_refuses_dc_creation_without_support_before_mutation(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    local = tmp_path / "Example.dc.html"
+    local.write_text("<main>new design</main>\n", encoding="utf-8")
+    client = SyncStubClient()
+    client.remote.clear()
+    assert run_design_command(_review_args(local), client_factory=lambda: client, workspace_root=tmp_path) == 0
+    review_id = _receipt_id(capsys)
+    client.calls.clear()
+
+    apply_args = Namespace(
+        design_command="sync",
+        sync_command="apply",
+        review_id=review_id,
+        allow_write=True,
+        json=True,
+    )
+    with pytest.raises(ClaudeDesignSafetyError, match="support.js"):
+        run_design_command(apply_args, client_factory=lambda: client, workspace_root=tmp_path)
+
+    assert [name for name, _arguments in client.calls] == ["list_files"]
+    assert "Example.dc.html" not in client.remote
 
 
 def test_sync_marks_ambiguous_post_write_failure_unknown_and_status_is_local_only(

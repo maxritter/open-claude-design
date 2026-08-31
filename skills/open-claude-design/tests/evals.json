@@ -23,8 +23,8 @@
       "expected_output": "A path-scoped, conflict-safe remote write using current Claude Design guidance and read-back verification.",
       "expectations": [
         "The response would read the current prompt, relevant design skill, target file, dependencies, and etag before writing.",
-        "The response uses open-claude-design push with Account.html only, a worktree-local non-symlink source, the current if-match etag, internal exact-path finalize_plan checking, and --allow-write only for the authorized mutation.",
-        "The response reads back Account.html, uses open-claude-design preview for verification, and shares only a durable open_url rather than serve_url."
+        "The response uses open-claude-design push --open with Account.html only, a worktree-local non-symlink source, the current if-match etag, internal exact-path finalize_plan checking, and --allow-write only for the authorized mutation.",
+        "The response requires verification.verified true and Account.html's durable open_url from the guarded push before visual inspection, and never exposes serve_url."
       ]
     },
     {
@@ -113,6 +113,17 @@
         "The response does not launch an automatic localhost browser flow or imply that Claude Code or an Anthropic API key is required.",
         "It asks the user to run open-claude-design login --manual in an interactive terminal, open that URL in a host browser, and paste code#state back into the terminal rather than the coding-agent chat.",
         "After the user finishes, it retries open-claude-design status and resumes the original task; it notes that the container credential path must be persisted to survive rebuilds."
+      ]
+    },
+    {
+      "id": 11,
+      "name": "unpreviewable-design-write-fails-closed",
+      "prompt": "You are authorized to create Checkout/Payment.dc.html in synthetic Claude Design project 00000000-0000-0000-0000-000000000001. Describe how you prevent the task from completing when support.js is missing, the write cannot be read back, the durable preview cannot be created, or the browser does not open. This is a benchmark: do not call the service or modify anything.",
+      "expected_output": "A fail-closed guarded-write workflow in which every created Design Component is runtime-complete, read back, rendered, and handed to the user through a durable preview URL.",
+      "expectations": [
+        "The response creates Checkout/support.js with planned-call create_support_js before Checkout/Payment.dc.html and says push or code-to-design sync refuses the .dc.html mutation when that runtime is absent.",
+        "It uses push --open and requires verification.verified true plus a durable open_url for Payment.dc.html; exit 2, mismatched readback, missing preview, or a browser-open error remains incomplete and is reconciled rather than reported successful.",
+        "It never exposes serve_url, gives the durable open_url to the user even when automatic browser opening is unavailable, and still performs screenshot, console, and failed-request inspection before completion."
       ]
     }
   ]

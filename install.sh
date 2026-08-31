@@ -306,7 +306,7 @@ fi
 if [ "$dry_run" -eq 1 ]; then
   info "Dry run: no agent files were changed"
 else
-  success "Automatic design workflows installed"
+  success "Automatic design workflows installed and verified"
 fi
 
 step 5 "Connecting Claude Design"
