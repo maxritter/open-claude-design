@@ -14,6 +14,7 @@ Run before submitting a change:
 ```bash
 uv run pytest -q
 uv run ruff check .
+uv run ruff format --check .
 uv run basedpyright
 uv run python scripts/validate_skills.py
 sh scripts/check-shell.sh
@@ -27,4 +28,4 @@ Never include Claude Design credentials, plan tokens, short-lived preview URLs, 
 
 By submitting a contribution, you grant Max Ritter a perpetual, worldwide, irrevocable, royalty-free right to use, modify, distribute, sublicense, and relicense the contribution as part of Open Claude Design. Third-party material must retain its original license and attribution.
 
-Use conventional commits (`feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `build:`, `ci:`). After the initial 1.0.0 bootstrap release, Release Please keeps a release pull request, semantic version, changelog, draft GitHub Release, verified artifacts, checksums, and provenance in sync. The `release` environment must approve publication after all test and security gates pass.
+Use conventional commits (`feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `build:`, `ci:`). Releases are manual: a maintainer bumps the version in `pyproject.toml` and `src/open_claude_design/config.py`, updates `CHANGELOG.md`, and dispatches the `Manual Release` workflow, which rebuilds, re-verifies, attests provenance, and publishes the GitHub Release. The `release` environment must approve publication after all test and security gates pass.

@@ -163,7 +163,13 @@ Before the first write, check once whether the coding host has browser automatio
 
 ## Sharing, members, and conversation sync
 
-Use `get_project` for current link-sharing metadata and `list_members` for current grants before proposing or applying a collaboration change. `add_member`, `remove_member`, `update_member_role`, `update_sharing`, and `put_conversation` change collaboration state. Use them only when the user explicitly names that change and the exact project, preserve concurrent changes, and read back the resulting state.
+Read current state first: `get_project` for link-sharing metadata, `list_members` for per-user grants, `get_conversation` for existing chats. Apply a collaboration change only when the user explicitly names the exact project and the exact change, preserve concurrent changes, and read the resulting state back.
+
+- **Link sharing** (`update_sharing`): `scope` is `invited` (owner plus explicit members) or `org` (anyone in the project's organization); `link_permission` is `view`, `comment`, or `edit`. Link settings act independently of per-user grants, so widening either can expose the project to the whole organization — restate the exact effect ("org-wide edit") and confirm before the call.
+- **Membership** (`add_member`, `update_member_role`, `remove_member`): roles are `viewer`, `commenter`, and `editor`. `add_member` takes exactly one of `account_uuid` or `email` (exact-matched inside the caller's organization) and silently overwrites an existing member's role. Callers cannot change their own role or remove themselves, and the owner cannot be removed. Verify the target identity against `list_members` before a role change or removal; a display name is not an identity.
+- **Conversation sync** (`put_conversation`): the first call creates a tool-authored chat and returns `chat_id` and `next_idx`. Later delta syncs pass `append: true` with that `chat_id`, the server's current message count as the synced-through index, and only the new rows. A refusal means the stored copy diverged — follow the error's instruction (usually one full-list sync without `append`) before resuming. Appending never edits earlier rows, syncing into a user-authored chat is rejected, and the chat's title and composer stay untouched. Publish a transcript only when the user asked for it; conversations may contain private context.
+
+All five are mutations behind explicit write acknowledgement, and `remove_member` is additionally destructive: it requires the destructive acknowledgement plus the user's exact authorization for that member and project.
 
 ## Local implementation handoff
 

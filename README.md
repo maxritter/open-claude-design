@@ -91,7 +91,7 @@ Every supported agent receives the same automatic workflows and CLI access.
 | Cursor · GitHub Copilot · Cline · Trae · Qoder · Rovo Dev | ✅ Full |
 | Gemini CLI · Antigravity · Kimi · Kiro · Pi | ✅ Full |
 | Mistral Vibe · Hermes · Reasonix · Grok Build · OpenClaw | ✅ Full |
-| Warp · Zed · Amp · Replit · other Agent Skills hosts | ✅ Full |
+| Warp · Zed · Amp · other Agent Skills hosts | ✅ Full |
 
 The installer auto-detects installed agents. Use `--all-agents` only when every available integration is wanted.
 
@@ -106,7 +106,7 @@ The installer auto-detects installed agents. Use `--all-agents` only when every 
 | **Conversations and comments** (4) | Read a conversation · update a conversation · list comments · acknowledge comments |
 | **Members and sharing** (5) | List members · add a member · remove a member · change a member role · update sharing |
 
-Remote access is read-only by default; changes require explicit authorization.
+Remote access is read-only by default; changes require explicit authorization. File writes, copies, deletes, support JavaScript, previews, and authoring plans never run as generic calls — they are only reachable through the guarded `push`, `delete`, `planned-call`, and `preview` helpers, which keep plan tokens, etag checks, backups, and verification inside one process.
 
 **Five automatically invoked Agent Skills:**
 
@@ -123,9 +123,13 @@ Remote access is read-only by default; changes require explicit authorization.
 | What do you want to do? | Command |
 |---|---|
 | **Reconnect your Claude account** | `open-claude-design login` |
+| **Disconnect your Claude account** | `open-claude-design logout` |
 | **Check the connection** | `open-claude-design status --json` |
+| **Verify the full installation** | `open-claude-design doctor --json` |
+| **List the packaged skills** | `open-claude-design list` |
 | **Update Open Claude Design** | `open-claude-design update --scope global --yes` |
 | **Uninstall Open Claude Design** | `curl -fsSL https://github.com/maxritter/open-claude-design/releases/latest/download/uninstall.sh \| sh` |
+| **Remove project-scoped skills** | `curl -fsSL https://github.com/maxritter/open-claude-design/releases/latest/download/uninstall.sh \| sh -s -- --scope project --yes` |
 
 ## Open for pull requests
 

@@ -8,6 +8,7 @@ Open Claude Design is a free, source-available design layer for coding agents. `
 
 - `uv sync --all-groups` — install the Python development environment.
 - `uv run ruff check .` — lint Python sources and tests.
+- `uv run ruff format --check .` — verify formatting; CI gates on it.
 - `uv run basedpyright` — type-check the package with the repository configuration.
 - `uv run pytest -q` — run the isolated CLI, installer, credential, and bridge tests.
 - `uv run python scripts/validate_skills.py` — validate every canonical skill and implicit-invocation manifest.
