@@ -50,7 +50,7 @@ def test_readme_promotes_the_one_line_installer_above_platforms() -> None:
     assert readme.count(command) == 1
     assert readme.index(command) < readme.index("**macOS · Linux · WSL2**")
     subtitle = (
-        "**Use Claude Design from your existing coding agent—no Claude Code installation "
+        "**Use Claude Design from your favorite coding agents—no Claude Code installation "
         "or Anthropic API key required.**"
     )
     assert readme.index("<h1>Claude Design for any coding agent</h1>") < readme.index(subtitle) < readme.index(command)
