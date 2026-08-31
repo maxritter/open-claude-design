@@ -21,6 +21,7 @@ from open_claude_design.config import (
     CLAUDE_DESIGN_OAUTH_CLIENT_ID,
     CLAUDE_DESIGN_OAUTH_MANUAL_REDIRECT_URL,
     CLAUDE_DESIGN_OAUTH_SCOPES,
+    CLAUDE_DESIGN_OAUTH_USER_AGENT,
 )
 
 pytestmark = pytest.mark.unit
@@ -67,6 +68,8 @@ def test_manual_login_uses_pkce_and_persists_without_claude_code(
 
     def opener(request: urllib.request.Request, *, timeout: int) -> FakeResponse:
         assert timeout == 30
+        # platform.claude.com bans urllib's default UA (Cloudflare error 1010).
+        assert request.get_header("User-agent") == CLAUDE_DESIGN_OAUTH_USER_AGENT
         requests.append(json.loads(bytes(request.data or b"").decode("utf-8")))
         return FakeResponse(_token_response())
 
@@ -284,6 +287,7 @@ def test_refresh_uses_stored_client_and_rotates_credential(tmp_path: Path) -> No
 
     def opener(request: urllib.request.Request, *, timeout: int) -> FakeResponse:
         assert timeout == 30
+        assert request.get_header("User-agent") == CLAUDE_DESIGN_OAUTH_USER_AGENT
         requests.append(json.loads(bytes(request.data or b"").decode("utf-8")))
         return FakeResponse(_token_response(access="new-access", refresh="new-refresh"))
 
@@ -316,9 +320,12 @@ def test_keychain_write_keeps_tokens_out_of_argv() -> None:
     )
 
     command, kwargs = calls[0]
-    assert "secret-access" not in " ".join(command)
-    assert "secret-refresh" not in " ".join(command)
-    assert str(kwargs["input"]).count("secret-access") == 2
+    # The value must ride on a `security -i` stdin command line: argv would leak it
+    # to `ps`, and the interactive password prompt truncates at 128 bytes.
+    assert command == ["/usr/bin/security", "-i"]
+    input_text = str(kwargs["input"])
+    assert input_text.count("secret-access") == 1
+    assert input_text.count("secret-refresh") == 1
     assert kwargs["shell"] is False
 
 

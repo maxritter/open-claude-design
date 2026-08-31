@@ -36,6 +36,7 @@ from open_claude_design.config import (
     CLAUDE_DESIGN_OAUTH_SUCCESS_URL,
     CLAUDE_DESIGN_OAUTH_TIMEOUT_SECONDS,
     CLAUDE_DESIGN_OAUTH_TOKEN_URL,
+    CLAUDE_DESIGN_OAUTH_USER_AGENT,
     CLAUDE_DESIGN_STANDALONE_CREDENTIAL_PARTS,
     CLAUDE_DESIGN_STANDALONE_KEYCHAIN_ACCOUNT,
     CLAUDE_DESIGN_STANDALONE_KEYCHAIN_SERVICE,
@@ -236,19 +237,19 @@ def _write_keychain(
     payload: dict[str, object],
     runner: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
 ) -> None:
+    # The value must ride on a `security -i` stdin command line: argv would leak it
+    # to `ps`, and security's interactive password prompt truncates at 128 bytes.
     serialized = json.dumps(payload, separators=(",", ":"))
+    escaped = serialized.replace("\\", "\\\\").replace('"', '\\"')
+    command = (
+        "add-generic-password -U"
+        f' -a "{CLAUDE_DESIGN_STANDALONE_KEYCHAIN_ACCOUNT}"'
+        f' -s "{CLAUDE_DESIGN_STANDALONE_KEYCHAIN_SERVICE}"'
+        f' -w "{escaped}"\n'
+    )
     result = runner(
-        [
-            "/usr/bin/security",
-            "add-generic-password",
-            "-U",
-            "-a",
-            CLAUDE_DESIGN_STANDALONE_KEYCHAIN_ACCOUNT,
-            "-s",
-            CLAUDE_DESIGN_STANDALONE_KEYCHAIN_SERVICE,
-            "-w",
-        ],
-        input=f"{serialized}\n{serialized}\n",
+        ["/usr/bin/security", "-i"],
+        input=command,
         capture_output=True,
         text=True,
         shell=False,
@@ -382,7 +383,12 @@ def _request_token(
     request = urllib.request.Request(
         CLAUDE_DESIGN_OAUTH_TOKEN_URL,
         data=json.dumps(fields).encode("utf-8"),
-        headers={"Accept": "application/json", "Content-Type": "application/json"},
+        headers={
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+            # Cloudflare on platform.claude.com rejects urllib's default UA (error 1010).
+            "User-Agent": CLAUDE_DESIGN_OAUTH_USER_AGENT,
+        },
         method="POST",
     )
     try:

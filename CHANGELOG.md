@@ -2,6 +2,13 @@
 
 All notable changes to Open Claude Design are documented here. Releases follow semantic versioning and are generated from conventional commits.
 
+## [1.1.1](https://github.com/maxritter/open-claude-design/compare/v1.1.0...v1.1.1) (2026-08-31)
+
+### Fixed
+
+- Login no longer fails with HTTP 403: Cloudflare on `platform.claude.com` began rejecting Python's default urllib User-Agent, so OAuth token and refresh requests now identify themselves as `open-claude-design/<version>`.
+- macOS credential storage is no longer silently truncated: the Keychain write previously fed the credential through `security`'s interactive password prompt, which caps input at 128 bytes and corrupted the stored JSON while still exiting 0. The credential now travels on a `security -i` stdin command line, keeping it out of process argv and intact at any length.
+
 ## [1.1.0](https://github.com/maxritter/open-claude-design/compare/v1.0.2...v1.1.0) (2026-08-31)
 
 ### Added

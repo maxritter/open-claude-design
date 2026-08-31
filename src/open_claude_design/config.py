@@ -5,12 +5,13 @@ from __future__ import annotations
 from typing import Final
 
 PACKAGE_NAME: Final = "open-claude-design"
-VERSION: Final = "1.1.0"
+VERSION: Final = "1.1.1"
 
 CLAUDE_DESIGN_ENDPOINT: Final = "https://api.anthropic.com/v1/design/mcp"
 CLAUDE_DESIGN_OAUTH_AUTHORIZE_URL: Final = "https://claude.com/cai/oauth/authorize"
 CLAUDE_DESIGN_OAUTH_TOKEN_URL: Final = "https://platform.claude.com/v1/oauth/token"
 CLAUDE_DESIGN_OAUTH_CLIENT_ID: Final = "59637612-477b-4836-a601-b0589eda7704"
+CLAUDE_DESIGN_OAUTH_USER_AGENT: Final = f"{PACKAGE_NAME}/{VERSION}"
 CLAUDE_DESIGN_OAUTH_MANUAL_REDIRECT_URL: Final = "https://platform.claude.com/oauth/code/callback"
 CLAUDE_DESIGN_OAUTH_SUCCESS_URL: Final = "https://platform.claude.com/oauth/code/success?app=claude-code"
 CLAUDE_DESIGN_BROWSER_LOGIN_ENV: Final = "OPEN_CLAUDE_DESIGN_BROWSER_LOGIN"
