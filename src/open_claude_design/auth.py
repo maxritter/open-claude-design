@@ -39,6 +39,7 @@ from open_claude_design.config import (
     CLAUDE_DESIGN_STANDALONE_CREDENTIAL_PARTS,
     CLAUDE_DESIGN_STANDALONE_KEYCHAIN_ACCOUNT,
     CLAUDE_DESIGN_STANDALONE_KEYCHAIN_SERVICE,
+    CLAUDE_DESIGN_USER_AGENT,
 )
 
 
@@ -382,7 +383,11 @@ def _request_token(
     request = urllib.request.Request(
         CLAUDE_DESIGN_OAUTH_TOKEN_URL,
         data=json.dumps(fields).encode("utf-8"),
-        headers={"Accept": "application/json", "Content-Type": "application/json"},
+        headers={
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+            "User-Agent": CLAUDE_DESIGN_USER_AGENT,
+        },
         method="POST",
     )
     try:

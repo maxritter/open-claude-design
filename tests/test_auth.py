@@ -21,6 +21,7 @@ from open_claude_design.config import (
     CLAUDE_DESIGN_OAUTH_CLIENT_ID,
     CLAUDE_DESIGN_OAUTH_MANUAL_REDIRECT_URL,
     CLAUDE_DESIGN_OAUTH_SCOPES,
+    CLAUDE_DESIGN_USER_AGENT,
 )
 
 pytestmark = pytest.mark.unit
@@ -320,6 +321,34 @@ def test_keychain_write_keeps_tokens_out_of_argv() -> None:
     assert "secret-refresh" not in " ".join(command)
     assert str(kwargs["input"]).count("secret-access") == 2
     assert kwargs["shell"] is False
+
+
+def test_token_request_sends_a_product_user_agent(tmp_path: Path) -> None:
+    # Cloudflare answers the default "Python-urllib/3.x" agent with Error 1010, which
+    # surfaces as "authorization was rejected (HTTP 403)" and fails every login.
+    seen: list[str | None] = []
+    messages: list[str] = []
+
+    def opener(request: urllib.request.Request, *, timeout: int) -> FakeResponse:
+        seen.append(request.get_header("User-agent"))
+        return FakeResponse(_token_response())
+
+    def reply(_prompt: str) -> str:
+        authorize_url = next(line for line in messages if line.startswith("https://"))
+        state = parse_qs(urlparse(authorize_url).query)["state"][0]
+        return f"authorization-code#{state}"
+
+    auth.login_design(
+        manual=True,
+        platform="linux",
+        home=tmp_path,
+        token_opener=opener,
+        input_reader=reply,
+        emit=messages.append,
+    )
+
+    assert seen == [CLAUDE_DESIGN_USER_AGENT]
+    assert "python-urllib" not in str(seen[0]).lower()
 
 
 def test_authorize_url_is_registered_public_client_with_exact_design_scopes() -> None:

@@ -62,6 +62,7 @@ from open_claude_design.config import (
     CLAUDE_DESIGN_SYNC_SCHEMA_VERSION,
     CLAUDE_DESIGN_SYNC_STALE_EXIT_CODE,
     CLAUDE_DESIGN_SYNC_UNKNOWN_EXIT_CODE,
+    CLAUDE_DESIGN_USER_AGENT,
     DEFAULT_FILE_LIST_DEPTH,
     VERSION,
 )
@@ -366,6 +367,7 @@ class ClaudeDesignClient:
             "Authorization": f"Bearer {self._token()}",
             "Accept": "application/json, text/event-stream",
             "Content-Type": "application/json",
+            "User-Agent": CLAUDE_DESIGN_USER_AGENT,
         }
         if self._session_id:
             headers["Mcp-Session-Id"] = self._session_id

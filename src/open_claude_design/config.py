@@ -7,6 +7,10 @@ from typing import Final
 PACKAGE_NAME: Final = "open-claude-design"
 VERSION: Final = "1.1.0"
 
+# Cloudflare in front of the OAuth token endpoint rejects urllib's default
+# "Python-urllib/3.x" agent with Error 1010, so every request must send a product agent.
+CLAUDE_DESIGN_USER_AGENT: Final = f"{PACKAGE_NAME}/{VERSION}"
+
 CLAUDE_DESIGN_ENDPOINT: Final = "https://api.anthropic.com/v1/design/mcp"
 CLAUDE_DESIGN_OAUTH_AUTHORIZE_URL: Final = "https://claude.com/cai/oauth/authorize"
 CLAUDE_DESIGN_OAUTH_TOKEN_URL: Final = "https://platform.claude.com/v1/oauth/token"

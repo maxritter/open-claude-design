@@ -27,6 +27,7 @@ from open_claude_design.bridge import (
     read_design_credential,
     run_design_command,
 )
+from open_claude_design.config import CLAUDE_DESIGN_USER_AGENT
 
 pytestmark = pytest.mark.unit
 
@@ -274,10 +275,12 @@ def test_client_lists_tools_progressively_without_returning_token() -> None:
         ]
     )
     seen_authorization: list[str] = []
+    seen_user_agent: list[str | None] = []
 
     def opener(request: Any, *, timeout: int) -> FakeResponse:
         assert timeout == 30
         seen_authorization.append(request.headers["Authorization"])
+        seen_user_agent.append(request.get_header("User-agent"))
         if request.headers.get("Mcp-session-id"):
             assert request.headers["Mcp-session-id"] == "session-1"
         return next(responses)
@@ -287,6 +290,8 @@ def test_client_lists_tools_progressively_without_returning_token() -> None:
 
     assert tools[0]["name"] == "read_file"
     assert seen_authorization == ["Bearer secret-access-token"] * 3
+    # A default urllib agent is what Cloudflare rejects with Error 1010.
+    assert seen_user_agent == [CLAUDE_DESIGN_USER_AGENT] * 3
     assert "secret-access-token" not in json.dumps(tools)
 
 
