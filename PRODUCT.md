@@ -40,6 +40,8 @@ The coding agent remains the implementation environment. Claude Design remains t
 - Expose every current and future Claude Design tool published through its MCP catalog by discovering tools dynamically.
 - Keep large design files and synchronization ledgers out of model context through disk-backed CLI operations.
 - Detect remote-only, local-only, and both-changed states through remote etags and local hashes; never choose a winner silently when both sides changed.
+- Bind synchronization approval to the exact reviewed remote etags and local content hashes, then require a new review if either side changes before application.
+- Connect the first real Claude Design task automatically on desktop hosts while keeping installs non-interactive and routing headless/dev-container users through a terminal-only manual flow.
 - Create new Claude Design elements from real components, tokens, assets, copy, templates, and interaction states.
 - Load Anthropic's latest live Claude Design prompt and exactly one relevant live authoring skill only at the remote-authoring boundary.
 - Verify remote writes through render, visual inspection, and readback before advancing the synchronization baseline.

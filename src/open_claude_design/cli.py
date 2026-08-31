@@ -11,7 +11,12 @@ from pathlib import Path
 from typing import cast
 
 from open_claude_design import bridge
-from open_claude_design.auth import DesignAuthError, delete_standalone_credential, login_design
+from open_claude_design.auth import (
+    DesignAuthError,
+    automatic_browser_login_available,
+    delete_standalone_credential,
+    login_design,
+)
 from open_claude_design.config import (
     BRIDGE_COMMAND_NAMES,
     DEFAULT_INSTALL_SCOPE,
@@ -144,7 +149,17 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "login":
             if args.timeout < 1:
                 raise DesignAuthError("--timeout must be at least one second.")
-            login_design(manual=args.manual, timeout_seconds=args.timeout)
+            if not args.manual and not automatic_browser_login_available():
+                raise DesignAuthError(
+                    "No local browser session is available. Run open-claude-design login --manual in an "
+                    "interactive terminal; open its URL on your host browser and paste the returned code into "
+                    "that terminal, not into a coding-agent chat."
+                )
+            login_design(
+                manual=args.manual,
+                timeout_seconds=args.timeout,
+                allow_manual_fallback=sys.stdin.isatty(),
+            )
             return 0
         if args.command == "logout":
             if not args.yes:

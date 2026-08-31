@@ -68,6 +68,8 @@ def test_readme_keeps_activation_order_and_local_links_valid() -> None:
     assert local_targets
     assert all((ROOT / target).is_file() for target in local_targets)
     assert (ROOT / "docs" / "media" / "open-claude-design-hero.png").is_file()
+    assert (ROOT / "docs" / "media" / "claude-design-ui.webp").is_file()
+    assert readme.index("docs/media/claude-design-ui.webp") < readme.index("## Quick start")
 
 
 def test_readme_promotes_the_one_line_installer_above_platforms() -> None:

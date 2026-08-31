@@ -2,6 +2,19 @@
 
 All notable changes to Open Claude Design are documented here. Releases follow semantic versioning and are generated from conventional commits.
 
+## [1.1.0](https://github.com/maxritter/open-claude-design/compare/v1.0.2...v1.1.0) (2026-08-31)
+
+### Added
+
+- Revision-bound two-way synchronization with automatic review receipts, local content hashes, remote etags, verified baselines, and stale-approval rejection before mutation.
+- First-use desktop authentication without install-time coupling, plus a fail-closed manual flow for CI, SSH, and headless dev containers that keeps authorization codes out of agent chat.
+- Local-only Git exclusion for generated sync receipts and snapshots, preventing status noise without editing a repository's tracked `.gitignore`.
+- A real Claude Design editor screenshot in the README so new users can see the visual workspace before installing.
+
+### Security
+
+- Approved sync batches are all-or-nothing, detect file creation, deletion, and concurrent revision changes, keep snapshots worktree-local, and cannot be replayed after completion or an ambiguous outcome.
+
 ## [1.0.2](https://github.com/maxritter/open-claude-design/compare/v1.0.1...v1.0.2) (2026-08-31)
 
 ### Added

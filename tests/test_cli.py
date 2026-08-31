@@ -84,6 +84,21 @@ def test_login_is_standalone_and_does_not_route_through_bridge(monkeypatch: pyte
     assert captured["timeout_seconds"] == 42
 
 
+def test_automatic_login_fails_cleanly_in_headless_runtime(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setattr(cli, "automatic_browser_login_available", lambda: False)
+    monkeypatch.setattr(cli, "login_design", lambda **_kwargs: pytest.fail("headless login must not start OAuth"))
+
+    assert main(["login"]) == 1
+
+    error = capsys.readouterr().err
+    assert "login --manual" in error
+    assert "interactive terminal" in error
+    assert "coding-agent chat" in error
+
+
 def test_logout_removes_only_standalone_credential(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -105,6 +120,19 @@ def test_bridge_commands_are_flat_top_level_commands(monkeypatch: pytest.MonkeyP
 
     assert main(["status", "--json"]) == 0
     assert captured == ["status", "--json"]
+
+
+def test_sync_lifecycle_is_a_flat_bridge_command(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: list[str] = []
+
+    def fake_bridge(arguments: list[str]) -> int:
+        captured.extend(arguments)
+        return 0
+
+    monkeypatch.setattr(cli.bridge, "main", fake_bridge)
+
+    assert main(["sync", "status", "0123456789abcdef0123456789abcdef", "--json"]) == 0
+    assert captured == ["sync", "status", "0123456789abcdef0123456789abcdef", "--json"]
 
 
 def test_authoring_context_is_a_flat_bridge_command(monkeypatch: pytest.MonkeyPatch) -> None:

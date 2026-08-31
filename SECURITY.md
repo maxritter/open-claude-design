@@ -8,6 +8,8 @@ Please report vulnerabilities privately to `mail@maxritter.net`. Do not open a p
 - Authenticated HTTP requests never follow redirects.
 - MCP responses are size-bounded and bound to the exact JSON-RPC request id; paginated discovery has page, item, and repeated-cursor limits.
 - Remote mutation requires local tool classification, explicit write authorization, current etags, and structured success evidence bound to the requested project and paths. Unknown live tools are treated as possible mutations regardless of their remote annotation.
+- Approval-bound synchronization records a worktree-local revision receipt, revalidates every mapped etag and content hash before mutation, rejects stale batches without partial writes, and consumes the receipt only after verification.
+- Generated sync receipts and snapshots are excluded through Git's local `info/exclude`; Open Claude Design never edits the repository's tracked `.gitignore` for runtime state.
 - Local file operations reject symlink escapes and default to the current Git worktree.
 - Capability-bearing operations use guarded one-process helpers; plan tokens and short-lived preview URLs are redacted from output.
 - Generic remote deletion is disabled. Guarded deletion requires exact path confirmation, current etags, recovery backups, canonical paths, and post-delete absence verification.

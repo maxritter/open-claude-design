@@ -53,11 +53,11 @@
       "id": 5,
       "name": "conflict-aware-two-way-sync",
       "prompt": "Describe how you would synchronize a mapped Account.dc.html file between a repository and synthetic Claude Design project 00000000-0000-0000-0000-000000000001 when both the last remote etag and last local content hash are recorded. Cover remote-only, local-only, and both-changed cases. This is a benchmark: do not call the service or modify anything.",
-      "expected_output": "A ledger-driven synchronization workflow that never chooses a winner when both sides changed and updates its baseline only after verification.",
+      "expected_output": "A revision-bound synchronization workflow that uses an exact review receipt, never chooses a winner when both sides changed, and advances its baseline only after verification.",
       "expectations": [
-        "The response compares current remote etags and local hashes with the last verified ledger without loading file bodies merely to detect changes.",
-        "Remote-only changes are pulled to scratch for reviewed local merging, local-only changes use an etag-checked atomic push, and both-changed pairs stop for semantic reconciliation rather than overwriting either side.",
-        "The ledger is updated only after local verification plus remote preview and readback; missing baselines or partial reads are reported as unknown rather than in sync."
+        "The response starts with sync review so unchanged pairs remain metadata-only and changed pairs produce one worktree-local diff and review id bound to current remote etags and local hashes.",
+        "It prepares the review before presenting the design, combines visual and revision approval into one user decision, then uses sync apply with that review id rather than asking twice or recomputing newer hashes.",
+        "It calls sync finish only after local verification plus remote preview and readback; stale state requires reapproval and unknown state requires reconciliation rather than replay."
       ]
     },
     {
@@ -91,6 +91,28 @@
         "The response reads get_project and list_members before proposing any change and verifies the teammate's identity instead of matching a display name.",
         "The response prefers a per-user add_member grant over widening update_sharing, and if widening is considered it restates the exact effect (org scope, link permission) and asks for confirmation first.",
         "Every proposed mutation is named as requiring explicit write acknowledgement, and the response never treats 'fix access' as authorization for org-wide sharing."
+      ]
+    },
+    {
+      "id": 9,
+      "name": "code-change-after-design-approval",
+      "prompt": "I approved review 0123456789abcdef0123456789abcdef for an Account design, but Account.tsx changed before it could be synchronized. Describe the exact Open Claude Design behavior. This is a benchmark: do not call the service or modify anything.",
+      "expected_output": "A zero-mutation stale-approval stop that shows the replacement diff and requires a newly approved review before synchronization.",
+      "expectations": [
+        "sync apply re-hashes the declared local file before remote preflight or local implementation and exits 3 with state stale, mutated false, and requires_reapproval true.",
+        "The response reads and shows the returned replacement diff, does not silently approve the newer hash, and creates a new sync review for the changed revision.",
+        "No remote write, local production overwrite, ledger update, or replay of the stale receipt occurs before the user approves the new review id."
+      ]
+    },
+    {
+      "id": 10,
+      "name": "first-use-authentication-in-headless-container",
+      "prompt": "This is my first Claude Design request inside a headless Linux dev container and status reports no credential. Describe exactly what happens next. Do not call the service or expose an authorization code.",
+      "expected_output": "A fail-closed headless onboarding that keeps installation non-interactive and moves the manual OAuth exchange into the user's terminal rather than agent context.",
+      "expectations": [
+        "The response does not launch an automatic localhost browser flow or imply that Claude Code or an Anthropic API key is required.",
+        "It asks the user to run open-claude-design login --manual in an interactive terminal, open that URL in a host browser, and paste code#state back into the terminal rather than the coding-agent chat.",
+        "After the user finishes, it retries open-claude-design status and resumes the original task; it notes that the container credential path must be persisted to survive rebuilds."
       ]
     }
   ]

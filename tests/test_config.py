@@ -41,6 +41,7 @@ def test_public_command_and_scope_configuration_is_complete() -> None:
         "pull",
         "push",
         "delete",
+        "sync",
     )
     assert DEFAULT_INSTALL_SCOPE in INSTALL_SCOPES
     assert "open-claude-design-quality" in SKILL_NAMES

@@ -314,20 +314,20 @@ if open-claude-design status --json > /dev/null 2>&1; then
   success "Claude Design is already connected"
 elif [ "${OPEN_CLAUDE_DESIGN_SKIP_LOGIN:-0}" = "1" ] || [ "${CI:-}" = "true" ]; then
   info "Login skipped for this non-interactive install"
-  info "Run: open-claude-design login"
+  info "Run: open-claude-design login --manual from an interactive terminal"
 elif { : < /dev/tty; } 2> /dev/null; then
   if open-claude-design login < /dev/tty && open-claude-design status --json > /dev/null 2>&1; then
     success "Claude Design connected"
   else
     info "The CLI and agent workflows are installed"
-    info "Finish later with: open-claude-design login"
+    info "Finish later with: open-claude-design login (use --manual when headless)"
     info "Claude Design currently requires Pro, Max, Team, or Enterprise access"
   fi
 elif open-claude-design login < /dev/null && open-claude-design status --json > /dev/null 2>&1; then
   success "Claude Design connected"
 else
   info "The CLI and agent workflows are installed"
-  info "Finish later with: open-claude-design login"
+  info "Finish later with: open-claude-design login --manual from an interactive terminal"
   info "Claude Design currently requires Pro, Max, Team, or Enterprise access"
 fi
 

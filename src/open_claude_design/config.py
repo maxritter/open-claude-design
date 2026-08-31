@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Final
 
 PACKAGE_NAME: Final = "open-claude-design"
-VERSION: Final = "1.0.2"
+VERSION: Final = "1.1.0"
 
 CLAUDE_DESIGN_ENDPOINT: Final = "https://api.anthropic.com/v1/design/mcp"
 CLAUDE_DESIGN_OAUTH_AUTHORIZE_URL: Final = "https://claude.com/cai/oauth/authorize"
@@ -13,6 +13,7 @@ CLAUDE_DESIGN_OAUTH_TOKEN_URL: Final = "https://platform.claude.com/v1/oauth/tok
 CLAUDE_DESIGN_OAUTH_CLIENT_ID: Final = "59637612-477b-4836-a601-b0589eda7704"
 CLAUDE_DESIGN_OAUTH_MANUAL_REDIRECT_URL: Final = "https://platform.claude.com/oauth/code/callback"
 CLAUDE_DESIGN_OAUTH_SUCCESS_URL: Final = "https://platform.claude.com/oauth/code/success?app=claude-code"
+CLAUDE_DESIGN_BROWSER_LOGIN_ENV: Final = "OPEN_CLAUDE_DESIGN_BROWSER_LOGIN"
 CLAUDE_DESIGN_OAUTH_SCOPES: Final = ("user:design:read", "user:design:write")
 CLAUDE_DESIGN_OAUTH_TIMEOUT_SECONDS: Final = 5 * 60
 CLAUDE_DESIGN_OAUTH_REFRESH_MARGIN_SECONDS: Final = 2 * 60
@@ -38,6 +39,11 @@ CLAUDE_DESIGN_MAX_PLAN_TOKEN_BYTES: Final = 16 * 1024
 CLAUDE_DESIGN_MIN_WRITE_CREDENTIAL_SECONDS: Final = 5 * 60
 CLAUDE_DESIGN_AUTHORING_CACHE_TTL_SECONDS: Final = 60 * 60
 CLAUDE_DESIGN_AUTHORING_CACHE_PARTS: Final = (".open-claude-design", "authoring-context")
+CLAUDE_DESIGN_SYNC_PARTS: Final = (".open-claude-design", "sync")
+CLAUDE_DESIGN_SYNC_SCHEMA_VERSION: Final = 1
+CLAUDE_DESIGN_MAX_SYNC_DIFF_BYTES: Final = 4 * 1024 * 1024
+CLAUDE_DESIGN_SYNC_UNKNOWN_EXIT_CODE: Final = 2
+CLAUDE_DESIGN_SYNC_STALE_EXIT_CODE: Final = 3
 CLAUDE_DESIGN_NON_MUTATING_GUARDED_TOOLS: Final = frozenset()
 CLAUDE_DESIGN_KNOWN_READ_ONLY_TOOLS: Final = frozenset(
     {
@@ -133,6 +139,7 @@ BRIDGE_COMMAND_NAMES: Final = (
     "pull",
     "push",
     "delete",
+    "sync",
 )
 INSTALL_SCOPES: Final = ("project", "global")
 DEFAULT_INSTALL_SCOPE: Final = "global"

@@ -192,6 +192,80 @@ def test_automatic_login_rejects_a_callback_with_the_wrong_state(
     assert auth.load_standalone_credential(platform="linux", home=tmp_path, now_ms=0) is None
 
 
+def test_automatic_browser_login_detection_is_safe_for_headless_runtimes(tmp_path: Path) -> None:
+    no_container = tmp_path / "no-container-marker"
+    container = tmp_path / "container-marker"
+    container.touch()
+
+    assert auth.automatic_browser_login_available(
+        platform="darwin",
+        environment={},
+        container_marker=no_container,
+    )
+    assert auth.automatic_browser_login_available(
+        platform="linux",
+        environment={"DISPLAY": ":0"},
+        container_marker=no_container,
+    )
+    assert auth.automatic_browser_login_available(
+        platform="linux",
+        environment={"WSL_DISTRO_NAME": "Ubuntu"},
+        container_marker=no_container,
+    )
+    assert not auth.automatic_browser_login_available(
+        platform="linux",
+        environment={},
+        container_marker=no_container,
+    )
+    assert not auth.automatic_browser_login_available(
+        platform="linux",
+        environment={"DISPLAY": ":0"},
+        container_marker=container,
+    )
+    assert not auth.automatic_browser_login_available(
+        platform="linux",
+        environment={"DISPLAY": ":0", "SSH_CONNECTION": "host"},
+        container_marker=no_container,
+    )
+    assert auth.automatic_browser_login_available(
+        platform="linux",
+        environment={"CI": "true", "OPEN_CLAUDE_DESIGN_BROWSER_LOGIN": "1"},
+        container_marker=container,
+    )
+
+
+def test_automatic_login_does_not_fall_into_manual_input_when_noninteractive(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("WSL_DISTRO_NAME", raising=False)
+    monkeypatch.setattr(auth.shutil, "which", lambda _name: None)
+
+    with pytest.raises(auth.DesignAuthError, match="No local browser could be opened"):
+        auth.login_design(
+            platform="linux",
+            home=tmp_path,
+            runner=lambda *_args, **_kwargs: pytest.fail("no browser command should exist"),
+            input_reader=lambda _prompt: pytest.fail("manual input must not be attempted"),
+            emit=lambda _message: None,
+            allow_manual_fallback=False,
+        )
+
+
+def test_manual_login_reports_noninteractive_terminal_without_traceback(tmp_path: Path) -> None:
+    def raise_eof(_prompt: str) -> str:
+        raise EOFError
+
+    with pytest.raises(auth.DesignAuthError, match="interactive terminal"):
+        auth.login_design(
+            manual=True,
+            platform="linux",
+            home=tmp_path,
+            input_reader=raise_eof,
+            emit=lambda _message: None,
+        )
+
+
 def test_refresh_uses_stored_client_and_rotates_credential(tmp_path: Path) -> None:
     auth.save_standalone_credential(
         {

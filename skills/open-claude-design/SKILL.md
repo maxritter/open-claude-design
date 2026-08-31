@@ -12,7 +12,7 @@ Use Claude Design as an external design workspace without loading its tool catal
 
 Use the `open-claude-design` CLI from every coding agent, including Claude Code. This keeps discovery, path boundaries, etag checks, backups, capability redaction, and verification identical across hosts. Do not bypass it with a native Claude Design connector.
 
-Start every remote task with `open-claude-design status --json`. If authentication is missing or expired, tell the user to run `open-claude-design login`, then retry. The browser flow is independent of the coding agent and API keys; never print, log, reconstruct, or ask the user to copy its tokens.
+Start every remote task with `open-claude-design status --json`. If authentication is missing or expired on a desktop host, tell the user that the first-use browser connection is opening, run `open-claude-design login`, then retry status after it succeeds. In CI, SSH, or a headless/dev-container runtime, do not run automatic or manual login inside the agent session: tell the user to run `open-claude-design login --manual` in their own interactive terminal, open its URL on a host browser, and paste the returned code into that terminal—not into the coding-agent chat. The browser flow is independent of the coding agent and API keys; never print, log, reconstruct, or ask the user to copy its tokens.
 
 On macOS the CLI stores its scoped credential in a dedicated Keychain item. On Linux and WSL2 it uses `~/.config/open-claude-design/credentials.json`, rejects symlinked paths, and requires a current-user-owned regular file with no group or other permissions. A pre-existing Claude Code Design credential remains a compatibility fallback.
 
@@ -29,6 +29,9 @@ open-claude-design planned-call <copy_files|create_support_js> <project-id> --ar
 open-claude-design files <project-id> --path '<dir>' --depth -1 --json
 open-claude-design pull <project-id> <remote-path> --output <scratch-path> --json
 open-claude-design preview <project-id> <remote-path> --json
+open-claude-design sync review <project-id> --direction <to-design|to-code> --pair '<remote-path>=<local-path>' --json
+open-claude-design sync apply <review-id> --allow-write --json
+open-claude-design sync finish <review-id> --json
 ```
 
 Use `--args -` to read a complex JSON object from stdin. Never dump the full tool catalog when one known tool is enough; use `describe` for that tool only.
@@ -45,6 +48,8 @@ Read-only work is the default. A tool runs without acknowledgement only when bot
 Tools marked `destructiveHint: true` require the additional `--allow-destructive` acknowledgement and exact user authorization. Generic `delete_files` calls are disabled entirely; deletion must use the specialized guarded helper.
 
 Never pass `--allow-write` merely because a tool requires it. Pass it only when the user's current request explicitly authorizes that Claude Design mutation. Reading or implementing a design in the local repository does not authorize changing the remote design project. `--allow-guarded` cannot authorize a locally known write tool.
+
+Before asking the user to approve a design or synchronization, run `sync review` and attach its exact review id and diff to that same approval decision; never add a second routine confirmation. Pass that review id to `sync apply` only after approval. An unchanged review is a silent no-op. Exit `3` means code or design changed after review: no mutation occurred, so show the replacement diff and obtain fresh approval. Exit `2` means the outcome is unknown and must be reconciled rather than retried. Run `sync finish` only after implementation, preview, and readback verification succeed.
 
 For authorized file writes:
 
@@ -84,7 +89,7 @@ An authentication failure during a remote task is an immediate user-visible bloc
 
 ## Completion
 
-Report which project and paths were read or changed and the read-back or preview evidence. Any skipped, failed, or authentication-blocked remote operation remains explicit in the final state. When the task continues into repository implementation, hand the retrieved evidence to the matching design skill rather than duplicating its design procedure here.
+Report which project and paths were read or changed and the read-back or preview evidence. Any skipped, stale, unknown, or authentication-blocked operation remains explicit in the final state. Do not report synchronization complete until `sync finish` advances the verified ledger. When the task continues into repository implementation, hand the immutable review snapshot to the matching design skill rather than duplicating its design procedure here.
 
 ## When not to use
 

@@ -10,6 +10,14 @@ Claude Design's system prompt and design skills are live host guidance, not bund
 
 Do not copy volatile host-format or authoring instructions into the bundled skills. Stable cross-agent principles may live locally; current Claude Design behavior stays live.
 
+### First-use authentication
+
+Installation and updates may be non-interactive and must not require authentication. On the first real Claude Design task, run `status`. When no credential is available on a desktop host, explain that a one-time browser connection is opening, run `open-claude-design login`, and retry the task after status succeeds. Do not surprise the user during an unrelated install or background update.
+
+In CI, SSH, a dev container, or another runtime without a local browser, never start a flow that will wait on an unreachable localhost callback. Ask the user to run `open-claude-design login --manual` in an interactive terminal. They may open its URL in a browser on the host machine, but the returned `code#state` value must be pasted back into the CLI terminal and never into agent chat or model context. The resulting standalone credential does not require Claude Code; Linux and WSL2 keep it in the current user's mode-0600 Open Claude Design credential file. A container must persist that file if authentication should survive rebuilds.
+
+Automatic detection fails closed for CI, SSH, and common dev-container environments. `OPEN_CLAUDE_DESIGN_BROWSER_LOGIN=1` is an explicit operator override when a forwarded browser and localhost callback are known to work; `=0` forces the manual route.
+
 ### Remote authoring context budget
 
 For one remote authoring task, load only:
@@ -61,19 +69,34 @@ Local pull destinations and push sources stay inside the enclosing Git worktree 
 
 ## Keep code and design in sync
 
-Treat synchronization as a conflict-aware comparison, not a blind copy. Reuse the repository's named mapping and ledger when one exists. A trustworthy ledger records, for every mapped pair, the remote project/path and last verified etag plus the local path and last verified content hash.
+Treat synchronization as a revision-bound review, not a blind copy. Resolve the exact remote-to-local relationships; for design-to-code work, repeat the same remote path for every affected local implementation file. Do not infer mappings from similar names.
 
-For every sync cycle:
+Start with the metadata-first review helper:
 
-1. Resolve the exact remote-to-local mapping. Do not infer that similarly named files are mirrors when the repository has not established that relationship.
-2. Run `files --tsv` for the narrow mapped remote tree and hash the current local files without loading either body into model context.
-3. Compare both sides with the last verified ledger and classify each pair as unchanged, remote-only, local-only, or both-changed.
-4. For remote-only changes, `pull` to a separate worktree-local scratch path, inspect the diff, then merge deliberately into the repository and run its verification.
-5. For local-only changes, review the local diff, then use one atomic `push` batch with the ledger's current remote etags and explicit write authorization.
-6. For both-changed pairs, stop automatic propagation. Pull the remote revision to scratch, show the semantic conflict, and reconcile or ask for the missing product decision before either side is overwritten.
-7. After an authorized remote write, render and read back the affected paths. Update the ledger only after the local verification and remote readback are both clean.
+```bash
+open-claude-design sync review <project-id> \
+  --direction to-design \
+  --pair '<remote-path>=<local-path>' \
+  --json
+```
 
-Missing mapping, missing baseline hashes, stale etags, partial reads, or unverified writes mean “sync state unknown,” not “in sync.” Open Claude Design does not run a background daemon or silently choose which side wins.
+Repeat `--pair` for the complete batch. `state: in_sync` is a silent no-op and does not load file bodies. Otherwise read the returned worktree-local `diff_path`, present the exact semantic change or both-changed conflict, and retain the `review_id` attached to that presentation. Prepare this before the normal design approval so one user decision approves the visual result and its exact sync revision; do not ask twice. Missing baselines are `unknown` until one explicitly reviewed synchronization finishes.
+
+After the user approves that exact review, run:
+
+```bash
+open-claude-design sync apply <review-id> --allow-write --json
+```
+
+The helper re-reads mapped local files through pinned descriptors and revalidates the reviewed remote revisions inside the existing exact-path plan or read operation. The fast path needs no additional user interaction. Exit `3` with `state: stale` guarantees no sync mutation occurred; show its replacement diff and run a new review rather than recomputing hashes behind the user's back. Exit `2` with `state: unknown` means a write or handoff may be partial; report it immediately, inspect `sync status`, and reconcile from current state without replaying the receipt.
+
+For `to-design`, `apply` writes the retained approved bytes, reads every path back, and returns durable preview URLs. For `to-code`, it returns immutable `handoff_paths`; pass those snapshots to `open-claude-ui-design`, implement the approved design in the declared local files, and run the repository's visual and behavioral checks. After those checks and remote readback are clean, advance the baseline:
+
+```bash
+open-claude-design sync finish <review-id> --json
+```
+
+`finish` performs one final compact revision check, records the verified remote etags and local hashes, consumes the receipt, and removes its content snapshots. Sync state is automatically added to Git's local `info/exclude`, never to a tracked `.gitignore`, so it stays out of normal status and commits. Do not call `finish` after skipped verification, a stale result, an authentication failure, or an unknown outcome. Open Claude Design does not run a background daemon or silently choose which side wins.
 
 If authentication expires after only part of a synchronization cycle, stop the remote lane and report the partial state immediately. Do not advance the ledger or let unrelated progress obscure the blocker. After `open-claude-design login`, start with a fresh status, tree, and etag read; prior plans and delete assumptions are stale until revalidated.
 
@@ -138,6 +161,8 @@ open-claude-design push <project-id> \
 ```
 
 Repeat `--file` and `--if-match` for an atomic batch. Every path needs an etag (`0` asserts creation). Open Claude Design creates an exact-path `finalize_plan` token internally and refuses the write if the plan's fresh base etags differ, so the token and file bytes never need to enter model context. Pass `--plan-token -` only when reusing a separately minted path plan; literal plan-token arguments are rejected without echoing them. The CLI refuses files over 256 KiB; use the server-side `copy_files` workflow for larger content.
+
+`push` remains the low-level helper for an explicitly authorized new or narrowly edited remote artifact. When the user approved an earlier code/design diff, use the `sync` lifecycle so the local content revision is bound as well as the remote etag.
 
 The live prompt owns the current `.dc.html` format. Do not cache or recreate that host contract from memory: fetch it before writing. Use descriptive `.dc.html` filenames, call `create_support_js` rather than synthesizing the runtime, preserve editor overrides and comment anchors, and copy an existing file for a significant revision unless the user explicitly asked to replace it in place. A targeted change stays targeted.
 

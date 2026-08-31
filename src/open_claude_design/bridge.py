@@ -5,7 +5,9 @@ from __future__ import annotations
 import argparse
 import base64
 import contextlib
+import difflib
 import errno
+import fcntl
 import hashlib
 import json
 import os
@@ -47,6 +49,7 @@ from open_claude_design.config import (
     CLAUDE_DESIGN_MAX_RESPONSE_BYTES,
     CLAUDE_DESIGN_MAX_SSE_EVENTS,
     CLAUDE_DESIGN_MAX_STDIN_BYTES,
+    CLAUDE_DESIGN_MAX_SYNC_DIFF_BYTES,
     CLAUDE_DESIGN_MAX_TOOL_PAGES,
     CLAUDE_DESIGN_MAX_TOOLS,
     CLAUDE_DESIGN_MIN_WRITE_CREDENTIAL_SECONDS,
@@ -55,8 +58,23 @@ from open_claude_design.config import (
     CLAUDE_DESIGN_PROTOCOL_VERSION,
     CLAUDE_DESIGN_SERVE_PREVIEW_HOST_SUFFIX,
     CLAUDE_DESIGN_SPECIALIZED_ONLY_TOOLS,
+    CLAUDE_DESIGN_SYNC_PARTS,
+    CLAUDE_DESIGN_SYNC_SCHEMA_VERSION,
+    CLAUDE_DESIGN_SYNC_STALE_EXIT_CODE,
+    CLAUDE_DESIGN_SYNC_UNKNOWN_EXIT_CODE,
     DEFAULT_FILE_LIST_DEPTH,
     VERSION,
+)
+from open_claude_design.sync import (
+    REVIEW_ID_PATTERN,
+    SyncPair,
+    aggregate_classification,
+    canonical_digest,
+    classify_pair,
+    content_sha256,
+    parse_pairs,
+    seal_receipt,
+    validate_receipt,
 )
 
 
@@ -1575,6 +1593,992 @@ def _run_files_command(args: argparse.Namespace, client: Any) -> int:
     return 0
 
 
+def _sync_root(root: Path) -> Path:
+    return root.joinpath(*CLAUDE_DESIGN_SYNC_PARTS)
+
+
+def _ensure_sync_state_ignored(root: Path) -> None:
+    """Keep generated sync state out of Git status without editing tracked ignore files."""
+    marker = _sync_root(root) / ".git-exclude-ready"
+    if marker.is_file() and not marker.is_symlink():
+        return
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--git-path", "info/exclude"],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            shell=False,
+            timeout=5,
+            check=False,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            raw_path = Path(result.stdout.strip())
+            exclude_path = raw_path if raw_path.is_absolute() else root / raw_path
+            exclude_path = exclude_path.resolve(strict=False)
+            if not exclude_path.parent.is_dir() or exclude_path.parent.is_symlink():
+                raise OSError("Git's local exclude directory is unavailable or unsafe.")
+            flags = os.O_RDWR | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_CLOEXEC", 0)
+            descriptor = os.open(exclude_path, flags, 0o644)
+            try:
+                fcntl.flock(descriptor, fcntl.LOCK_EX)
+                existing = os.read(descriptor, CLAUDE_DESIGN_MAX_STDIN_BYTES + 1)
+                if len(existing) > CLAUDE_DESIGN_MAX_STDIN_BYTES:
+                    raise OSError("Git's local exclude file exceeds the safety limit.")
+                rule = b".open-claude-design/"
+                if rule not in {line.strip() for line in existing.splitlines()}:
+                    suffix = b"" if not existing or existing.endswith(b"\n") else b"\n"
+                    os.lseek(descriptor, 0, os.SEEK_END)
+                    pending = memoryview(suffix + rule + b"\n")
+                    while pending:
+                        written = os.write(descriptor, pending)
+                        if written <= 0:
+                            raise OSError("Could not update Git's local exclude file for sync state.")
+                        pending = pending[written:]
+                    os.fsync(descriptor)
+            finally:
+                os.close(descriptor)
+    except (OSError, RuntimeError, subprocess.SubprocessError):
+        pass
+    _atomic_write_local(
+        marker,
+        b"ready\n",
+        force=marker.exists(),
+        workspace_root=root,
+        authorized_external_paths=[],
+    )
+
+
+def _sync_review_root(root: Path, review_id: str) -> Path:
+    if REVIEW_ID_PATTERN.fullmatch(review_id) is None:
+        raise ValueError("A sync review id must be exactly 32 lowercase hexadecimal characters.")
+    return _sync_root(root) / "reviews" / review_id
+
+
+def _sync_receipt_path(root: Path, review_id: str) -> Path:
+    return _sync_review_root(root, review_id) / "receipt.json"
+
+
+def _sync_relative(root: Path, path: Path) -> str:
+    return path.relative_to(root).as_posix()
+
+
+def _sync_validate_local_relative_path(path: object) -> str:
+    if (
+        not isinstance(path, str)
+        or not path
+        or path.startswith("/")
+        or "\\" in path
+        or any(part in {"", ".", ".."} for part in path.split("/"))
+        or PurePosixPath(path).as_posix() != path
+        or _has_unsafe_text_character(path)
+    ):
+        raise ValueError("A sync local path must be canonical and workspace-relative.")
+    return path
+
+
+def _sync_read_json(root: Path, path: Path) -> dict[str, Any]:
+    _source, data = _read_local_file(
+        str(path),
+        workspace_root=root,
+        authorized_external_paths=[],
+    )
+    try:
+        value = json.loads(data)
+    except (UnicodeDecodeError, json.JSONDecodeError, RecursionError) as error:
+        raise ValueError(f"Open Claude Design sync metadata is not valid JSON: {_sync_relative(root, path)}") from error
+    if not isinstance(value, dict):
+        raise ValueError(f"Open Claude Design sync metadata is not an object: {_sync_relative(root, path)}")
+    return value
+
+
+def _sync_write_json(root: Path, path: Path, payload: dict[str, Any], *, force: bool) -> None:
+    encoded = json.dumps(payload, ensure_ascii=True, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    if len(encoded) > CLAUDE_DESIGN_MAX_INLINE_FILE_BYTES:
+        raise ClaudeDesignSafetyError("Open Claude Design sync metadata exceeds the local safety limit.")
+    _atomic_write_local(
+        path,
+        encoded,
+        force=force,
+        workspace_root=root,
+        authorized_external_paths=[],
+    )
+
+
+def _sync_load_receipt(root: Path, review_id: str) -> dict[str, Any]:
+    path = _sync_receipt_path(root, review_id)
+    if not path.exists():
+        raise ValueError(f"Sync review not found: {review_id}")
+    receipt = validate_receipt(_sync_read_json(root, path), review_id=review_id)
+    project_id = receipt.get("project_id")
+    classification = receipt.get("classification")
+    if not isinstance(project_id, str) or not project_id or _has_unsafe_text_character(project_id):
+        raise ValueError("The sync review receipt has an invalid project id.")
+    if classification not in {"unchanged", "remote-only", "local-only", "both-changed", "unknown"}:
+        raise ValueError("The sync review receipt has an invalid classification.")
+    active = receipt["state"] != "complete"
+    snapshot_prefix = f"{_sync_relative(root, _sync_review_root(root, review_id))}/snapshots/"
+    for pair in receipt["pairs"]:
+        remote_path = pair.get("remote_path")
+        local_path = pair.get("local_path")
+        if not isinstance(remote_path, str):
+            raise ValueError("The sync review receipt has an invalid remote path.")
+        _validate_remote_path(remote_path)
+        _sync_validate_local_relative_path(local_path)
+        for exists_key, hash_key in (("remote_exists", "remote_sha256"), ("local_exists", "local_sha256")):
+            exists = pair.get(exists_key)
+            digest = pair.get(hash_key)
+            if not isinstance(exists, bool):
+                raise ValueError("The sync review receipt has an invalid file-existence revision.")
+            if exists and (not isinstance(digest, str) or re.fullmatch(r"[0-9a-f]{64}", digest) is None):
+                raise ValueError("The sync review receipt has an invalid content revision.")
+            if not exists and digest is not None:
+                raise ValueError("The sync review receipt has an invalid missing-file revision.")
+        etag = pair.get("remote_etag")
+        if not isinstance(etag, str) or not etag or _has_unsafe_text_character(etag):
+            raise ValueError("The sync review receipt has an invalid remote etag.")
+        if active:
+            for snapshot_key in ("remote_snapshot", "local_snapshot"):
+                snapshot = pair.get(snapshot_key)
+                if not isinstance(snapshot, str):
+                    raise ValueError("The sync review receipt has an invalid snapshot path.")
+                _sync_validate_local_relative_path(snapshot)
+                if not snapshot.startswith(snapshot_prefix) or PurePosixPath(snapshot).parent.as_posix() != (
+                    snapshot_prefix.removesuffix("/")
+                ):
+                    raise ValueError("The sync review receipt has an invalid snapshot path.")
+    return receipt
+
+
+def _sync_save_receipt(root: Path, receipt: dict[str, Any]) -> dict[str, Any]:
+    review_id = str(receipt["review_id"])
+    sealed = seal_receipt(receipt)
+    receipt_path = _sync_receipt_path(root, review_id)
+    _sync_write_json(root, receipt_path, sealed, force=receipt_path.exists())
+    return sealed
+
+
+def _sync_ledger_path(root: Path, *, project_id: str, remote_path: str, local_path: str) -> Path:
+    key = hashlib.sha256(f"{project_id}\0{remote_path}\0{local_path}".encode()).hexdigest()[:32]
+    return _sync_root(root) / "ledger" / f"{key}.json"
+
+
+def _sync_load_ledger(
+    root: Path,
+    *,
+    project_id: str,
+    remote_path: str,
+    local_path: str,
+) -> dict[str, Any] | None:
+    path = _sync_ledger_path(root, project_id=project_id, remote_path=remote_path, local_path=local_path)
+    if not path.exists():
+        return None
+    payload = _sync_read_json(root, path)
+    digest = payload.get("review_digest")
+    if not isinstance(digest, str) or digest != canonical_digest(payload):
+        raise ValueError(f"The sync ledger changed unexpectedly: {_sync_relative(root, path)}")
+    if (
+        payload.get("project_id") != project_id
+        or payload.get("remote_path") != remote_path
+        or payload.get("local_path") != local_path
+    ):
+        raise ValueError(f"The sync ledger identity changed unexpectedly: {_sync_relative(root, path)}")
+    return payload
+
+
+def _sync_save_ledger(root: Path, payload: dict[str, Any]) -> None:
+    path = _sync_ledger_path(
+        root,
+        project_id=str(payload["project_id"]),
+        remote_path=str(payload["remote_path"]),
+        local_path=str(payload["local_path"]),
+    )
+    sealed = seal_receipt(payload)
+    _sync_write_json(root, path, sealed, force=path.exists())
+
+
+def _sync_optional_local(root: Path, raw_path: str) -> tuple[str, bool, bytes]:
+    operand = Path(raw_path).expanduser()
+    if not operand.is_absolute():
+        operand = root / operand
+    candidate = _resolve_local_path(
+        str(operand),
+        workspace_root=root,
+        authorized_external_paths=[],
+        require_file=False,
+    )
+    local_path = _sync_relative(root, candidate)
+    if not candidate.exists():
+        return local_path, False, b""
+    _source, data = _read_local_file(
+        str(candidate),
+        workspace_root=root,
+        authorized_external_paths=[],
+    )
+    return local_path, True, data
+
+
+def _sync_remote_metadata(client: Any, project_id: str, remote_paths: set[str]) -> dict[str, dict[str, Any]]:
+    metadata = {path: {"exists": False, "etag": "0"} for path in remote_paths}
+    parents = {
+        "" if PurePosixPath(path).parent.as_posix() == "." else PurePosixPath(path).parent.as_posix()
+        for path in remote_paths
+    }
+    for parent in sorted(parents):
+        result = client.call_tool(
+            "list_files",
+            {"project_id": project_id, "path": parent, "depth": 1},
+        )
+        entries = _tool_result_value(result, tool="list_files")
+        if not isinstance(entries, list):
+            raise ClaudeDesignProtocolError("Claude Design list_files returned no array during sync review.")
+        for entry in entries:
+            if not isinstance(entry, dict) or entry.get("type") != "file":
+                continue
+            path = entry.get("path")
+            etag = entry.get("etag")
+            if not isinstance(path, str) or path not in remote_paths:
+                continue
+            if not isinstance(etag, str) or not etag or _has_unsafe_text_character(etag):
+                raise ClaudeDesignProtocolError("Claude Design returned incomplete sync file metadata.")
+            metadata[path] = {"exists": True, "etag": etag}
+    return metadata
+
+
+def _sync_remote_contents(
+    client: Any,
+    project_id: str,
+    metadata: dict[str, dict[str, Any]],
+) -> dict[str, bytes]:
+    contents: dict[str, bytes] = {}
+    for path, revision in sorted(metadata.items()):
+        if revision["exists"] is not True:
+            contents[path] = b""
+            continue
+        result = client.call_tool("read_file", {"project_id": project_id, "path": path})
+        decoded, etag = _decode_read_file_result(result)
+        if etag != revision["etag"]:
+            raise ClaudeDesignSafetyError(
+                f"Claude Design changed while the sync review was being prepared: {path}. Review again."
+            )
+        contents[path] = decoded.encode("utf-8")
+    return contents
+
+
+def _sync_snapshot_path(root: Path, review_id: str, index: int, side: str) -> Path:
+    return _sync_review_root(root, review_id) / "snapshots" / f"{index:03d}-{side}.bin"
+
+
+def _sync_diff_bytes(old: bytes, new: bytes, *, old_label: str, new_label: str) -> bytes:
+    if old == new:
+        return f"--- {old_label}\n+++ {new_label}\n(no byte changes)\n".encode()
+    if b"\0" in old or b"\0" in new:
+        return (
+            f"--- {old_label}\n+++ {new_label}\n"
+            f"binary revisions differ: {content_sha256(old)} -> {content_sha256(new)}\n"
+        ).encode()
+    try:
+        old_text = old.decode("utf-8").splitlines(keepends=True)
+        new_text = new.decode("utf-8").splitlines(keepends=True)
+    except UnicodeDecodeError:
+        return (
+            f"--- {old_label}\n+++ {new_label}\n"
+            f"binary revisions differ: {content_sha256(old)} -> {content_sha256(new)}\n"
+        ).encode()
+    rendered = "".join(
+        difflib.unified_diff(
+            old_text,
+            new_text,
+            fromfile=old_label,
+            tofile=new_label,
+        )
+    )
+    return rendered.encode("utf-8")
+
+
+def _sync_write_diff(root: Path, review_id: str, sections: list[bytes], *, force: bool) -> str:
+    data = b"\n".join(sections)
+    if len(data) > CLAUDE_DESIGN_MAX_SYNC_DIFF_BYTES:
+        raise ClaudeDesignSafetyError("The synchronization diff is too large; review a smaller mapped batch.")
+    path = _sync_review_root(root, review_id) / "diff.patch"
+    _atomic_write_local(
+        path,
+        data,
+        force=force,
+        workspace_root=root,
+        authorized_external_paths=[],
+    )
+    return _sync_relative(root, path)
+
+
+def _sync_read_snapshot(root: Path, relative_path: str) -> bytes:
+    _source, data = _read_local_file(
+        str(root / relative_path),
+        workspace_root=root,
+        authorized_external_paths=[],
+    )
+    return data
+
+
+def _sync_public_receipt(receipt: dict[str, Any]) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "review_id": receipt["review_id"],
+        "state": receipt["state"],
+        "direction": receipt["direction"],
+        "classification": receipt["classification"],
+        "mutated": receipt.get("mutated", False),
+    }
+    if isinstance(receipt.get("diff_path"), str):
+        payload["diff_path"] = receipt["diff_path"]
+    return payload
+
+
+def _sync_review(args: argparse.Namespace, client: Any, root: Path) -> int:
+    pairs = parse_pairs(list(args.pairs))
+    if args.direction not in {"to-design", "to-code"}:
+        raise ValueError("A sync review direction must be to-design or to-code.")
+    if not isinstance(args.project_id, str) or not args.project_id or _has_unsafe_text_character(args.project_id):
+        raise ValueError("A sync review requires a valid Claude Design project id.")
+    if len(pairs) > CLAUDE_DESIGN_MAX_BATCH_FILES:
+        raise ClaudeDesignSafetyError("A sync review contains too many mapped pairs.")
+    if args.direction == "to-design" and len({pair.remote_path for pair in pairs}) != len(pairs):
+        raise ValueError("A to-design sync needs exactly one local source for every remote path.")
+    for pair in pairs:
+        _validate_remote_path(pair.remote_path)
+
+    local_cache: dict[str, tuple[bool, bytes]] = {}
+    normalized_pairs: list[SyncPair] = []
+    total_bytes = 0
+    for pair in pairs:
+        local_path, exists, data = _sync_optional_local(root, pair.local_path)
+        _sync_validate_local_relative_path(local_path)
+        if args.direction == "to-design" and not exists:
+            raise ValueError(f"A to-design local source does not exist: {local_path}")
+        normalized_pairs.append(SyncPair(pair.remote_path, local_path))
+        if local_path not in local_cache:
+            local_cache[local_path] = (exists, data)
+            total_bytes += len(data)
+    if total_bytes > CLAUDE_DESIGN_MAX_BATCH_BYTES:
+        raise ClaudeDesignSafetyError("The mapped local sync files exceed the aggregate safety limit.")
+
+    remote_paths = {pair.remote_path for pair in normalized_pairs}
+    remote_metadata = _sync_remote_metadata(client, args.project_id, remote_paths)
+    pair_revisions: list[dict[str, Any]] = []
+    classifications = []
+    for pair in normalized_pairs:
+        local_exists, local_data = local_cache[pair.local_path]
+        remote_revision = remote_metadata[pair.remote_path]
+        baseline = _sync_load_ledger(
+            root,
+            project_id=args.project_id,
+            remote_path=pair.remote_path,
+            local_path=pair.local_path,
+        )
+        classification = classify_pair(
+            baseline,
+            remote_exists=bool(remote_revision["exists"]),
+            remote_etag=str(remote_revision["etag"]),
+            local_exists=local_exists,
+            local_sha256=content_sha256(local_data) if local_exists else None,
+        )
+        classifications.append(classification)
+        pair_revisions.append(
+            {
+                "remote_path": pair.remote_path,
+                "local_path": pair.local_path,
+                "remote_exists": bool(remote_revision["exists"]),
+                "remote_etag": str(remote_revision["etag"]),
+                "local_exists": local_exists,
+                "local_sha256": content_sha256(local_data) if local_exists else None,
+                "classification": classification,
+            }
+        )
+
+    classification = aggregate_classification(classifications)
+    if classification == "unchanged":
+        _print_design_result(
+            {
+                "state": "in_sync",
+                "classification": "unchanged",
+                "requires_approval": False,
+                "mutated": False,
+            },
+            json_mode=args.json,
+        )
+        return 0
+
+    _ensure_sync_state_ignored(root)
+    remote_contents = _sync_remote_contents(client, args.project_id, remote_metadata)
+    if args.direction == "to-code":
+        missing_remote = sorted(path for path, metadata in remote_metadata.items() if metadata["exists"] is not True)
+        if missing_remote:
+            raise ValueError("A to-code sync cannot use missing remote designs: " + ", ".join(missing_remote))
+    total_bytes += sum(len(data) for data in remote_contents.values())
+    if total_bytes > CLAUDE_DESIGN_MAX_BATCH_BYTES:
+        raise ClaudeDesignSafetyError("The mapped sync revisions exceed the aggregate safety limit.")
+
+    review_id = secrets.token_hex(16)
+    diff_sections: list[bytes] = []
+    remote_snapshots: dict[str, Path] = {}
+    local_snapshots: dict[str, Path] = {}
+    for pair_revision in pair_revisions:
+        remote_path = str(pair_revision["remote_path"])
+        local_path = str(pair_revision["local_path"])
+        remote_data = remote_contents[remote_path]
+        local_data = local_cache[local_path][1]
+        if remote_path not in remote_snapshots:
+            remote_snapshot = _sync_snapshot_path(root, review_id, len(remote_snapshots), "remote")
+            _atomic_write_local(
+                remote_snapshot,
+                remote_data,
+                force=False,
+                workspace_root=root,
+                authorized_external_paths=[],
+            )
+            remote_snapshots[remote_path] = remote_snapshot
+        if local_path not in local_snapshots:
+            local_snapshot = _sync_snapshot_path(root, review_id, len(local_snapshots), "local")
+            _atomic_write_local(
+                local_snapshot,
+                local_data,
+                force=False,
+                workspace_root=root,
+                authorized_external_paths=[],
+            )
+            local_snapshots[local_path] = local_snapshot
+        pair_revision["remote_sha256"] = content_sha256(remote_data) if pair_revision["remote_exists"] else None
+        pair_revision["remote_snapshot"] = _sync_relative(root, remote_snapshots[remote_path])
+        pair_revision["local_snapshot"] = _sync_relative(root, local_snapshots[local_path])
+        if args.direction == "to-design":
+            old_data, new_data = remote_data, local_data
+            old_label, new_label = f"design/{remote_path}", f"code/{local_path}"
+        else:
+            old_data, new_data = local_data, remote_data
+            old_label, new_label = f"code/{local_path}", f"design/{remote_path}"
+        diff_sections.append(_sync_diff_bytes(old_data, new_data, old_label=old_label, new_label=new_label))
+    diff_path = _sync_write_diff(root, review_id, diff_sections, force=False)
+    receipt = _sync_save_receipt(
+        root,
+        {
+            "schema_version": CLAUDE_DESIGN_SYNC_SCHEMA_VERSION,
+            "review_id": review_id,
+            "state": "reviewed",
+            "direction": args.direction,
+            "project_id": args.project_id,
+            "classification": classification,
+            "requires_reconciliation": classification == "both-changed",
+            "created_at": int(time.time()),
+            "updated_at": int(time.time()),
+            "diff_path": diff_path,
+            "pairs": pair_revisions,
+            "mutated": False,
+        },
+    )
+    _print_design_result(
+        {
+            "review_id": review_id,
+            "state": "reviewed",
+            "classification": classification,
+            "requires_approval": True,
+            "requires_reconciliation": receipt["requires_reconciliation"],
+            "mutated": False,
+            "receipt_path": _sync_relative(root, _sync_receipt_path(root, review_id)),
+            "diff_path": diff_path,
+        },
+        json_mode=args.json,
+    )
+    return 0
+
+
+def _sync_current_locals(root: Path, receipt: dict[str, Any]) -> dict[str, tuple[bool, bytes]]:
+    current: dict[str, tuple[bool, bytes]] = {}
+    for pair in receipt["pairs"]:
+        local_path = str(pair["local_path"])
+        if local_path in current:
+            continue
+        _normalized, exists, data = _sync_optional_local(root, local_path)
+        current[local_path] = (exists, data)
+    return current
+
+
+def _sync_local_changes(
+    receipt: dict[str, Any],
+    current: dict[str, tuple[bool, bytes]],
+) -> list[dict[str, str]]:
+    changed: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for pair in receipt["pairs"]:
+        local_path = str(pair["local_path"])
+        exists, data = current[local_path]
+        expected_hash = pair.get("local_sha256")
+        changed_revision = pair.get("local_exists") is not exists or expected_hash != (
+            content_sha256(data) if exists else None
+        )
+        if changed_revision and local_path not in seen:
+            changed.append({"side": "local", "path": local_path})
+            seen.add(local_path)
+    return changed
+
+
+def _sync_mark_stale(
+    root: Path,
+    receipt: dict[str, Any],
+    *,
+    changed: list[dict[str, str]],
+    current_locals: dict[str, tuple[bool, bytes]] | None = None,
+    current_remote: dict[str, bytes] | None = None,
+    json_mode: bool,
+) -> int:
+    sections: list[bytes] = []
+    for item in changed:
+        side = item["side"]
+        path = item["path"]
+        pair = next(
+            pair
+            for pair in receipt["pairs"]
+            if (side == "local" and pair["local_path"] == path) or (side == "remote" and pair["remote_path"] == path)
+        )
+        if side == "local" and current_locals is not None:
+            approved = _sync_read_snapshot(root, str(pair["local_snapshot"]))
+            current = current_locals[path][1]
+            sections.append(
+                _sync_diff_bytes(
+                    approved,
+                    current,
+                    old_label=f"approved-code/{path}",
+                    new_label=f"current-code/{path}",
+                )
+            )
+        elif side == "remote" and current_remote is not None:
+            approved = _sync_read_snapshot(root, str(pair["remote_snapshot"]))
+            current = current_remote.get(path, b"")
+            sections.append(
+                _sync_diff_bytes(
+                    approved,
+                    current,
+                    old_label=f"approved-design/{path}",
+                    new_label=f"current-design/{path}",
+                )
+            )
+    if sections:
+        receipt["diff_path"] = _sync_write_diff(
+            root,
+            str(receipt["review_id"]),
+            sections,
+            force=True,
+        )
+    receipt["state"] = "stale"
+    receipt["updated_at"] = int(time.time())
+    receipt["mutated"] = False
+    receipt = _sync_save_receipt(root, receipt)
+    _print_design_result(
+        {
+            "review_id": receipt["review_id"],
+            "state": "stale",
+            "requires_reapproval": True,
+            "mutated": False,
+            "changed": changed,
+            "diff_path": receipt["diff_path"],
+        },
+        json_mode=json_mode,
+    )
+    return CLAUDE_DESIGN_SYNC_STALE_EXIT_CODE
+
+
+def _sync_mark_unknown(root: Path, receipt: dict[str, Any], *, message: str, json_mode: bool) -> int:
+    receipt["state"] = "unknown"
+    receipt["updated_at"] = int(time.time())
+    receipt = _sync_save_receipt(root, receipt)
+    _print_design_result(
+        {
+            "review_id": receipt["review_id"],
+            "state": "unknown",
+            "mutated": receipt.get("mutated", False),
+            "error": message,
+        },
+        json_mode=json_mode,
+    )
+    return CLAUDE_DESIGN_SYNC_UNKNOWN_EXIT_CODE
+
+
+def _sync_apply_to_design(
+    args: argparse.Namespace,
+    client: Any,
+    root: Path,
+    receipt: dict[str, Any],
+    current_locals: dict[str, tuple[bool, bytes]],
+) -> int:
+    _require_write_window(client)
+    expected_etags = {str(pair["remote_path"]): str(pair["remote_etag"]) for pair in receipt["pairs"]}
+    planned = _tool_result_object(
+        client.call_tool(
+            "finalize_plan",
+            {
+                "project_id": receipt["project_id"],
+                "scope": "paths",
+                "writes": sorted(expected_etags),
+                "deletes": [],
+            },
+        ),
+        tool="finalize_plan",
+    )
+    plan_token = planned.get("plan_token")
+    base_etags = planned.get("base_etags")
+    if not isinstance(plan_token, str) or not plan_token or not isinstance(base_etags, dict):
+        raise ClaudeDesignProtocolError("Claude Design finalize_plan returned an incomplete sync plan.")
+    remote_changed = sorted(path for path, etag in expected_etags.items() if base_etags.get(path) != etag)
+    if remote_changed:
+        metadata = _sync_remote_metadata(client, str(receipt["project_id"]), set(remote_changed))
+        contents = _sync_remote_contents(client, str(receipt["project_id"]), metadata)
+        return _sync_mark_stale(
+            root,
+            receipt,
+            changed=[{"side": "remote", "path": path} for path in remote_changed],
+            current_remote=contents,
+            json_mode=args.json,
+        )
+
+    files: list[dict[str, object]] = []
+    expected_bytes: dict[str, bytes] = {}
+    for pair in receipt["pairs"]:
+        remote_path = str(pair["remote_path"])
+        local_path = str(pair["local_path"])
+        data = current_locals[local_path][1]
+        expected_bytes[remote_path] = data
+        file_payload: dict[str, object] = {"path": remote_path, "if_match": expected_etags[remote_path]}
+        try:
+            file_payload["data"] = data.decode("utf-8")
+        except UnicodeDecodeError:
+            file_payload["data"] = base64.b64encode(data).decode("ascii")
+            file_payload["encoding"] = "base64"
+        files.append(file_payload)
+    payload = {
+        "project_id": receipt["project_id"],
+        "plan_token": plan_token,
+        "files": files,
+    }
+    receipt["state"] = "applying"
+    receipt["updated_at"] = int(time.time())
+    receipt = _sync_save_receipt(root, receipt)
+    try:
+        result = client.call_tool("write_files", payload)
+    except ClaudeDesignError as error:
+        receipt["mutated"] = True
+        return _sync_mark_unknown(root, receipt, message=str(error), json_mode=args.json)
+    try:
+        write_value = _tool_result_object(result, tool="write_files")
+    except ClaudeDesignProtocolError:
+        write_value = {}
+    if write_value.get("status") == "conflict":
+        metadata = _sync_remote_metadata(client, str(receipt["project_id"]), set(expected_etags))
+        contents = _sync_remote_contents(client, str(receipt["project_id"]), metadata)
+        return _sync_mark_stale(
+            root,
+            receipt,
+            changed=[{"side": "remote", "path": path} for path in sorted(expected_etags)],
+            current_remote=contents,
+            json_mode=args.json,
+        )
+    receipt["mutated"] = True
+    if _tool_exit_code(result, tool="write_files", mutation=True, arguments=payload) != 0:
+        return _sync_mark_unknown(
+            root,
+            receipt,
+            message="Claude Design did not return complete evidence for the approved sync write.",
+            json_mode=args.json,
+        )
+
+    applied_remote: list[dict[str, Any]] = []
+    open_urls: list[str] = []
+    try:
+        for remote_path, expected in sorted(expected_bytes.items()):
+            readback = client.call_tool(
+                "read_file",
+                {"project_id": receipt["project_id"], "path": remote_path},
+            )
+            decoded, etag = _decode_read_file_result(readback)
+            data = decoded.encode("utf-8")
+            if data != expected:
+                return _sync_mark_unknown(
+                    root,
+                    receipt,
+                    message=f"Claude Design readback did not match the approved bytes: {remote_path}",
+                    json_mode=args.json,
+                )
+            applied_remote.append(
+                {"remote_path": remote_path, "remote_etag": etag, "remote_sha256": content_sha256(data)}
+            )
+            if remote_path.endswith((".html", ".dc.html")):
+                preview = _tool_result_object(
+                    client.call_tool(
+                        "render_preview",
+                        {"project_id": receipt["project_id"], "path": remote_path},
+                    ),
+                    tool="render_preview",
+                )
+                open_url = preview.get("open_url")
+                if not isinstance(open_url, str) or not open_url:
+                    return _sync_mark_unknown(
+                        root,
+                        receipt,
+                        message=f"Claude Design returned no durable preview after syncing: {remote_path}",
+                        json_mode=args.json,
+                    )
+                _validate_durable_preview_url(open_url)
+                open_urls.append(open_url)
+    except (ClaudeDesignError, ValueError) as error:
+        return _sync_mark_unknown(root, receipt, message=str(error), json_mode=args.json)
+    receipt["state"] = "awaiting_verification"
+    receipt["updated_at"] = int(time.time())
+    receipt["applied_remote"] = applied_remote
+    receipt = _sync_save_receipt(root, receipt)
+    _print_design_result(
+        {
+            "review_id": receipt["review_id"],
+            "state": "awaiting_verification",
+            "mutated": True,
+            "open_urls": open_urls,
+        },
+        json_mode=args.json,
+    )
+    return 0
+
+
+def _sync_apply_to_code(
+    args: argparse.Namespace,
+    client: Any,
+    root: Path,
+    receipt: dict[str, Any],
+) -> int:
+    remote_cache: dict[str, tuple[str, bytes]] = {}
+    changed: list[dict[str, str]] = []
+    for pair in receipt["pairs"]:
+        remote_path = str(pair["remote_path"])
+        if remote_path not in remote_cache:
+            try:
+                result = client.call_tool(
+                    "read_file",
+                    {
+                        "project_id": receipt["project_id"],
+                        "path": remote_path,
+                        "if_none_match": pair["remote_etag"],
+                    },
+                )
+                try:
+                    conditional = _tool_result_object(result, tool="read_file")
+                except ClaudeDesignProtocolError:
+                    conditional = {}
+                if conditional.get("unchanged") is True:
+                    etag = conditional.get("etag")
+                    path = conditional.get("path")
+                    if etag != pair["remote_etag"] or path != remote_path:
+                        raise ClaudeDesignProtocolError(
+                            "Claude Design returned invalid conditional-read metadata during sync apply."
+                        )
+                    remote_cache[remote_path] = (str(etag), _sync_read_snapshot(root, str(pair["remote_snapshot"])))
+                else:
+                    decoded, etag = _decode_read_file_result(result)
+                    remote_cache[remote_path] = (etag, decoded.encode("utf-8"))
+            except ClaudeDesignProtocolError:
+                metadata = _sync_remote_metadata(client, str(receipt["project_id"]), {remote_path})
+                if metadata[remote_path]["exists"] is True:
+                    raise
+                remote_cache[remote_path] = ("0", b"")
+        etag, data = remote_cache[remote_path]
+        changed_revision = etag != pair["remote_etag"] or content_sha256(data) != pair["remote_sha256"]
+        if changed_revision and {"side": "remote", "path": remote_path} not in changed:
+            changed.append({"side": "remote", "path": remote_path})
+    if changed:
+        return _sync_mark_stale(
+            root,
+            receipt,
+            changed=changed,
+            current_remote={path: data for path, (_etag, data) in remote_cache.items()},
+            json_mode=args.json,
+        )
+    receipt["state"] = "awaiting_verification"
+    receipt["updated_at"] = int(time.time())
+    receipt["mutated"] = False
+    receipt = _sync_save_receipt(root, receipt)
+    handoff_paths = sorted({str(pair["remote_snapshot"]) for pair in receipt["pairs"]})
+    _print_design_result(
+        {
+            "review_id": receipt["review_id"],
+            "state": "awaiting_verification",
+            "mutated": False,
+            "handoff_paths": handoff_paths,
+        },
+        json_mode=args.json,
+    )
+    return 0
+
+
+def _sync_apply(args: argparse.Namespace, client: Any, root: Path) -> int:
+    if not args.allow_write:
+        raise ClaudeDesignSafetyError(
+            "sync apply requires --allow-write only after the user approved the exact recorded review."
+        )
+    receipt = _sync_load_receipt(root, args.review_id)
+    if receipt["state"] != "reviewed":
+        raise ValueError(f"Sync review {args.review_id} state is {receipt['state']}; it cannot be applied.")
+    current_locals = _sync_current_locals(root, receipt)
+    local_changes = _sync_local_changes(receipt, current_locals)
+    if local_changes:
+        return _sync_mark_stale(
+            root,
+            receipt,
+            changed=local_changes,
+            current_locals=current_locals,
+            json_mode=args.json,
+        )
+    if receipt["direction"] == "to-design":
+        return _sync_apply_to_design(args, client, root, receipt, current_locals)
+    return _sync_apply_to_code(args, client, root, receipt)
+
+
+def _sync_cleanup_artifacts(root: Path, receipt: dict[str, Any]) -> None:
+    review_root = _sync_review_root(root, str(receipt["review_id"]))
+    for target in (review_root / "snapshots", review_root / "diff.patch"):
+        resolved = _resolve_local_path(
+            str(target),
+            workspace_root=root,
+            authorized_external_paths=[],
+            require_file=False,
+        )
+        if not resolved.exists():
+            continue
+        if resolved.is_dir():
+            shutil.rmtree(resolved)
+        else:
+            resolved.unlink()
+    receipt.pop("diff_path", None)
+    for pair in receipt["pairs"]:
+        pair.pop("remote_snapshot", None)
+        pair.pop("local_snapshot", None)
+
+
+def _sync_finish(args: argparse.Namespace, client: Any, root: Path) -> int:
+    receipt = _sync_load_receipt(root, args.review_id)
+    if receipt["state"] != "awaiting_verification":
+        raise ValueError(f"Sync review {args.review_id} state is {receipt['state']}; it is not awaiting verification.")
+    remote_paths = {str(pair["remote_path"]) for pair in receipt["pairs"]}
+    metadata = _sync_remote_metadata(client, str(receipt["project_id"]), remote_paths)
+    if receipt["direction"] == "to-design":
+        applied = {
+            str(item["remote_path"]): item for item in receipt.get("applied_remote", []) if isinstance(item, dict)
+        }
+        expected_etags = {path: str(applied[path]["remote_etag"]) for path in remote_paths if path in applied}
+    else:
+        expected_etags = {str(pair["remote_path"]): str(pair["remote_etag"]) for pair in receipt["pairs"]}
+    remote_changes = sorted(
+        path
+        for path in remote_paths
+        if metadata[path]["exists"] is not True or metadata[path]["etag"] != expected_etags.get(path)
+    )
+    if remote_changes:
+        receipt["mutated"] = receipt["direction"] == "to-design"
+        return _sync_mark_unknown(
+            root,
+            receipt,
+            message="Claude Design changed before synchronization verification completed: " + ", ".join(remote_changes),
+            json_mode=args.json,
+        )
+
+    current_locals = _sync_current_locals(root, receipt)
+    if receipt["direction"] == "to-design":
+        local_changes = _sync_local_changes(receipt, current_locals)
+        if local_changes:
+            receipt["mutated"] = True
+            return _sync_mark_unknown(
+                root,
+                receipt,
+                message="Local code changed after the approved remote write but before verification completed.",
+                json_mode=args.json,
+            )
+
+    applied = {str(item["remote_path"]): item for item in receipt.get("applied_remote", []) if isinstance(item, dict)}
+    verified_at = int(time.time())
+    for pair in receipt["pairs"]:
+        remote_path = str(pair["remote_path"])
+        local_path = str(pair["local_path"])
+        local_exists, local_data = current_locals[local_path]
+        remote_sha256 = (
+            applied[remote_path]["remote_sha256"] if receipt["direction"] == "to-design" else pair["remote_sha256"]
+        )
+        _sync_save_ledger(
+            root,
+            {
+                "schema_version": CLAUDE_DESIGN_SYNC_SCHEMA_VERSION,
+                "project_id": receipt["project_id"],
+                "remote_path": remote_path,
+                "local_path": local_path,
+                "remote_exists": True,
+                "remote_etag": expected_etags[remote_path],
+                "remote_sha256": remote_sha256,
+                "local_exists": local_exists,
+                "local_sha256": content_sha256(local_data) if local_exists else None,
+                "verified_at": verified_at,
+            },
+        )
+    receipt["state"] = "complete"
+    receipt["updated_at"] = verified_at
+    receipt["mutated"] = receipt["direction"] == "to-design"
+    receipt = _sync_save_receipt(root, receipt)
+    _sync_cleanup_artifacts(root, receipt)
+    receipt = _sync_save_receipt(root, receipt)
+    _print_design_result(
+        {
+            "review_id": receipt["review_id"],
+            "state": "complete",
+            "mutated": False,
+        },
+        json_mode=args.json,
+    )
+    return 0
+
+
+def _sync_status(args: argparse.Namespace, root: Path) -> int:
+    if args.review_id is not None:
+        receipt = _sync_load_receipt(root, args.review_id)
+        _print_design_result(_sync_public_receipt(receipt), json_mode=args.json)
+        return 0
+    reviews_root = _resolve_local_path(
+        str(_sync_root(root) / "reviews"),
+        workspace_root=root,
+        authorized_external_paths=[],
+        require_file=False,
+    )
+    if not reviews_root.exists():
+        _print_design_result({"reviews": []}, json_mode=args.json)
+        return 0
+    reviews: list[dict[str, Any]] = []
+    for path in sorted(reviews_root.iterdir()):
+        if not path.is_dir() or REVIEW_ID_PATTERN.fullmatch(path.name) is None:
+            continue
+        reviews.append(_sync_public_receipt(_sync_load_receipt(root, path.name)))
+    _print_design_result({"reviews": reviews}, json_mode=args.json)
+    return 0
+
+
+def _run_sync_command(
+    args: argparse.Namespace,
+    *,
+    client_factory: Callable[[], Any],
+    workspace_root: Path | None,
+) -> int:
+    root = _design_workspace_root(workspace_root)
+    if args.sync_command == "status":
+        return _sync_status(args, root)
+    client = client_factory()
+    if args.sync_command == "review":
+        return _sync_review(args, client, root)
+    if args.sync_command == "apply":
+        return _sync_apply(args, client, root)
+    if args.sync_command == "finish":
+        return _sync_finish(args, client, root)
+    raise ValueError("Choose sync review, apply, finish, or status.")
+
+
 def run_design_command(
     args: argparse.Namespace,
     *,
@@ -1583,6 +2587,12 @@ def run_design_command(
 ) -> int:
     """Execute a parsed `open-claude-design` bridge command."""
     command = args.design_command
+    if command == "sync":
+        return _run_sync_command(
+            args,
+            client_factory=client_factory,
+            workspace_root=workspace_root,
+        )
     if command == "delete":
         if not args.allow_write:
             raise ClaudeDesignSafetyError(
@@ -1959,6 +2969,50 @@ def build_parser() -> argparse.ArgumentParser:
     )
     push_parser.add_argument("--allow-write", action="store_true", help="Required remote-write acknowledgement.")
     push_parser.add_argument("--json", action="store_true", help="Output compact JSON metadata.")
+
+    sync_parser = subparsers.add_parser(
+        "sync",
+        help="Review, apply, and verify revision-bound code and Claude Design synchronization.",
+    )
+    sync_commands = sync_parser.add_subparsers(dest="sync_command", required=True)
+
+    sync_review = sync_commands.add_parser(
+        "review",
+        help="Record the exact local hashes and remote etags shown for approval.",
+    )
+    sync_review.add_argument("project_id", help="Claude Design project UUID.")
+    sync_review.add_argument("--direction", required=True, choices=("to-design", "to-code"))
+    sync_review.add_argument(
+        "--pair",
+        dest="pairs",
+        action="append",
+        required=True,
+        help="REMOTE_PATH=LOCAL_PATH; repeat for every affected relationship.",
+    )
+    sync_review.add_argument("--json", action="store_true", help="Output compact revision metadata.")
+
+    sync_apply = sync_commands.add_parser(
+        "apply",
+        help="Revalidate and apply one user-approved sync review.",
+    )
+    sync_apply.add_argument("review_id", help="Exact review id previously shown to the user.")
+    sync_apply.add_argument(
+        "--allow-write",
+        action="store_true",
+        help="Required after the user approved this exact review.",
+    )
+    sync_apply.add_argument("--json", action="store_true", help="Output compact revision metadata.")
+
+    sync_finish = sync_commands.add_parser(
+        "finish",
+        help="Advance the verified sync ledger after implementation and preview checks pass.",
+    )
+    sync_finish.add_argument("review_id", help="Applied review awaiting verification.")
+    sync_finish.add_argument("--json", action="store_true", help="Output compact revision metadata.")
+
+    sync_status = sync_commands.add_parser("status", help="Inspect local sync receipt state without remote access.")
+    sync_status.add_argument("review_id", nargs="?", help="Optional exact review id.")
+    sync_status.add_argument("--json", action="store_true", help="Output compact revision metadata.")
 
     delete_parser = subparsers.add_parser(
         "delete",

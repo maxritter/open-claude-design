@@ -17,7 +17,7 @@ import sys
 import time
 import urllib.error
 import urllib.request
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
@@ -25,6 +25,7 @@ from typing import Any, Protocol, cast
 from urllib.parse import parse_qs, urlencode, urlparse
 
 from open_claude_design.config import (
+    CLAUDE_DESIGN_BROWSER_LOGIN_ENV,
     CLAUDE_DESIGN_CREDENTIAL_MAX_BYTES,
     CLAUDE_DESIGN_OAUTH_AUTHORIZE_URL,
     CLAUDE_DESIGN_OAUTH_CLIENT_ID,
@@ -530,6 +531,33 @@ def _open_browser(
     return result.returncode == 0
 
 
+def automatic_browser_login_available(
+    *,
+    platform: str = sys.platform,
+    environment: Mapping[str, str] = os.environ,
+    container_marker: Path = Path("/.dockerenv"),
+) -> bool:
+    """Return whether automatic localhost OAuth is appropriate for this runtime."""
+    override = environment.get(CLAUDE_DESIGN_BROWSER_LOGIN_ENV, "").lower()
+    if override in {"1", "true", "yes"}:
+        return True
+    if override in {"0", "false", "no"}:
+        return False
+    if environment.get("CI", "").lower() in {"1", "true", "yes"}:
+        return False
+    if any(environment.get(name) for name in ("REMOTE_CONTAINERS", "CODESPACES", "SSH_CONNECTION")):
+        return False
+    if container_marker.exists():
+        return False
+    if platform == "darwin":
+        return True
+    if platform.startswith("linux"):
+        if environment.get("WSL_DISTRO_NAME"):
+            return True
+        return bool(environment.get("DISPLAY") or environment.get("WAYLAND_DISPLAY"))
+    return False
+
+
 def login_design(
     *,
     manual: bool = False,
@@ -540,6 +568,7 @@ def login_design(
     token_opener: Callable[..., _Response] = _TOKEN_OPENER.open,
     input_reader: Callable[[str], str] = getpass.getpass,
     emit: Callable[[str], None] = print,
+    allow_manual_fallback: bool = True,
 ) -> dict[str, object]:
     """Authorize a Claude.ai account without requiring Claude Code."""
     if platform != "darwin" and not platform.startswith("linux"):
@@ -554,7 +583,14 @@ def login_design(
             authorize_url = _authorize_url(redirect_uri=redirect_uri, challenge=challenge, state=state)
             emit("Open this URL in a browser to authorize Claude Design:")
             emit(authorize_url)
-            pasted = input_reader("Paste the code#state value: ").strip()
+            try:
+                pasted = input_reader("Paste the code#state value: ").strip()
+            except (EOFError, KeyboardInterrupt) as error:
+                raise DesignAuthError(
+                    "Manual Claude Design login needs an interactive terminal. Run "
+                    "open-claude-design login --manual there and paste the returned code into that terminal, "
+                    "not into a coding-agent chat."
+                ) from error
             code, separator, returned_state = pasted.partition("#")
             if not separator or not code or returned_state != state:
                 raise DesignAuthError("The pasted authorization code or state is invalid.")
@@ -571,6 +607,13 @@ def login_design(
             emit("Opening Claude Design authorization in your browser...")
             if not _open_browser(automatic_url, platform=platform, runner=runner):
                 server.server_close()
+                server = None
+                if not allow_manual_fallback:
+                    raise DesignAuthError(
+                        "No local browser could be opened. Run open-claude-design login --manual in an "
+                        "interactive terminal; open its URL on your host browser and paste the returned code "
+                        "back into that terminal."
+                    )
                 return login_design(
                     manual=True,
                     timeout_seconds=timeout_seconds,
@@ -580,6 +623,7 @@ def login_design(
                     token_opener=token_opener,
                     input_reader=input_reader,
                     emit=emit,
+                    allow_manual_fallback=allow_manual_fallback,
                 )
             emit("Browser did not open? Use this URL and paste the returned code:")
             emit(manual_url)

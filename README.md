@@ -27,6 +27,10 @@ curl -fsSL https://github.com/maxritter/open-claude-design/releases/latest/downl
 
 </div>
 
+<p align="center">
+<img src="docs/media/claude-design-ui.webp" alt="Claude Design's interactive editor with canvas controls, comments, editing, and a live product preview" width="100%">
+</p>
+
 Claude Design is excellent. Using it alongside your favorite coding agents can still mean switching back and forth: open the visual workspace, export the generated prompt, return to the terminal, restore the context, then repeat after the next visual change.
 
 The design and codebase can also drift apart as each changes independently. A newer component, state, or token can exist on only one side, making the two increasingly difficult to keep synchronized.
@@ -42,7 +46,7 @@ To invoke Open Claude Design, mention **Claude Design** in your request to one o
 > [!IMPORTANT]
 > Free accounts are not currently eligible. Claude Design uses the paid plan's shared usage limits. [Enterprise administrators](https://support.claude.com/en/articles/14604406-claude-design-admin-guide-for-team-and-enterprise-plans) must enable it under Organization settings → Capabilities.
 
-1. **Run the one-line installer above.** It installs the CLI and shared workflows, connects detected agents, and opens the standalone Claude login.
+1. **Run the one-line installer above.** It installs the CLI and shared workflows, connects detected agents, and opens the standalone Claude login when a local browser is available.
 
 2. **Mention Claude Design in your request to one of your favorite coding agents.** No special command or manual skill selection is needed.
 
@@ -56,7 +60,7 @@ Design decisions stop living in a separate side conversation. They become part o
 
 1. **Create from code.** Turn real components, tokens, assets, copy, and states into a Claude Design element.
 2. **Inspect visually.** Open the result in Claude Design, compare options, and tweak it directly in the visual UI.
-3. **Sync both ways.** Move approved designs into code or newer code into Claude Design. Conflicts stop for review.
+3. **Sync both ways.** Approved revisions move safely in either direction. If code or design changes afterward, the new diff comes back for review.
 
 ## Why Claude Design is the design tool to beat
 
