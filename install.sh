@@ -18,6 +18,7 @@ unset UV_INDEX UV_INDEX_URL UV_EXTRA_INDEX_URL UV_FIND_LINKS UV_CONFIG_FILE UV_K
 UV_NO_CONFIG=1
 UV_DEFAULT_INDEX="https://pypi.org/simple"
 export UV_NO_CONFIG UV_DEFAULT_INDEX
+ORIGINAL_PATH="${PATH:-}"
 
 if [ -t 1 ] && [ "${NO_COLOR:-}" = "" ]; then
   CYAN='\033[38;5;44m'
@@ -130,9 +131,9 @@ trap 'cleanup; exit 1' HUP INT TERM
 step 2 "Preparing private runtimes"
 uv_is_compatible() {
   command -v uv > /dev/null 2>&1 &&
-    uv tool install --help 2> /dev/null | grep -q -- '--default-index' &&
-    uv tool install --help 2> /dev/null | grep -q -- '--no-sources' &&
-    uv tool dir --bin > /dev/null 2>&1
+    uv tool install --help < /dev/null 2> /dev/null | grep -q -- '--default-index' &&
+    uv tool install --help < /dev/null 2> /dev/null | grep -q -- '--no-sources' &&
+    uv tool dir --bin < /dev/null > /dev/null 2>&1
 }
 
 if ! uv_is_compatible; then
@@ -194,7 +195,7 @@ uv_is_compatible || fail "compatible uv setup did not complete"
 node_is_compatible() {
   command -v node > /dev/null 2>&1 &&
     command -v npx > /dev/null 2>&1 &&
-    node -e 'const [major, minor] = process.versions.node.split(".").map(Number); process.exit(major > 22 || (major === 22 && minor >= 20) ? 0 : 1)'
+    node -e 'const [major, minor] = process.versions.node.split(".").map(Number); process.exit(major > 22 || (major === 22 && minor >= 20) ? 0 : 1)' < /dev/null
 }
 
 if ! node_is_compatible && [ -x "$SKILLS_NODE_ROOT/bin/node" ] && [ -x "$SKILLS_NODE_ROOT/bin/npx" ]; then
@@ -256,7 +257,7 @@ else
     info "Downloading the latest Open Claude Design release"
   fi
   curl -fsSL "$RELEASE_BASE/$CHECKSUM_NAME" -o "$STAGING_DIR/$CHECKSUM_NAME"
-  PACKAGE_NAME="$(awk '$2 ~ /^open_claude_design-.*-py3-none-any\.whl$/ {print $2; exit}' "$STAGING_DIR/$CHECKSUM_NAME")"
+  PACKAGE_NAME="$(awk '$2 ~ /^open_claude_design-[^\/]*-py3-none-any\.whl$/ {print $2; exit}' "$STAGING_DIR/$CHECKSUM_NAME")"
   [ "$PACKAGE_NAME" != "" ] || fail "release wheel is missing from the checksum manifest"
   curl -fsSL "$RELEASE_BASE/$PACKAGE_NAME" -o "$STAGING_DIR/$PACKAGE_NAME"
   EXPECTED="$(awk -v name="$PACKAGE_NAME" '$2 == name {print $1}' "$STAGING_DIR/$CHECKSUM_NAME")"
@@ -267,7 +268,9 @@ fi
 
 uv tool install --no-config --default-index "$UV_DEFAULT_INDEX" --no-sources --force --quiet \
   "$STAGING_DIR/$PACKAGE_NAME" < /dev/null
-UV_TOOL_BIN="$(uv tool dir --bin)"
+# NO_COLOR keeps the captured path free of ANSI codes when a parent process
+# (uv run, some CI systems) exports FORCE_COLOR/CLICOLOR_FORCE.
+UV_TOOL_BIN="$(NO_COLOR=1 uv tool dir --bin < /dev/null)"
 case "$UV_TOOL_BIN" in
   /*) ;;
   *) fail "uv returned an invalid tool executable directory" ;;
@@ -276,12 +279,21 @@ PATH="$UV_TOOL_BIN:$PATH"
 export PATH
 command -v open-claude-design > /dev/null 2>&1 || fail "installed CLI is not on PATH; add $UV_TOOL_BIN"
 success "CLI $(open-claude-design --version) installed"
+case ":$ORIGINAL_PATH:" in
+  *":$UV_TOOL_BIN:"*) ;;
+  *)
+    info "New terminals need $UV_TOOL_BIN on PATH before open-claude-design resolves"
+    info "Add to your shell profile: export PATH=\"$UV_TOOL_BIN:\$PATH\""
+    ;;
+esac
 
 step 4 "Connecting your coding agents"
 has_yes=0
+dry_run=0
 for argument; do
   case "$argument" in
     --yes | -y) has_yes=1 ;;
+    --dry-run) dry_run=1 ;;
   esac
 done
 if [ "$has_yes" -eq 0 ]; then
@@ -289,9 +301,13 @@ if [ "$has_yes" -eq 0 ]; then
 fi
 if ! open-claude-design install "$@" --json < /dev/null > "$STAGING_DIR/agent-install.json"; then
   cat "$STAGING_DIR/agent-install.json" >&2
-  fail "coding-agent integration failed"
+  fail "coding-agent integration failed; remove the partial install with uninstall.sh"
 fi
-success "Automatic design workflows installed"
+if [ "$dry_run" -eq 1 ]; then
+  info "Dry run: no agent files were changed"
+else
+  success "Automatic design workflows installed"
+fi
 
 step 5 "Connecting Claude Design"
 if open-claude-design status --json > /dev/null 2>&1; then

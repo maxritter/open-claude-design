@@ -53,12 +53,24 @@ case "$RUNTIME_ROOT" in
 esac
 
 confirmed=0
-for argument; do
-  case "$argument" in
+SCOPE="global"
+while [ "$#" -gt 0 ]; do
+  case "$1" in
     --yes | -y) confirmed=1 ;;
-    *) fail "unknown option: $argument" ;;
+    --scope)
+      [ "$#" -ge 2 ] || fail "--scope requires a value: global or project"
+      SCOPE="$2"
+      shift
+      ;;
+    --scope=*) SCOPE="${1#--scope=}" ;;
+    *) fail "unknown option: $1 (supported: --yes, --scope global|project)" ;;
   esac
+  shift
 done
+case "$SCOPE" in
+  global | project) ;;
+  *) fail "scope must be global or project" ;;
+esac
 
 line ""
 line "${CYAN}╭──────────────────────────────────────────────────────────╮${RESET}"
@@ -82,44 +94,73 @@ if [ "$confirmed" -ne 1 ]; then
 fi
 
 step 1 "Removing agent integrations"
+cli_skills_removed=0
 if command -v open-claude-design > /dev/null 2>&1; then
-  if open-claude-design uninstall --scope global --yes < /dev/null > /dev/null 2>&1; then
-    success "Five Open Claude Design skills removed"
+  if open-claude-design uninstall --scope "$SCOPE" --yes < /dev/null > /dev/null 2>&1; then
+    cli_skills_removed=1
+    success "Five Open Claude Design skills removed ($SCOPE scope)"
   else
     info "The CLI could not remove every skill; trying the Agent Skills backend"
   fi
   open-claude-design logout --yes < /dev/null > /dev/null 2>&1 || true
 fi
 
-if command -v npx > /dev/null 2>&1; then
-  npx --yes skills@1.5.23 remove \
-    open-claude-design \
-    open-claude-design-quality \
-    open-claude-design-system \
-    open-claude-ui-design \
-    open-claude-ui-review \
-    --global --yes < /dev/null > /dev/null 2>&1 || true
-elif [ -x "$MANAGED_NPX" ]; then
-  PATH="$(dirname "$MANAGED_NPX"):$PATH"
-  export PATH
-  "$MANAGED_NPX" --yes skills@1.5.23 remove \
-    open-claude-design \
-    open-claude-design-quality \
-    open-claude-design-system \
-    open-claude-ui-design \
-    open-claude-ui-review \
-    --global --yes < /dev/null > /dev/null 2>&1 || true
+fallback_skills_removed=0
+if [ "$cli_skills_removed" -ne 1 ]; then
+  if [ "$SCOPE" = "global" ]; then
+    set -- --global --yes
+  else
+    set -- --yes
+  fi
+  if command -v npx > /dev/null 2>&1; then
+    if npx --yes skills@1.5.23 remove \
+      open-claude-design \
+      open-claude-design-quality \
+      open-claude-design-system \
+      open-claude-ui-design \
+      open-claude-ui-review \
+      "$@" < /dev/null > /dev/null 2>&1; then
+      fallback_skills_removed=1
+    fi
+  elif [ -x "$MANAGED_NPX" ]; then
+    PATH="$(dirname "$MANAGED_NPX"):$PATH"
+    export PATH
+    if "$MANAGED_NPX" --yes skills@1.5.23 remove \
+      open-claude-design \
+      open-claude-design-quality \
+      open-claude-design-system \
+      open-claude-ui-design \
+      open-claude-ui-review \
+      "$@" < /dev/null > /dev/null 2>&1; then
+      fallback_skills_removed=1
+    fi
+  fi
 fi
-success "Agent integrations are clean"
+if [ "$cli_skills_removed" -eq 1 ] || [ "$fallback_skills_removed" -eq 1 ]; then
+  success "Agent integrations are clean"
+else
+  info "Could not confirm skill removal for the $SCOPE scope"
+  info "Re-run this uninstaller once open-claude-design or npx can reach the Agent Skills backend"
+fi
 
 step 2 "Removing the CLI"
+uv_bin_dir=""
 if command -v uv > /dev/null 2>&1; then
   uv tool uninstall "$PACKAGE_NAME" < /dev/null > /dev/null 2>&1 || true
+  uv_bin_dir="$(NO_COLOR=1 uv tool dir --bin < /dev/null 2> /dev/null || true)"
 elif [ -x "$MANAGED_UV" ]; then
   "$MANAGED_UV" tool uninstall "$PACKAGE_NAME" < /dev/null > /dev/null 2>&1 || true
+  uv_bin_dir="$(NO_COLOR=1 "$MANAGED_UV" tool dir --bin < /dev/null 2> /dev/null || true)"
 fi
+case "$uv_bin_dir" in
+  /*) rm -f "$uv_bin_dir/open-claude-design" ;;
+esac
 rm -f "$HOME/.local/bin/open-claude-design"
-success "CLI removed"
+if command -v open-claude-design > /dev/null 2>&1; then
+  info "An open-claude-design executable remains at $(command -v open-claude-design); remove it manually"
+else
+  success "CLI removed"
+fi
 
 step 3 "Removing owned runtime data"
 case "$(uname -s)" in
@@ -128,12 +169,11 @@ case "$(uname -s)" in
       -a open-claude-design \
       -s "Open Claude Design-credentials" > /dev/null 2>&1 || true
     ;;
-  Linux)
-    rm -f "$HOME/.config/open-claude-design/credentials.json"
-    rm -f "$HOME/.config/open-claude-design/.refresh.lock"
-    rmdir "$HOME/.config/open-claude-design" > /dev/null 2>&1 || true
-    ;;
 esac
+# The refresh lock directory is created on every platform, so clean it everywhere.
+rm -f "$HOME/.config/open-claude-design/credentials.json"
+rm -f "$HOME/.config/open-claude-design/.refresh.lock"
+rmdir "$HOME/.config/open-claude-design" > /dev/null 2>&1 || true
 rm -rf "$RUNTIME_ROOT"
 success "Managed uv, Node.js, and credential data removed"
 
