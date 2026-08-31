@@ -4,7 +4,7 @@
 
 <h1>Claude Design for any coding agent</h1>
 
-**Use Claude Design from your existing coding agent—no Claude Code installation or Anthropic API key required.**
+**Use Claude Design from your favorite coding agents—no Claude Code installation or Anthropic API key required.**
 
 ```bash
 curl -fsSL https://github.com/maxritter/open-claude-design/releases/latest/download/install.sh | sh
@@ -23,13 +23,17 @@ curl -fsSL https://github.com/maxritter/open-claude-design/releases/latest/downl
 <a href="#agent-compatibility">Agents</a> ·
 <a href="#open-for-pull-requests">Contribute</a>
 
-⭐ **If this makes your coding agent better at design, [give it a star](https://github.com/maxritter/open-claude-design).**
+⭐ **If this makes your favorite coding agents better at design, [give it a star](https://github.com/maxritter/open-claude-design).**
 
 </div>
 
-Claude Design is excellent. The workflow around it can still feel like a relay between two products: open the visual workspace, export the generated prompt, return to the terminal, restore the context, then repeat after the next visual change.
+Claude Design is excellent. Using it alongside your favorite coding agents can still mean switching back and forth: open the visual workspace, export the generated prompt, return to the terminal, restore the context, then repeat after the next visual change.
 
-Open Claude Design removes that relay. It connects your coding agent and real codebase directly to Claude Design's visual workspace. Ask normally—the right workflow loads automatically.
+The design and codebase can also drift apart as each changes independently. A newer component, state, or token can exist on only one side, making the two increasingly difficult to keep synchronized.
+
+Open Claude Design solves both problems. It connects your favorite coding agents and your real codebase directly to Claude Design's visual workspace, so design context stays connected to implementation and changes can move safely in either direction.
+
+To invoke Open Claude Design, mention **Claude Design** in your request to one of your favorite coding agents. It loads the Claude Design access skill and connects to your design workspace automatically.
 
 ## Quick start
 
@@ -40,9 +44,11 @@ Open Claude Design removes that relay. It connects your coding agent and real co
 
 1. **Run the one-line installer above.** It installs the CLI and shared workflows, connects detected agents, and opens the standalone Claude login.
 
-2. **Ask your agent normally.**
+2. **Mention Claude Design in your request to one of your favorite coding agents.** No special command or manual skill selection is needed.
 
-> Create a Claude Design version of this settings flow, using the real components and states from the codebase.
+   > Create a Claude Design version of this settings flow, using the real components and states from the codebase.
+
+3. **View and edit your design in Claude Design.** Open it from the Claude Design sidebar in the [Claude Desktop app](https://claude.com/download), or use the [Claude Design web app](https://claude.ai/design).
 
 ## One workflow, both sides
 
@@ -88,6 +94,29 @@ Every supported agent receives the same automatic workflows and CLI access.
 | Warp · Zed · Amp · Replit · other Agent Skills hosts | ✅ Full |
 
 The installer auto-detects installed agents. Use `--all-agents` only when every available integration is wanted.
+
+### Included capabilities
+
+**The full Claude Design tool catalog.** The latest authenticated audit found these 23 operations. The bridge discovers the catalog dynamically as it evolves.
+
+| Area | Bridged capabilities |
+|---|---|
+| **Projects and files** (8) | List projects · inspect a project · create a project · list files · read a file · write files · copy files · delete files |
+| **Design guidance and previews** (6) | List design systems · load the project prompt · load a design skill · render a preview · create support JavaScript · finalize an authoring plan |
+| **Conversations and comments** (4) | Read a conversation · update a conversation · list comments · acknowledge comments |
+| **Members and sharing** (5) | List members · add a member · remove a member · change a member role · update sharing |
+
+Remote access is read-only by default; changes require explicit authorization.
+
+**Five automatically invoked Agent Skills:**
+
+| Skill | What it handles |
+|---|---|
+| `open-claude-design` | Claude Design access, collaboration, and two-way synchronization |
+| `open-claude-ui-design` | Product UI creation and redesign in the real codebase |
+| `open-claude-design-system` | Design-token and component-system extraction or normalization |
+| `open-claude-ui-review` | Accessibility, brand, responsive, theme, state, and UX review |
+| `open-claude-design-quality` | Product-grounded visual quality for every user-visible change |
 
 ## Maintenance
 
