@@ -27,10 +27,6 @@ curl -fsSL https://github.com/maxritter/open-claude-design/releases/latest/downl
 
 </div>
 
-<p align="center">
-<img src="docs/media/claude-design-ui.webp" alt="Claude Design's interactive editor with canvas controls, comments, editing, and a live product preview" width="100%">
-</p>
-
 Claude Design is excellent. Using it alongside your favorite coding agents can still mean switching back and forth: open the visual workspace, export the generated prompt, return to the terminal, restore the context, then repeat after the next visual change.
 
 The design and codebase can also drift apart as each changes independently. A newer component, state, or token can exist on only one side, making the two increasingly difficult to keep synchronized.
@@ -54,6 +50,10 @@ To invoke Open Claude Design, mention **Claude Design** in your request to one o
 
 3. **View and edit your design in Claude Design.** Open it from the Claude Design sidebar in the [Claude Desktop app](https://claude.com/download), or use the [Claude Design web app](https://claude.ai/design).
 
+<p align="center">
+<img src="docs/media/claude-design-ui.webp" alt="Claude Design's interactive editor with canvas controls, comments, editing, and a live product preview" width="100%">
+</p>
+
 ## One workflow, both sides
 
 Design decisions stop living in a separate side conversation. They become part of the same implementation and verification loop as the code.
@@ -61,16 +61,6 @@ Design decisions stop living in a separate side conversation. They become part o
 1. **Create from code.** Turn real components, tokens, assets, copy, and states into a Claude Design element.
 2. **Inspect visually.** Open the result in Claude Design, compare options, and tweak it directly in the visual UI.
 3. **Sync both ways.** Approved revisions move safely in either direction. If code or design changes afterward, the new diff comes back for review.
-
-## Why Claude Design is the design tool to beat
-
-Most AI design tools end at a mockup. Claude Design stays interactive: generate, inspect, compare, comment, edit, and tune visually.
-
-Open Claude Design connects that visual workspace to the real product:
-
-- **Codebase grounded.** Real components, tokens, assets, copy, and states shape the design.
-- **Visually controllable.** Inspect and adjust the rendered result without prompting every tweak.
-- **Two-way iteration.** Approved designs return to code; newer code returns to Claude Design.
 
 ## What you can do
 
@@ -133,7 +123,6 @@ Remote access is read-only by default; changes require explicit authorization. F
 | **List the packaged skills** | `open-claude-design list` |
 | **Update Open Claude Design** | `open-claude-design update --scope global --yes` |
 | **Uninstall Open Claude Design** | `curl -fsSL https://github.com/maxritter/open-claude-design/releases/latest/download/uninstall.sh \| sh` |
-| **Remove project-scoped skills** | `curl -fsSL https://github.com/maxritter/open-claude-design/releases/latest/download/uninstall.sh \| sh -s -- --scope project --yes` |
 
 ## Open for pull requests
 
