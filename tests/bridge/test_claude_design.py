@@ -1657,3 +1657,80 @@ def test_design_files_tsv_rejects_control_characters(unsafe_path: str) -> None:
 def test_remote_paths_must_be_canonical(remote_path: str) -> None:
     with pytest.raises(ValueError, match="canonical"):
         claude_design._validate_remote_path(remote_path)
+
+
+@pytest.mark.parametrize(
+    ("argv", "expected"),
+    [
+        (["status", "--json"], {"design_command": "status", "json": True}),
+        (
+            ["authoring-context", "project-1", "--design-system", "ds-1", "--skill", "hifi-design", "--refresh"],
+            {"project_id": "project-1", "design_system_id": "ds-1", "skill": "hifi-design", "refresh": True},
+        ),
+        (["tools", "--json"], {"design_command": "tools"}),
+        (["describe", "read_file", "--json"], {"tool": "read_file"}),
+        (
+            ["call", "list_projects", "--args", "{}", "--allow-write", "--allow-destructive", "--allow-guarded"],
+            {
+                "tool": "list_projects",
+                "args": "{}",
+                "allow_write": True,
+                "allow_destructive": True,
+                "allow_guarded": True,
+            },
+        ),
+        (
+            ["planned-call", "copy_files", "project-1", "--args", "{}", "--write", "a.dc.html", "--allow-write"],
+            {"tool": "copy_files", "project_id": "project-1", "writes": ["a.dc.html"], "allow_write": True},
+        ),
+        (
+            ["preview", "project-1", "screen.dc.html", "--open"],
+            {"project_id": "project-1", "remote_path": "screen.dc.html", "open_browser": True},
+        ),
+        (
+            ["files", "project-1", "--path", "assets", "--depth", "-1", "--tsv"],
+            {"project_id": "project-1", "path": "assets", "depth": -1, "tsv": True, "json": False},
+        ),
+        (
+            ["pull", "project-1", "screen.dc.html", "--output", "local.html", "--force"],
+            {"remote_path": "screen.dc.html", "output": "local.html", "force": True, "external_local_paths": []},
+        ),
+        (
+            ["push", "project-1", "--file", "a=./a", "--if-match", "a=123", "--plan-token", "-", "--allow-write"],
+            {"files": ["a=./a"], "if_matches": ["a=123"], "plan_token": "-", "allow_write": True},
+        ),
+        (
+            [
+                "delete",
+                "project-1",
+                "--path",
+                "a.dc.html",
+                "--if-match",
+                "a.dc.html=123",
+                "--confirm-delete",
+                "a.dc.html",
+                "--allow-write",
+            ],
+            {
+                "paths": ["a.dc.html"],
+                "if_matches": ["a.dc.html=123"],
+                "confirm_deletes": ["a.dc.html"],
+                "allow_write": True,
+            },
+        ),
+    ],
+)
+def test_build_parser_accepts_every_documented_bridge_invocation(
+    argv: list[str],
+    expected: dict[str, Any],
+) -> None:
+    """The documented CLI surface (SKILL.md + README) must keep parsing."""
+    parsed = claude_design.build_parser().parse_args(argv)
+    for attribute, value in expected.items():
+        assert getattr(parsed, attribute) == value
+
+
+def test_push_plan_token_only_accepts_the_stdin_marker() -> None:
+    parser = claude_design.build_parser()
+    with pytest.raises(SystemExit):
+        parser.parse_args(["push", "project-1", "--file", "a=./a", "--if-match", "a=1", "--plan-token", "tok"])

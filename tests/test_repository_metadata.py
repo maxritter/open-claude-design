@@ -7,9 +7,36 @@ import re
 import tomllib
 from pathlib import Path
 
+import pytest
 import yaml
 
+from open_claude_design.config import (
+    SKILL_NAMES,
+    SKILLS_CLI_NODE_VERSION,
+    SKILLS_CLI_PACKAGE,
+    SKILLS_CLI_VERSION,
+)
+
+pytestmark = pytest.mark.unit
 ROOT = Path(__file__).parents[1]
+
+
+def test_shell_scripts_track_the_python_configuration_pins() -> None:
+    """install.sh / uninstall.sh literals must not drift from config.py."""
+    install = (ROOT / "install.sh").read_text(encoding="utf-8")
+    uninstall = (ROOT / "uninstall.sh").read_text(encoding="utf-8")
+
+    assert f'SKILLS_NODE_VERSION="{SKILLS_CLI_NODE_VERSION}"' in install
+
+    pinned_cli = f"{SKILLS_CLI_PACKAGE}@{SKILLS_CLI_VERSION}"
+    referenced_pins = set(re.findall(r"\bskills@[0-9][0-9.]*\b", uninstall))
+    assert referenced_pins == {pinned_cli}
+
+    removal_blocks = re.findall(r"remove \\\n((?:\s+[a-z0-9-]+ \\\n)+)", uninstall)
+    assert removal_blocks, "uninstall.sh lost its skill removal fallback"
+    for block in removal_blocks:
+        removed = {line.strip().removesuffix(" \\") for line in block.splitlines() if line.strip()}
+        assert removed == set(SKILL_NAMES)
 
 
 def test_readme_keeps_activation_order_and_local_links_valid() -> None:

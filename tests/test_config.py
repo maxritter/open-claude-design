@@ -5,6 +5,8 @@ from __future__ import annotations
 import tomllib
 from pathlib import Path
 
+import pytest
+
 from open_claude_design import __version__
 from open_claude_design.config import (
     BRIDGE_COMMAND_NAMES,
@@ -16,6 +18,8 @@ from open_claude_design.config import (
     SKILLS_CLI_VERSION,
     VERSION,
 )
+
+pytestmark = pytest.mark.unit
 
 
 def test_central_version_matches_project_metadata() -> None:

@@ -9,6 +9,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+import open_claude_design.installer as installer_module
 from open_claude_design.config import SKILL_NAMES, SKILLS_CLI_VERSION
 from open_claude_design.installer import (
     InstallError,
@@ -252,3 +253,35 @@ def test_dry_run_does_not_export_or_execute(
     run.assert_not_called()
     assert result["executed"] is False
     assert "<bundled-skills>" in result["command"]
+
+
+def test_data_root_prefers_the_installed_wheel_layout(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An installed wheel resolves skills from open_claude_design/data/skills."""
+    package_dir = tmp_path / "open_claude_design"
+    skill = SKILL_NAMES[0]
+    source = package_dir / "data" / "skills" / skill
+    source.mkdir(parents=True)
+    (source / "SKILL.md").write_text("---\nname: x\n---\n", encoding="utf-8")
+    (source / "tests").mkdir()
+    (source / "tests" / "evals.json").write_text("[]", encoding="utf-8")
+    monkeypatch.setattr(installer_module, "__file__", str(package_dir / "installer.py"))
+
+    files = installer_module._runtime_files(skill)
+
+    assert set(files) == {"SKILL.md"}
+    assert files["SKILL.md"] == source / "SKILL.md"
+
+
+def test_data_root_fails_clearly_when_package_data_is_missing(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    orphan = tmp_path / "deep" / "nested" / "package"
+    orphan.mkdir(parents=True)
+    monkeypatch.setattr(installer_module, "__file__", str(orphan / "installer.py"))
+
+    with pytest.raises(InstallError, match="package data is missing"):
+        installer_module._data_root()

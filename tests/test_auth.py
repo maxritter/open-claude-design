@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import base64
+import http.client
 import json
 import stat
 import subprocess
+import threading
 import urllib.request
 from email.message import Message
 from pathlib import Path
@@ -97,6 +99,97 @@ def test_manual_login_uses_pkce_and_persists_without_claude_code(
     assert "access-value" not in "\n".join(messages)
     credential = tmp_path.joinpath(".config", "open-claude-design", "credentials.json")
     assert stat.S_IMODE(credential.stat().st_mode) == 0o600
+
+
+def _localhost_browser_runner(
+    visit: Any,
+) -> Any:
+    """Return a fake browser runner that hits the login callback like a real browser."""
+
+    def runner(command: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        url = command[-1]
+        parameters = parse_qs(urlparse(url).query)
+        state = parameters["state"][0]
+        redirect = urlparse(parameters["redirect_uri"][0])
+        assert redirect.hostname == "localhost"
+        port = redirect.port
+        assert port is not None
+        threading.Thread(target=visit, args=(port, state), daemon=True).start()
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    return runner
+
+
+def _get_callback(port: int, query: str) -> None:
+    connection = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
+    try:
+        connection.request("GET", f"/callback?{query}")
+        connection.getresponse().read()
+    finally:
+        connection.close()
+
+
+def test_automatic_login_serves_the_localhost_callback_and_persists(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("WSL_DISTRO_NAME", raising=False)
+    monkeypatch.setattr(auth.shutil, "which", lambda name: "/usr/bin/xdg-open" if name == "xdg-open" else None)
+    requests: list[dict[str, Any]] = []
+
+    def opener(request: urllib.request.Request, *, timeout: int) -> FakeResponse:
+        requests.append(json.loads(bytes(request.data or b"").decode("utf-8")))
+        return FakeResponse(_token_response(access="callback-access"))
+
+    def visit(port: int, state: str) -> None:
+        _get_callback(port, f"code=browser-code&state={state}")
+
+    messages: list[str] = []
+    result = auth.login_design(
+        timeout_seconds=10,
+        platform="linux",
+        home=tmp_path,
+        runner=_localhost_browser_runner(visit),
+        token_opener=opener,
+        emit=messages.append,
+    )
+
+    assert result["authenticated"] is True
+    assert requests[0]["grant_type"] == "authorization_code"
+    assert requests[0]["code"] == "browser-code"
+    assert requests[0]["redirect_uri"].startswith("http://localhost:")
+    stored = auth.load_standalone_credential(platform="linux", home=tmp_path, now_ms=0)
+    assert stored is not None
+    stored_oauth = stored["designOauth"]
+    assert isinstance(stored_oauth, dict)
+    assert stored_oauth["accessToken"] == "callback-access"
+    assert "callback-access" not in "\n".join(messages)
+
+
+def test_automatic_login_rejects_a_callback_with_the_wrong_state(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("WSL_DISTRO_NAME", raising=False)
+    monkeypatch.setattr(auth.shutil, "which", lambda name: "/usr/bin/xdg-open" if name == "xdg-open" else None)
+
+    def visit(port: int, _state: str) -> None:
+        _get_callback(port, "code=browser-code&state=forged-state")
+
+    def opener(_request: urllib.request.Request, *, timeout: int) -> FakeResponse:
+        raise AssertionError(f"no token request may follow a forged state (timeout={timeout})")
+
+    with pytest.raises(auth.DesignAuthError, match="invalid state"):
+        auth.login_design(
+            timeout_seconds=10,
+            platform="linux",
+            home=tmp_path,
+            runner=_localhost_browser_runner(visit),
+            token_opener=opener,
+            emit=lambda _message: None,
+        )
+
+    assert auth.load_standalone_credential(platform="linux", home=tmp_path, now_ms=0) is None
 
 
 def test_refresh_uses_stored_client_and_rotates_credential(tmp_path: Path) -> None:
