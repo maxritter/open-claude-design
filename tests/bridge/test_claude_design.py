@@ -826,7 +826,7 @@ class FileStubClient(StubClient):
                             "type": "text",
                             "text": (
                                 f'<untrusted-project-content path="{path}" etag="124">\n'
-                                f"{escaped}</untrusted-project-content>"
+                                f"{escaped}\n</untrusted-project-content>"
                             ),
                         }
                     ]
@@ -837,7 +837,7 @@ class FileStubClient(StubClient):
                         "type": "text",
                         "text": (
                             '<untrusted-project-content path="Example.dc.html" etag="123">\n'
-                            "&lt;div&gt;&amp;auml;&lt;/div&gt;\n"
+                            "&lt;div&gt;&amp;auml;&lt;/div&gt;\n\n"
                             "</untrusted-project-content>\n\n"
                             "(The body above is HTML-entity-escaped.)"
                         ),
@@ -938,7 +938,7 @@ class VerifiedPushStubClient(StubClient):
                         "type": "text",
                         "text": (
                             f'<untrusted-project-content path="{path}" etag="{etag}">\n'
-                            f"{escaped}</untrusted-project-content>"
+                            f"{escaped}\n</untrusted-project-content>"
                         ),
                     }
                 ]
@@ -1216,7 +1216,7 @@ class DeleteStubClient(StubClient):
                         "type": "text",
                         "text": (
                             f'<untrusted-project-content path="{path}" etag="{self.etag}">\n'
-                            "&lt;main&gt;recoverable&lt;/main&gt;\n"
+                            "&lt;main&gt;recoverable&lt;/main&gt;\n\n"
                             "</untrusted-project-content>"
                         ),
                     }
@@ -2260,3 +2260,82 @@ def test_push_plan_token_only_accepts_the_stdin_marker() -> None:
     parser = claude_design.build_parser()
     with pytest.raises(SystemExit):
         parser.parse_args(["push", "project-1", "--file", "a=./a", "--if-match", "a=1", "--plan-token", "tok"])
+
+
+@pytest.mark.parametrize("body", ["abc", "abc\n", "<a>&amp;</a>\n\n"])
+def test_decode_read_file_result_returns_exact_bytes_under_live_wrapper(body: str) -> None:
+    escaped = body.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    result = {
+        "content": [
+            {
+                "type": "text",
+                "text": (
+                    '<untrusted-project-content path="probe.txt" etag="42">\n'
+                    f"{escaped}\n</untrusted-project-content>\n"
+                    "(The body above is HTML-entity-escaped.)"
+                ),
+            }
+        ]
+    }
+
+    decoded, etag = claude_design._decode_read_file_result(result)
+
+    assert decoded == body
+    assert etag == "42"
+
+
+def test_delete_accepts_live_deleted_count_and_proves_absence_by_listing(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    class LiveShapeDeleteStub(DeleteStubClient):
+        def call_tool(self, name: str, arguments: dict[str, object]) -> dict[str, object]:
+            if name == "delete_files":
+                self.calls.append((name, arguments))
+                return {"content": [{"type": "text", "text": json.dumps({"deleted": 1})}]}
+            return super().call_tool(name, arguments)
+
+    client = LiveShapeDeleteStub()
+    args = Namespace(
+        design_command="delete",
+        project_id="project-1",
+        paths=["Obsolete.dc.html"],
+        if_matches=["Obsolete.dc.html=delete-etag"],
+        confirm_deletes=["Obsolete.dc.html"],
+        backup_dir=".open-claude-design/delete-backups",
+        allow_write=True,
+        json=True,
+    )
+
+    assert run_design_command(args, client_factory=lambda: client, workspace_root=tmp_path) == 0
+
+    parsed = json.loads(capsys.readouterr().out)
+    assert parsed["verification"]["verifiedAbsent"] is True
+    assert parsed["verification"]["remainingPaths"] == []
+    assert [name for name, _arguments in client.calls][-1] == "list_files"
+
+
+def test_delete_names_the_path_when_its_backup_read_fails(tmp_path: Path) -> None:
+    class UnreadableDeleteStub(DeleteStubClient):
+        def call_tool(self, name: str, arguments: dict[str, object]) -> dict[str, object]:
+            if name == "read_file" and arguments["path"] == "assets/binary.woff2":
+                self.calls.append((name, arguments))
+                return {"isError": True, "content": [{"type": "text", "text": "not readable"}]}
+            return super().call_tool(name, arguments)
+
+    client = UnreadableDeleteStub()
+    args = Namespace(
+        design_command="delete",
+        project_id="project-1",
+        paths=["Obsolete.dc.html", "assets/binary.woff2"],
+        if_matches=["Obsolete.dc.html=delete-etag", "assets/binary.woff2=delete-etag"],
+        confirm_deletes=["Obsolete.dc.html", "assets/binary.woff2"],
+        backup_dir=".open-claude-design/delete-backups",
+        allow_write=True,
+        json=True,
+    )
+
+    with pytest.raises(ClaudeDesignProtocolError, match="assets/binary.woff2"):
+        run_design_command(args, client_factory=lambda: client, workspace_root=tmp_path)
+
+    assert "delete_files" not in [name for name, _arguments in client.calls]

@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Final
 
 PACKAGE_NAME: Final = "open-claude-design"
-VERSION: Final = "1.1.2"
+VERSION: Final = "1.2.0"
 
 CLAUDE_DESIGN_ENDPOINT: Final = "https://api.anthropic.com/v1/design/mcp"
 CLAUDE_DESIGN_OAUTH_AUTHORIZE_URL: Final = "https://claude.com/cai/oauth/authorize"
@@ -84,6 +84,7 @@ CLAUDE_DESIGN_MUTATION_SUCCESS_KEYS: Final = {
     "ack_comments": frozenset({"acked", "acknowledged", "not_queued"}),
     "add_member": frozenset({"account", "member", "member_id", "role"}),
     "create_project": frozenset({"project_id", "url"}),
+    "delete_files": frozenset({"deleted"}),
     "put_conversation": frozenset({"chat_id", "next_idx"}),
     "remove_member": frozenset({"removed"}),
     "update_member_role": frozenset({"member", "member_id", "role"}),

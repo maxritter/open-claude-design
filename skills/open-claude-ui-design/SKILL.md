@@ -13,27 +13,20 @@ Create intentional product interfaces inside the user's real codebase. The curre
 - Inspect the existing design system, components, tokens, theme, screenshots, assets, and neighboring screens before proposing visual changes.
 - A non-visual logic change in a UI file is not a design task. Preserve the rendered result and handle it directly without expanding scope.
 - Work in the project's native framework and file structure. Do not replace an application with a standalone HTML mockup unless the user explicitly requests an isolated prototype.
-- Reuse real content and assets. Mark missing assets honestly; do not invent product claims, statistics, testimonials, features, or destinations.
-- When the brief covers only part of a screen, keep surrounding product areas abstract or explicitly unchanged. Do not populate unspecified fields, settings, sections, policies, or consequences to make the design look complete.
+- Reuse real content and assets. Mark a missing asset with a labeled placeholder; do not invent product claims, statistics, testimonials, features, or destinations.
 - When Impeccable is also available, this skill owns the overall product-design workflow. Use Impeccable only for a requested named refinement, supporting agent, hook evidence, or detector result; do not run a second competing design process.
 
 ## Direction count
 
 Create one strong, complete direction by default. A direct request to design, redesign, or implement a surface does not imply comparative exploration. Use multiple variants only when the user explicitly asks for options, alternatives, or comparison, or when a materially unresolved product direction makes side-by-side evidence cheaper than a clarifying question. An established product system plus a clear objective normally has one product-consistent answer.
 
-## Scope contract
+## Scope
 
-The user's explicit surface is the boundary: do not narrow a requested full-screen redesign or expand a requested region. If the request names a whole surface but gives only a localized change objective and the intended breadth is materially ambiguous, ask one scope question. When no answer is available, preserve and omit the surrounding UI while designing the named change.
+The user's explicit surface is the boundary: do not narrow a requested full-screen redesign or expand a requested region. If the request names a whole surface but gives only a localized change objective and the intended breadth is materially ambiguous, ask one scope question. When no answer is available, design the named change and leave the surrounding UI unchanged and omitted.
 
-Missing evidence removes authority; it never permits “generic” or “illustrative” fields, sections, actions, or product consequences.
+Before sketching or specifying, separate **provided product facts**, **verified existing UI**, and **unknowns**. Missing evidence removes authority; it never permits “generic” or “illustrative” fields, settings, sections, actions, policies, or product consequences, and an unknown never becomes plausible-looking interface copy.
 
-## Scope frame
-
-Before sketching or specifying a surface, separate **provided product facts**, **verified existing UI**, and **unknowns**. Design only the named region. Represent everything else as “existing content unchanged” or omit it; an unknown never becomes plausible-looking interface copy.
-
-For a partial-surface request, start the deliverable with `Scope: <named region> only; surrounding UI unchanged and omitted.` Show only that region. A full-page wireframe, named surrounding section, or invented neighboring action is out of scope. Render an unknown high-stakes consequence as a bracketed placeholder such as `[verified deletion consequence]`, never as factual copy.
-
-A missing repository never expands scope. In a self-contained brief, the brief is authoritative.
+For a partial-surface request, start the deliverable with `Scope: <named region> only; surrounding UI unchanged and omitted.` Show only that region: a full-page wireframe, a named surrounding section, or an invented neighboring action is out of scope. Render an unknown high-stakes consequence as a bracketed placeholder such as `[verified deletion consequence]`, never as factual copy. A missing repository never expands scope; in a self-contained brief, the brief is authoritative.
 
 ## Select the relevant procedure
 

@@ -23,7 +23,7 @@
       "expected_output": "A selected-design refinement gate that turns the draft into a complete verified contract before implementation.",
       "expectations": [
         "The response treats selection as the start of refinement rather than approval to implement the draft immediately.",
-        "It removes unselected variants from the active deliverable and completes 1a with real content, responsive views, primary interactions, and material states.",
+        "It keeps the exploration file and its stable option ids intact, promotes 1a into its own deliverable, and completes it with real content, responsive views, primary interactions, and material states.",
         "It renders and reads back the finished selected design before implementation, then proceeds because implementation was already part of the original request."
       ]
     },

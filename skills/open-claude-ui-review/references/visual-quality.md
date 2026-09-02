@@ -32,6 +32,7 @@ Flag flat hierarchy, reversed emphasis, competing primary actions in a single-pa
 - Distinguish deliberate variation from almost-identical drift.
 - Check palette roles and surface relationships rather than enforcing an arbitrary color count.
 - Look for overflow and awkward wrapping with real long content, not only ideal demo strings.
+- Where the product defines no value, measure against the craft rules in the `open-claude-design-quality` skill's `references/craft.md`: type floors and heading roles, spacing tiers and inner-versus-outer gaps, button and input rows, nested radii, and the single full-strength accent per surface.
 
 ## Generic-template review
 

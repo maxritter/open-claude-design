@@ -2,6 +2,25 @@
 
 All notable changes to Open Claude Design are documented here. Releases follow semantic versioning and are generated from conventional commits.
 
+## [1.2.0](https://github.com/maxritter/open-claude-design/compare/v1.1.2...v1.2.0) (2026-09-02)
+
+### Added
+
+- `sync apply --reconciled`: a `both-changed` review no longer overwrites the design with the local bytes on `--allow-write` alone. The flag acknowledges that the remote changes were merged into the local files the user approved.
+- `sync review` records an observed match as the baseline when a mapped pair has no baseline yet but both sides already hold identical bytes (`baseline_recorded: true`), instead of requesting approval for a no-op remote write.
+- The `open-claude-design-quality` skill ships `references/craft.md`: measurable defaults for type, spacing, controls, color, and imagery with an explicit precedence below accessibility and the product's own tokens.
+
+### Fixed
+
+- Every `push`, `sync apply`, `pull`, and `delete` readback failed by one byte: Claude Design appends a newline before its `</untrusted-project-content>` wrapper and the bridge only stripped the leading one, so 1.1.2 exited 2 without a preview after each otherwise successful write.
+- `delete` exited 2 and reported the files as remaining although Claude Design had deleted them, because the live `delete_files` result is `{"deleted": N}`. The parent listing is now the ground truth whenever the tool did not error, and a failed backup read names the path.
+- The Claude Design skill described the live `frontend-design` skill as implementation-oriented output; it is aesthetic direction for work outside any design system and is no longer loaded inside an established system. Selected design options now stay in the exploration file and are promoted into a separate deliverable, as the live `hifi-design` skill requires.
+
+### Changed
+
+- The Claude Design skill also triggers on `.dc.html` files, offers the durable `?embed=1` live window, rebases on etag conflicts, and documents that `planned-call create_support_js` needs `if_match`.
+- The UI design skill merges its scope guidance into one section and adds craft defaults for a new visual direction.
+
 ## [1.1.2](https://github.com/maxritter/open-claude-design/compare/v1.1.1...v1.1.2) (2026-08-31)
 
 ### Fixed

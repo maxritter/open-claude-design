@@ -14,8 +14,10 @@ When a selected design workflow requires independent assessors or finish reviewe
 
 **Preserve the current visual language unless the user asks to change it.** Read the relevant components, tokens, theme, screenshots, brand guidance, and neighboring screens before making visual decisions. Exact project values outrank generic design advice.
 
+Precedence when sources disagree: accessibility and interaction safety first, then the product's tokens and components, then the measurable craft rules in `references/craft.md`, then taste. Read that reference when choosing or checking a concrete value the product does not define: type scale and floors, heading roles, spacing tiers, control rows, nested radii, color budget, or feedback timing.
+
 - Keep the project's component library, CSS methodology, icon set, typefaces, spacing scale, radii, shadows, and motion language.
-- Reuse real product content and assets. Do not invent testimonials, statistics, features, destinations, or decorative copy to fill space.
+- Reuse real product content and assets. Do not invent testimonials, statistics, features, destinations, or decorative copy to fill space. A missing image, icon, or illustration gets a labeled placeholder, never a hand-drawn SVG substitute.
 - Treat an absent design system as a decision point, not permission to fall back to a generic template. Establish a small coherent direction tied to audience, purpose, and tone.
 
 ## Make the hierarchy legible
@@ -29,6 +31,7 @@ When a selected design workflow requires independent assessors or finish reviewe
 ## Build a system, not a screenshot
 
 - Prefer reusable components and variants over one-off page markup.
+- Space sibling elements with flex or grid `gap` on the project's scale rather than per-element margins or inline whitespace.
 - Cover the states the interaction can actually enter: default, hover when applicable, active or selected, focus, disabled, loading, empty, success, and error.
 - Keep current state and action feedback visible. Disabled controls explain unmet prerequisites when the reason is not otherwise clear.
 - Motion communicates change or spatial relationship, remains brief, and respects reduced-motion preferences.

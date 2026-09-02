@@ -549,7 +549,7 @@ def _decode_read_file_result(result: dict[str, Any]) -> tuple[str, str]:
     if text is None:
         raise ClaudeDesignProtocolError("Claude Design read_file returned no text body.")
     wrapper = re.search(
-        r"<untrusted-project-content\b([^>]*)>\n?([\s\S]*?)</untrusted-project-content>",
+        r"<untrusted-project-content\b([^>]*)>\n?([\s\S]*?)\n?</untrusted-project-content>",
         text,
     )
     if wrapper is None:
@@ -1204,7 +1204,10 @@ def _local_delete_payload(
     total_backup_bytes = 0
     for path in paths:
         read_result = client.call_tool("read_file", {"project_id": args.project_id, "path": path})
-        decoded, current_etag = _decode_read_file_result(read_result)
+        try:
+            decoded, current_etag = _decode_read_file_result(read_result)
+        except ClaudeDesignProtocolError as error:
+            raise ClaudeDesignProtocolError(f"Could not read {path} for the delete backup: {error}") from error
         if current_etag != etags[path]:
             raise ClaudeDesignSafetyError(
                 f"Claude Design changed before the delete backup was created: {path}. Re-read and reconcile first."
@@ -2179,6 +2182,44 @@ def _sync_review(args: argparse.Namespace, client: Any, root: Path) -> int:
     if total_bytes > CLAUDE_DESIGN_MAX_BATCH_BYTES:
         raise ClaudeDesignSafetyError("The mapped sync revisions exceed the aggregate safety limit.")
 
+    if classification == "unknown" and all(
+        pair_revision["classification"] in {"unknown", "unchanged"}
+        and pair_revision["remote_exists"] is True
+        and pair_revision["local_exists"] is True
+        and content_sha256(remote_contents[str(pair_revision["remote_path"])]) == pair_revision["local_sha256"]
+        for pair_revision in pair_revisions
+    ):
+        # Both sides already hold the same bytes: record that observed match as the baseline
+        # instead of asking for approval to write identical content.
+        verified_at = int(time.time())
+        for pair_revision in pair_revisions:
+            _sync_save_ledger(
+                root,
+                {
+                    "schema_version": CLAUDE_DESIGN_SYNC_SCHEMA_VERSION,
+                    "project_id": args.project_id,
+                    "remote_path": pair_revision["remote_path"],
+                    "local_path": pair_revision["local_path"],
+                    "remote_exists": True,
+                    "remote_etag": pair_revision["remote_etag"],
+                    "remote_sha256": pair_revision["local_sha256"],
+                    "local_exists": True,
+                    "local_sha256": pair_revision["local_sha256"],
+                    "verified_at": verified_at,
+                },
+            )
+        _print_design_result(
+            {
+                "state": "in_sync",
+                "classification": "unchanged",
+                "requires_approval": False,
+                "mutated": False,
+                "baseline_recorded": True,
+            },
+            json_mode=args.json,
+        )
+        return 0
+
     review_id = secrets.token_hex(16)
     diff_sections: list[bytes] = []
     remote_snapshots: dict[str, Path] = {}
@@ -2596,6 +2637,16 @@ def _sync_apply(args: argparse.Namespace, client: Any, root: Path) -> int:
     receipt = _sync_load_receipt(root, args.review_id)
     if receipt["state"] != "reviewed":
         raise ValueError(f"Sync review {args.review_id} state is {receipt['state']}; it cannot be applied.")
+    if (
+        receipt["direction"] == "to-design"
+        and receipt.get("requires_reconciliation") is True
+        and not getattr(args, "reconciled", False)
+    ):
+        raise ClaudeDesignSafetyError(
+            f"Sync review {args.review_id} is both-changed: the design and the code diverged from the last "
+            "verified baseline. Merge the remote changes into the local files, review the merged result with "
+            "the user, then pass --reconciled together with --allow-write."
+        )
     current_locals = _sync_current_locals(root, receipt)
     local_changes = _sync_local_changes(receipt, current_locals)
     if local_changes:
@@ -2780,7 +2831,14 @@ def run_design_command(
         payload, backups = _local_delete_payload(args, client, workspace_root=root)
         result = client.call_tool("delete_files", payload)
         exit_code = _tool_exit_code(result, tool="delete_files", mutation=True, arguments=payload)
-        if exit_code == 0:
+        if result.get("isError") is True:
+            verification = {
+                "verifiedAbsent": False,
+                "remainingPaths": list(args.paths),
+                "error": "Delete did not report success; remote absence was not assumed.",
+            }
+        else:
+            # The parent listing is the ground truth for a delete, whatever shape the result took.
             try:
                 verification = _verify_deleted_paths(client, args.project_id, list(args.paths))
             except ClaudeDesignError as error:
@@ -2789,15 +2847,7 @@ def run_design_command(
                     "remainingPaths": [],
                     "error": str(error),
                 }
-                exit_code = 2
-            if verification.get("verifiedAbsent") is not True:
-                exit_code = 2
-        else:
-            verification = {
-                "verifiedAbsent": False,
-                "remainingPaths": list(args.paths),
-                "error": "Delete did not report success; remote absence was not assumed.",
-            }
+            exit_code = 0 if verification.get("verifiedAbsent") is True else 2
         _print_design_result(
             {
                 "tool": "delete_files",
@@ -3250,6 +3300,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--allow-write",
         action="store_true",
         help="Required after the user approved this exact review.",
+    )
+    sync_apply.add_argument(
+        "--reconciled",
+        action="store_true",
+        help="Acknowledge that a both-changed review was merged locally before it overwrites the design.",
     )
     sync_apply.add_argument(
         "--open",

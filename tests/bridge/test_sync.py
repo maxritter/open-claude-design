@@ -70,7 +70,7 @@ class SyncStubClient:
                         "type": "text",
                         "text": (
                             f'<untrusted-project-content path="{path}" etag="{etag}">\n'
-                            f"{escaped}</untrusted-project-content>"
+                            f"{escaped}\n</untrusted-project-content>"
                         ),
                     }
                 ]
@@ -828,6 +828,21 @@ def test_sync_review_marks_both_changed_for_explicit_reconciliation(
     assert payload["classification"] == "both-changed"
     assert payload["requires_reconciliation"] is True
 
+    conflict_apply = Namespace(
+        design_command="sync",
+        sync_command="apply",
+        review_id=payload["review_id"],
+        allow_write=True,
+        json=True,
+    )
+    with pytest.raises(ClaudeDesignSafetyError, match="--reconciled"):
+        run_design_command(conflict_apply, client_factory=lambda: client, workspace_root=tmp_path)
+    assert client.remote["Example.dc.html"] == ("remote-3", "<main>new design</main>\n")
+
+    conflict_apply.reconciled = True
+    assert run_design_command(conflict_apply, client_factory=lambda: client, workspace_root=tmp_path) == 0
+    assert client.remote["Example.dc.html"][1] == "<main>new code</main>\n"
+
 
 def test_completed_sync_receipt_cannot_be_replayed(
     tmp_path: Path,
@@ -858,3 +873,41 @@ def test_completed_sync_receipt_cannot_be_replayed(
 
     with pytest.raises(ValueError, match="state is complete"):
         run_design_command(apply_args, client_factory=lambda: client, workspace_root=tmp_path)
+
+
+@pytest.mark.parametrize("direction", ["to-design", "to-code"])
+def test_sync_review_records_baseline_for_identical_bytes_without_writing(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    direction: str,
+) -> None:
+    local = tmp_path / "Example.dc.html"
+    local.write_text("<main>remote</main>\n", encoding="utf-8")
+    client = SyncStubClient()
+
+    assert (
+        run_design_command(
+            _review_args(local, direction=direction), client_factory=lambda: client, workspace_root=tmp_path
+        )
+        == 0
+    )
+
+    payload = json.loads(capsys.readouterr().out)
+    assert payload == {
+        "state": "in_sync",
+        "classification": "unchanged",
+        "requires_approval": False,
+        "mutated": False,
+        "baseline_recorded": True,
+    }
+    assert "write_files" not in [name for name, _arguments in client.calls]
+    assert not (tmp_path / ".open-claude-design" / "sync" / "reviews").exists()
+
+    local.write_text("<main>edited locally</main>\n", encoding="utf-8")
+    assert (
+        run_design_command(
+            _review_args(local, direction=direction), client_factory=lambda: client, workspace_root=tmp_path
+        )
+        == 0
+    )
+    assert json.loads(capsys.readouterr().out)["classification"] == "local-only"

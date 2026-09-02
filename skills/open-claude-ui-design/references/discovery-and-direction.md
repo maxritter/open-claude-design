@@ -48,6 +48,17 @@ If the user supplied no visual signal, ask one focused aesthetic-direction quest
 
 In an unattended run where no answer can arrive, derive from the audience, product purpose, existing materials, and brief, then state the assumed direction and why so the user can redirect it cheaply.
 
+### Craft defaults for a new direction
+
+Once the direction is chosen, commit to it with specific values rather than a template:
+
+- Type: at most one display face and one body face from a web-safe or hosted set, three fonts total at the outside. Define a small named scale and reuse it; body text stays readable at the platform's normal size.
+- Color: subtly toned neutrals for foreground and background rather than pure white on pure black; zero to two accents that share chroma and lightness and differ in hue; semantic colors for success, warning, and error kept separate from brand accents. Express the palette as variables so consumers do not reintroduce literals.
+- Space: one base unit and a scale; siblings are spaced with flex or grid `gap`, not per-element margins or inline whitespace. Match density to the job: generous for marketing and reading, compact for tools and data.
+- Surfaces: a radius, border, and shadow scale with no more than three steps each; depth communicates layering, not decoration.
+- Imagery and icons: use the project's icon set or a placeholder; never hand-draw illustrations or complex SVG scenes, and label every placeholder with what belongs there.
+- Motion: brief, purposeful, gated on reduced-motion preferences; one well-orchestrated entrance beats scattered micro-interactions.
+
 ## Completion
 
 Direction is settled when the existing system has been identified or a small greenfield system is documented, every material open decision is answered, and the first surface can be built without inventing further product scope.

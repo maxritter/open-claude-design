@@ -125,6 +125,17 @@
         "It uses push --open and requires verification.verified true plus a durable open_url for Payment.dc.html; exit 2, mismatched readback, missing preview, or a browser-open error remains incomplete and is reconciled rather than reported successful.",
         "It never exposes serve_url, gives the durable open_url to the user even when automatic browser opening is unavailable, and still performs screenshot, console, and failed-request inspection before completion."
       ]
+    },
+    {
+      "id": 12,
+      "name": "live-authoring-skill-selection",
+      "prompt": "Synthetic Claude Design project 00000000-0000-0000-0000-000000000001 binds a design system, and you are authorized to create a polished Checkout.dc.html mockup in it. Separately, an empty synthetic project with no design system, brand, or references needs a first hi-fi landing page. Which live Claude Design authoring skills do you load for each task and why? This is a benchmark: do not call the service or modify anything.",
+      "expected_output": "hifi-design alone for the design-system project; hifi-design plus frontend-design only for the empty greenfield project.",
+      "expectations": [
+        "For the design-system project the response loads hifi-design and explicitly declines frontend-design because an established system governs the aesthetic.",
+        "For the empty project the response loads hifi-design for the process and frontend-design for aesthetic direction, using authoring-context once per skill rather than loading both for coverage elsewhere.",
+        "The response loads the current prompt with the project id before the first write and never describes frontend-design as implementation-oriented output."
+      ]
     }
   ]
 }

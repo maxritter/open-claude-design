@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "open-claude-design"
-version = "1.1.2"
+version = "1.2.0"
 description = "Design-system-aware UI workflows and Claude Design access for coding agents"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -46,6 +46,7 @@ packages = ["src/open_claude_design"]
 "skills/open-claude-design-quality/LICENSE.md" = "open_claude_design/data/skills/open-claude-design-quality/LICENSE.md"
 "skills/open-claude-design-quality/SKILL.md" = "open_claude_design/data/skills/open-claude-design-quality/SKILL.md"
 "skills/open-claude-design-quality/agents/openai.yaml" = "open_claude_design/data/skills/open-claude-design-quality/agents/openai.yaml"
+"skills/open-claude-design-quality/references/craft.md" = "open_claude_design/data/skills/open-claude-design-quality/references/craft.md"
 "skills/open-claude-design-system/LICENSE.md" = "open_claude_design/data/skills/open-claude-design-system/LICENSE.md"
 "skills/open-claude-design-system/SKILL.md" = "open_claude_design/data/skills/open-claude-design-system/SKILL.md"
 "skills/open-claude-design-system/agents/openai.yaml" = "open_claude_design/data/skills/open-claude-design-system/agents/openai.yaml"
