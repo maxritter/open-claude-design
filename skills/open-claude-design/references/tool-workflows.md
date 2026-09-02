@@ -114,7 +114,15 @@ Remote mutation requires an explicit request to change Claude Design itself. The
 
 The CLI flag is only the local safety gate. It does not replace Claude Design's own plan token, etag, sharing, or project-grant controls.
 
-The user may have the same project open in Claude Design while the agent writes. Once the target project is resolved, offer them a live window: the durable project URL with `?embed=1` appended refreshes on every write and is a `claude.ai/design` link, so it may be shared and opened. It is the user's view of the work, separate from the isolated render the verify loop uses. An etag conflict on write means the user edited that file in the meantime: re-read the current content as user-authored bytes, re-base the change on it, and retry with the new etag rather than regenerating the file from memory.
+### Live authoring
+
+When the user asked for a design to be created or changed in Claude Design, that request authorizes every write to that project for the task; the `sync` review ceremony below is for moving approved revisions between code and design, not for drafting. Work in short rounds:
+
+1. Resolve the project, create `support.js` once per directory, and offer the live window: the durable project URL with `?embed=1` appended refreshes on every write and is a `claude.ai/design` link, so it may be shared and opened. It is the user's view of the work, separate from the isolated render the verify loop uses.
+2. Push the first complete draft with `push --open`, then push at checkpoints: after each verify round that changes what the user would notice (a section landing, a requested change applied, a layout or content decision), and before pausing, asking a question, or reporting. A push costs a render, a readback, and a preview, so the unit is a finished round, not a keystroke: fold the cosmetic corrections of one round into one write, and never leave a finished round unpublished while continuing to the next.
+3. Keep the working copy in a scratch path, not in production code, unless implementation was requested. Re-read the file before each write; an etag conflict means the user edited it in the meantime, so re-base on the current content as user-authored bytes and retry with the new etag rather than regenerating from memory.
+4. Copy the file and edit the copy for a significant revision, as the live prompt requires; targeted requests stay targeted.
+5. Report the durable `open_url` after the first push and again at the end; do not ask "shall I push" in between.
 
 ### Delete remote files
 

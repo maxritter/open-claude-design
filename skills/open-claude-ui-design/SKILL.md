@@ -44,7 +44,7 @@ Combine references only when the task spans their modes. A redesign that asks fo
 
 1. Ground every decision in inspected product evidence or an explicit greenfield direction.
 2. Ask only when the answer materially changes audience, scope, brand, flow, fidelity, or the axes of comparison. Make reversible local decisions autonomously and state the consequential ones.
-3. Build the smallest complete surface that proves the direction, then extend it consistently through components and tokens.
+3. Build the smallest complete surface that proves the direction, then extend it consistently through components and tokens. On a multi-section page, finish and check one section against the product system and the craft rules before starting the next; one review pass at the end hides the defects the early sections introduced.
 4. Verify the actual interface with the repository's named browser, simulator, or UI driver: interact with the primary path, re-snapshot the result, inspect representative widths and supported themes, and report unverified states.
 5. For a final visual audit or polish request, use the `open-claude-ui-review` skill so review findings, accessibility, and fixes have one owner.
 

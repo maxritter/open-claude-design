@@ -50,6 +50,7 @@ packages = ["src/open_claude_design"]
 "skills/open-claude-design-system/LICENSE.md" = "open_claude_design/data/skills/open-claude-design-system/LICENSE.md"
 "skills/open-claude-design-system/SKILL.md" = "open_claude_design/data/skills/open-claude-design-system/SKILL.md"
 "skills/open-claude-design-system/agents/openai.yaml" = "open_claude_design/data/skills/open-claude-design-system/agents/openai.yaml"
+"skills/open-claude-design-system/references/agent-spec.md" = "open_claude_design/data/skills/open-claude-design-system/references/agent-spec.md"
 "skills/open-claude-design-system/references/components.md" = "open_claude_design/data/skills/open-claude-design-system/references/components.md"
 "skills/open-claude-design-system/references/tokens.md" = "open_claude_design/data/skills/open-claude-design-system/references/tokens.md"
 "skills/open-claude-design/LICENSE.md" = "open_claude_design/data/skills/open-claude-design/LICENSE.md"

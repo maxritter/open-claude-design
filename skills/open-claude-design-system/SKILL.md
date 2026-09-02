@@ -23,8 +23,9 @@ Read only the required references, resolved relative to this skill:
 |---|---|
 | Colors, type, spacing, radii, shadows, motion, breakpoints, or theme tokens | `references/tokens.md` |
 | Reusable UI components, variants, states, composition, or a component inventory | `references/components.md` |
+| A project-local design skill so future agent work follows the product's system automatically | `references/agent-spec.md` |
 
-Use both when the user wants a complete system or component library. Token extraction precedes component documentation because component contracts should name real tokens.
+Use tokens and components together when the user wants a complete system or component library. Token extraction precedes component documentation because component contracts should name real tokens. The agent-facing package comes last and restates that evidence; offer it whenever the extraction is meant to govern later UI work in the repository, since a system that lives only in code is re-explained on every task.
 
 ## Execution contract
 

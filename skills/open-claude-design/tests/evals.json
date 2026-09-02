@@ -136,6 +136,17 @@
         "For the empty project the response loads hifi-design for the process and frontend-design for aesthetic direction, using authoring-context once per skill rather than loading both for coverage elsewhere.",
         "The response loads the current prompt with the project id before the first write and never describes frontend-design as implementation-oriented output."
       ]
+    },
+    {
+      "id": 13,
+      "name": "live-authoring-pushes-every-iteration",
+      "prompt": "I asked you to redesign Account.dc.html in synthetic Claude Design project 00000000-0000-0000-0000-000000000001 and I have the project open in Claude Design. Describe how you work through the first three iterations. This is a benchmark: do not call the service or modify anything.",
+      "expected_output": "A live authoring loop in which the request itself authorizes the project writes, each clean iteration is pushed immediately, and the user watches through the durable embed window.",
+      "expectations": [
+        "The response treats the request as authorization for every write to that project during the task and does not ask before each push or wait to be told to push.",
+        "It offers the durable project URL with ?embed=1 once at the start, pushes the first clean draft with push --open, and then pushes at checkpoints: after each round that changes what the user would notice and before pausing or asking, folding one round's small corrections into one write rather than pushing every edit or waiting to be told.",
+        "It does not draft in production code, re-reads the file before each write, rebases on the current content after an etag conflict, and still asks before deletion, sharing, membership, comment acknowledgement, or syncing into code."
+      ]
     }
   ]
 }
