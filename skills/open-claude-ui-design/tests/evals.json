@@ -70,6 +70,17 @@
         "Only non-sensitive navigation state is considered for persistence; email, verification code, and authentication data are not retained.",
         "The delivered outline includes a verification plan requiring actual interaction, a representative failure, keyboard behavior, and re-snapshotting after state changes when the prototype is implemented."
       ]
+    },
+    {
+      "id": 7,
+      "name": "common-surface-uses-layout-pattern",
+      "prompt": "Add a pricing section with three tiers and a monthly/yearly toggle to this existing marketing site, which has a bound design system with tokens and a Button component. Describe the structure you would build and how it behaves on a phone. Do not create files.",
+      "expected_output": "A structural plan that starts from the shared pricing pattern, adapts it to the product's tokens and components, and states the responsive collapse.",
+      "expectations": [
+        "The response describes an intro block with the toggle, then equal-width tier cards containing plan name, one-line description, a dominant price with the period on the same baseline, one full-width action, and a feature list.",
+        "It highlights the recommended tier with a border or badge rather than a different card size, keeps one primary action per card, and takes colors, radii, and the button from the existing system instead of inventing values.",
+        "It states that the cards stack in order at narrow widths and that the plan is checked at narrow and wide widths before the surface is called done."
+      ]
     }
   ]
 }

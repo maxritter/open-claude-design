@@ -44,7 +44,7 @@ When no brand or system exists, define one coherent direction before high-fideli
 - Radius, border, shadow, and component treatment
 - Iconography, imagery, and motion behavior
 
-If the user supplied no visual signal, ask one focused aesthetic-direction question rather than silently selecting the model's house style. If the user is unsure, propose two or three genuinely distinct directions. Specify the differentiating palette family, type treatment, density, layout character, and motion—not cosmetic variations of the same template. Recommend one and explain why it best serves the brief.
+If the user supplied no visual signal, ask one focused aesthetic-direction question rather than silently selecting the model's house style. If the user is unsure, propose two or three genuinely distinct directions drawn from `references/directions.md`. Specify the differentiating palette family, type treatment, density, layout character, and motion—not cosmetic variations of the same template. Recommend one and explain why it best serves the brief.
 
 In an unattended run where no answer can arrive, derive from the audience, product purpose, existing materials, and brief, then state the assumed direction and why so the user can redirect it cheaply.
 

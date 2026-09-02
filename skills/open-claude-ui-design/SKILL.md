@@ -35,10 +35,12 @@ Read only the references needed for the request, resolved relative to this skill
 | Request | Required reference |
 |---|---|
 | New UI, redesign, or ambiguous visual direction | `references/discovery-and-direction.md` |
+| Greenfield work with no brand, system, or references to inherit | `references/directions.md` |
+| A common surface type: marketing section, application shell, table, form, settings, dashboard, auth page, or commerce screen | `references/layout-patterns.md` |
 | Explicit wireframes, alternatives, or materially unresolved visual direction | `references/exploration.md` |
 | Clickable prototype, interaction demo, or new flow | `references/prototype.md` |
 
-Combine references only when the task spans their modes. A redesign that asks for three interactive alternatives uses all three; a focused styling change may need none beyond this router.
+Combine references only when the task spans their modes. A redesign that asks for three interactive alternatives uses discovery, exploration, and prototype; a focused styling change may need none beyond this router.
 
 ## Execution contract
 
