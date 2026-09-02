@@ -2,6 +2,18 @@
 
 All notable changes to Open Claude Design are documented here. Releases follow semantic versioning and are generated from conventional commits.
 
+## [1.2.1](https://github.com/maxritter/open-claude-design/compare/v1.2.0...v1.2.1) (2026-09-02)
+
+### Added
+
+- Live authoring in the Claude Design skill: a request to create or change a design in Claude Design authorizes the task's writes, and the agent publishes at checkpoints (the first clean draft, each round that changes what the user would notice, and before pausing) so the design evolves in the editor instead of waiting for a push instruction. Each round's small corrections fold into one write.
+- An agent-facing design-system package output in the design-system skill (`references/agent-spec.md`): a project-local skill with provenance, signature traits, critical rules, a module index, and per-component specs, so an extracted system governs later UI work automatically.
+- Layout patterns for common marketing, application, and commerce surfaces (`references/layout-patterns.md`) and six greenfield aesthetic directions (`references/directions.md`) in the UI design skill, routed from the skill and its discovery reference.
+
+### Changed
+
+- The UI design skill builds multi-section pages one checked section at a time instead of reviewing once at the end.
+
 ## [1.2.0](https://github.com/maxritter/open-claude-design/compare/v1.1.2...v1.2.0) (2026-09-02)
 
 ### Added
