@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import os
 import re
 import subprocess
@@ -43,6 +44,14 @@ def _pipe_environment(tmp_path: Path) -> dict[str, str]:
     fake_cli = tmp_path / "open-claude-design"
     fake_wheel = tmp_path / "open_claude_design-1.0.0-py3-none-any.whl"
     fake_wheel.touch()
+    fake_archive = tmp_path / "open-claude-design.tar.gz"
+    fake_archive.write_bytes(b"synthetic release archive")
+    fake_manifest = tmp_path / "SHA256SUMS"
+    fake_manifest.write_text(
+        f"{hashlib.sha256(fake_archive.read_bytes()).hexdigest()}  {fake_archive.name}\n"
+        f"{hashlib.sha256(fake_wheel.read_bytes()).hexdigest()}  {fake_wheel.name}\n",
+        encoding="utf-8",
+    )
 
     _write_executable(fake_cli, _fake_cli_script())
     _write_executable(
@@ -78,11 +87,34 @@ if [ "${1:-}" = "--version" ]; then printf 'v22.20.0\\n'; fi
 """,
     )
     _write_executable(fake_bin / "npx", "#!/bin/sh\nexit 0\n")
+    _write_executable(
+        fake_bin / "curl",
+        """#!/bin/sh
+url=""
+output=""
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    -o) shift; output="$1" ;;
+    http://*|https://*) url="$1" ;;
+  esac
+  shift
+done
+case "$url" in
+  */SHA256SUMS) cp "$FAKE_RELEASE_MANIFEST" "$output" ;;
+  */open-claude-design.tar.gz) cp "$FAKE_RELEASE_ARCHIVE" "$output" ;;
+  */open_claude_design-*-py3-none-any.whl) cp "$FAKE_RELEASE_WHEEL" "$output" ;;
+  *) exit 22 ;;
+esac
+""",
+    )
 
     environment = os.environ.copy()
     environment.update(
         {
             "FAKE_OPEN_CLAUDE_DESIGN": str(fake_cli),
+            "FAKE_RELEASE_ARCHIVE": str(fake_archive),
+            "FAKE_RELEASE_MANIFEST": str(fake_manifest),
+            "FAKE_RELEASE_WHEEL": str(fake_wheel),
             "HOME": str(home),
             "NO_COLOR": "1",
             "OPEN_CLAUDE_DESIGN_PACKAGE": str(fake_wheel),
@@ -172,6 +204,61 @@ def test_advertised_pipe_mode_reaches_install_and_uninstall_completion(tmp_path:
     assert "Open Claude Design was removed" in uninstall.stdout
 
 
+def test_public_install_records_stable_latest_archive_for_uv_upgrade(tmp_path: Path) -> None:
+    environment = _pipe_environment(tmp_path)
+    del environment["OPEN_CLAUDE_DESIGN_PACKAGE"]
+
+    install = _run_script("install.sh", environment)
+
+    assert install.returncode == 0, install.stderr + install.stdout
+    trace = Path(environment["UV_TRACE"]).read_text(encoding="utf-8")
+    install_args = next(line for line in trace.splitlines() if line.startswith("args="))
+    assert (
+        "https://github.com/maxritter/open-claude-design/releases/latest/download/open-claude-design.tar.gz"
+        in install_args
+    )
+    assert ".whl" not in install_args
+
+
+def test_local_package_install_persists_its_uv_requirement_source(tmp_path: Path) -> None:
+    environment = _pipe_environment(tmp_path)
+    manifest = Path(environment["FAKE_RELEASE_MANIFEST"])
+    manifest.write_text(
+        manifest.read_text(encoding="utf-8").replace(
+            hashlib.sha256(Path(environment["FAKE_RELEASE_WHEEL"]).read_bytes()).hexdigest(),
+            "f" * 64,
+        ),
+        encoding="utf-8",
+    )
+
+    install = _run_script("install.sh", environment)
+
+    assert install.returncode == 0, install.stderr + install.stdout
+    package = (
+        Path(environment["HOME"])
+        / ".local/share/open-claude-design/packages"
+        / Path(environment["OPEN_CLAUDE_DESIGN_PACKAGE"]).name
+    )
+    assert package.is_file()
+    trace = Path(environment["UV_TRACE"]).read_text(encoding="utf-8")
+    assert str(package) in trace
+
+
+def test_published_local_package_switches_to_the_upgradeable_latest_source(tmp_path: Path) -> None:
+    environment = _pipe_environment(tmp_path)
+
+    install = _run_script("install.sh", environment)
+
+    assert install.returncode == 0, install.stderr + install.stdout
+    trace = Path(environment["UV_TRACE"]).read_text(encoding="utf-8")
+    install_args = next(line for line in trace.splitlines() if line.startswith("args="))
+    assert (
+        "https://github.com/maxritter/open-claude-design/releases/latest/download/open-claude-design.tar.gz"
+        in install_args
+    )
+    assert "enabling uv upgrades" in install.stdout
+
+
 def test_install_survives_forced_color_from_a_parent_process(tmp_path: Path) -> None:
     """uv run exports FORCE_COLOR, which wraps captured uv output in ANSI codes."""
     environment = _pipe_environment(tmp_path)
@@ -245,25 +332,21 @@ def test_uninstall_reports_unconfirmed_removal_when_every_backend_fails(tmp_path
     assert "Agent integrations are clean" not in uninstall.stdout
 
 
-def test_release_manifest_wheel_pattern_rejects_path_traversal(tmp_path: Path) -> None:
-    """The awk wheel-name filter from install.sh must never match a path with separators."""
+def test_release_manifest_archive_checksum_requires_the_exact_asset_name(tmp_path: Path) -> None:
     install_text = (ROOT / "install.sh").read_text(encoding="utf-8")
-    match = re.search(r"awk '(\$2 ~ [^']*)' \"\$STAGING_DIR/\$CHECKSUM_NAME\"", install_text)
-    assert match is not None, "wheel-name extraction line not found in install.sh"
+    match = re.search(r"""awk -v name="\$ARCHIVE_NAME" '([^']*)' """, install_text)
+    assert match is not None, "archive checksum extraction line not found in install.sh"
     program = match.group(1)
 
     manifest = tmp_path / "SHA256SUMS"
     manifest.write_text(
-        "0" * 64
-        + "  open_claude_design-x/../../../../tmp/evil-py3-none-any.whl\n"
-        + "1" * 64
-        + "  open_claude_design-1.0.1-py3-none-any.whl\n",
+        "0" * 64 + "  nested/open-claude-design.tar.gz\n" + "1" * 64 + "  open-claude-design.tar.gz\n",
         encoding="utf-8",
     )
     result = subprocess.run(
-        ["awk", program, str(manifest)],
+        ["awk", "-v", "name=open-claude-design.tar.gz", program, str(manifest)],
         capture_output=True,
         text=True,
         check=True,
     )
-    assert result.stdout.strip() == "open_claude_design-1.0.1-py3-none-any.whl"
+    assert result.stdout.strip() == "1" * 64

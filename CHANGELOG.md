@@ -2,6 +2,12 @@
 
 All notable changes to Open Claude Design are documented here. Releases follow semantic versioning and are generated from conventional commits.
 
+## [1.2.3](https://github.com/maxritter/open-claude-design/compare/v1.2.2...v1.2.3) (2026-09-16)
+
+### Fixed
+
+- Public installs now record the durable `releases/latest/download/open-claude-design.tar.gz` source in uv instead of the installer's deleted staging wheel, so `uv tool upgrade open-claude-design` can resolve future releases. Explicit local package installs are copied into persistent package-owned storage rather than leaving a dead temporary-path receipt.
+
 ## [1.2.2](https://github.com/maxritter/open-claude-design/compare/v1.2.1...v1.2.2) (2026-09-16)
 
 ### Fixed

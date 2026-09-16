@@ -3,12 +3,14 @@ set -eu
 
 REPOSITORY="maxritter/open-claude-design"
 CHECKSUM_NAME="SHA256SUMS"
+ARCHIVE_NAME="open-claude-design.tar.gz"
 REQUESTED_VERSION="${VERSION:-}"
 INSTALL_SOURCE="${OPEN_CLAUDE_DESIGN_PACKAGE:-${OPEN_CLAUDE_DESIGN_ARCHIVE:-}}"
 SKILLS_NODE_VERSION="22.20.0"
 SKILLS_NODE_ROOT="$HOME/.local/share/open-claude-design/node"
 UV_VERSION="0.12.7"
 UV_ROOT="$HOME/.local/share/open-claude-design/uv"
+PACKAGE_ROOT="$HOME/.local/share/open-claude-design/packages"
 RULE="────────────────────────────────────────────────────────────"
 
 # The CLI is installed into uv's isolated tools directory. Ignore ambient
@@ -247,7 +249,37 @@ node_is_compatible || fail "compatible Node.js and npx setup did not complete"
 step 3 "Installing the CLI"
 if [ "$INSTALL_SOURCE" != "" ]; then
   PACKAGE_NAME="$(basename "$INSTALL_SOURCE")"
-  cp "$INSTALL_SOURCE" "$STAGING_DIR/$PACKAGE_NAME"
+  case "$PACKAGE_NAME" in
+    open_claude_design-*-py3-none-any.whl | open-claude-design*.tar.gz) ;;
+    *) fail "local package must be an Open Claude Design wheel or source archive" ;;
+  esac
+  case "$PACKAGE_ROOT" in
+    "$HOME/.local/share/open-claude-design/packages") ;;
+    *) fail "refusing unexpected local package cache" ;;
+  esac
+  mkdir -p "$PACKAGE_ROOT"
+  TOOL_REQUIREMENT="$PACKAGE_ROOT/$PACKAGE_NAME"
+  if [ "$INSTALL_SOURCE" != "$TOOL_REQUIREMENT" ]; then
+    cp "$INSTALL_SOURCE" "$TOOL_REQUIREMENT"
+  fi
+  info "Installing a persistent local package source"
+  info "Local package installs stay pinned; rerun the public installer to follow releases"
+  if [ "$REQUESTED_VERSION" = "" ]; then
+    LATEST_BASE="https://github.com/$REPOSITORY/releases/latest/download"
+    if curl -fsSL "$LATEST_BASE/$CHECKSUM_NAME" -o "$STAGING_DIR/latest-$CHECKSUM_NAME" 2> /dev/null; then
+      PUBLISHED_WHEEL_SHA="$(awk -v name="$PACKAGE_NAME" '$2 == name {print $1; exit}' "$STAGING_DIR/latest-$CHECKSUM_NAME")"
+      LOCAL_PACKAGE_SHA="$(sha256_file "$TOOL_REQUIREMENT")"
+      if is_sha256 "$PUBLISHED_WHEEL_SHA" && [ "$LOCAL_PACKAGE_SHA" = "$PUBLISHED_WHEEL_SHA" ]; then
+        PUBLISHED_ARCHIVE_SHA="$(awk -v name="$ARCHIVE_NAME" '$2 == name {print $1; exit}' "$STAGING_DIR/latest-$CHECKSUM_NAME")"
+        if is_sha256 "$PUBLISHED_ARCHIVE_SHA" &&
+          curl -fsSL "$LATEST_BASE/$ARCHIVE_NAME" -o "$STAGING_DIR/latest-$ARCHIVE_NAME" 2> /dev/null &&
+          [ "$(sha256_file "$STAGING_DIR/latest-$ARCHIVE_NAME")" = "$PUBLISHED_ARCHIVE_SHA" ]; then
+          TOOL_REQUIREMENT="$LATEST_BASE/$ARCHIVE_NAME"
+          info "Local package matches the latest verified release; enabling uv upgrades"
+        fi
+      fi
+    fi
+  fi
 else
   if [ "$REQUESTED_VERSION" != "" ]; then
     RELEASE_BASE="https://github.com/$REPOSITORY/releases/download/v$REQUESTED_VERSION"
@@ -257,17 +289,19 @@ else
     info "Downloading the latest Open Claude Design release"
   fi
   curl -fsSL "$RELEASE_BASE/$CHECKSUM_NAME" -o "$STAGING_DIR/$CHECKSUM_NAME"
-  PACKAGE_NAME="$(awk '$2 ~ /^open_claude_design-[^\/]*-py3-none-any\.whl$/ {print $2; exit}' "$STAGING_DIR/$CHECKSUM_NAME")"
-  [ "$PACKAGE_NAME" != "" ] || fail "release wheel is missing from the checksum manifest"
-  curl -fsSL "$RELEASE_BASE/$PACKAGE_NAME" -o "$STAGING_DIR/$PACKAGE_NAME"
-  EXPECTED="$(awk -v name="$PACKAGE_NAME" '$2 == name {print $1}' "$STAGING_DIR/$CHECKSUM_NAME")"
+  curl -fsSL "$RELEASE_BASE/$ARCHIVE_NAME" -o "$STAGING_DIR/$ARCHIVE_NAME"
+  EXPECTED="$(awk -v name="$ARCHIVE_NAME" '$2 == name {print $1; exit}' "$STAGING_DIR/$CHECKSUM_NAME")"
   is_sha256 "$EXPECTED" || fail "release checksum is missing or malformed"
-  ACTUAL="$(sha256_file "$STAGING_DIR/$PACKAGE_NAME")"
-  [ "$ACTUAL" = "$EXPECTED" ] || fail "release wheel checksum mismatch"
+  ACTUAL="$(sha256_file "$STAGING_DIR/$ARCHIVE_NAME")"
+  [ "$ACTUAL" = "$EXPECTED" ] || fail "release archive checksum mismatch"
+  # Keep the canonical URL in uv's receipt. Unlike the staging file, this URL
+  # survives installation and lets `uv tool upgrade open-claude-design`
+  # re-resolve the current release later.
+  TOOL_REQUIREMENT="$RELEASE_BASE/$ARCHIVE_NAME"
 fi
 
 uv tool install --no-config --default-index "$UV_DEFAULT_INDEX" --no-sources --force --quiet \
-  "$STAGING_DIR/$PACKAGE_NAME" < /dev/null
+  "$TOOL_REQUIREMENT" < /dev/null
 # NO_COLOR keeps the captured path free of ANSI codes when a parent process
 # (uv run, some CI systems) exports FORCE_COLOR/CLICOLOR_FORCE.
 UV_TOOL_BIN="$(NO_COLOR=1 uv tool dir --bin < /dev/null)"

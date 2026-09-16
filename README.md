@@ -122,8 +122,11 @@ Remote access is read-only by default; changes require explicit authorization. F
 | **Verify detected agent installs** | `open-claude-design doctor --json` |
 | **Verify every supported agent** | `open-claude-design doctor --all-agents --json` |
 | **List the packaged skills** | `open-claude-design list` |
-| **Update Open Claude Design** | `open-claude-design update --scope global --yes` |
+| **Update or repair Open Claude Design** | `curl -fsSL https://github.com/maxritter/open-claude-design/releases/latest/download/install.sh \| sh` |
+| **Upgrade an uv-managed CLI and its skills** | `uv tool upgrade open-claude-design && open-claude-design update --scope global --yes` |
 | **Uninstall Open Claude Design** | `curl -fsSL https://github.com/maxritter/open-claude-design/releases/latest/download/uninstall.sh \| sh` |
+
+Public installer releases use a durable `releases/latest` source, so `uv tool upgrade open-claude-design` can resolve future CLI versions. If an older installation reports a deleted temporary wheel path, rerun the installer once to repair its uv receipt. Local development-package installs remain pinned by design.
 
 ### A "claude-design" connector that fails to connect
 
