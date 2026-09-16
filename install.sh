@@ -308,6 +308,10 @@ if [ "$dry_run" -eq 1 ]; then
 else
   success "Automatic design workflows installed and verified"
 fi
+if grep -q '"bypass_detected": true' "$STAGING_DIR/agent-install.json" 2> /dev/null; then
+  info "An agent registers Claude Design as its own MCP server; that entry fails with HTTP 403 and bypasses this CLI"
+  info "Run: open-claude-design doctor --json to see which file to remove it from"
+fi
 
 step 5 "Connecting Claude Design"
 if open-claude-design status --json > /dev/null 2>&1; then

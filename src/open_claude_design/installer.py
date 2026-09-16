@@ -22,6 +22,7 @@ from open_claude_design.config import (
     SUPPORTED_PLATFORM_LABELS,
     VERSION,
 )
+from open_claude_design.connectors import native_connector_report
 
 Scope = Literal["project", "global"]
 Action = Literal["install", "update", "uninstall"]
@@ -264,6 +265,19 @@ def _skills_command(
     return command
 
 
+def _warn_on_native_connector(
+    payload: dict[str, object],
+    *,
+    home: Path | None,
+    project_root: Path,
+) -> dict[str, object]:
+    """Attach a native-connector conflict to an installer payload only when one exists."""
+    report = native_connector_report(home=home, project_root=project_root)
+    if report["bypass_detected"]:
+        payload["native_connectors"] = report
+    return payload
+
+
 def run_skills_action(
     action: Action,
     agents: tuple[str, ...],
@@ -292,7 +306,7 @@ def run_skills_action(
     if action in {"install", "update"}:
         current, current_agents, current_errors = _verified_install_state(runtime, root, agents, scope)
         if not current_errors and all(current.values()):
-            return {
+            unchanged_payload: dict[str, object] = {
                 "action": action,
                 "scope": scope,
                 "agents": list(agents) or ["auto-detect"],
@@ -305,6 +319,7 @@ def run_skills_action(
                 "verified": True,
                 "agent_state": current_agents,
             }
+            return _warn_on_native_connector(unchanged_payload, home=home, project_root=root)
 
     with tempfile.TemporaryDirectory(prefix="open-claude-design-skills-") as temporary:
         source = _export_runtime_skills(Path(temporary)) if action in {"install", "update"} else None
@@ -347,6 +362,7 @@ def run_skills_action(
     if action in {"install", "update"}:
         payload["verified"] = True
         payload["agent_state"] = verified_agents
+        return _warn_on_native_connector(payload, home=home, project_root=root)
     return payload
 
 
@@ -397,7 +413,9 @@ def doctor(
             from open_claude_design.bridge import ClaudeDesignClient
 
             bridge_status.update(ClaudeDesignClient().status())
+            bridge_status["authentication"] = "verified"
         except Exception as error:
+            bridge_status["authentication"] = "failed"
             bridge_status["authenticated"] = False
             bridge_status["error"] = str(error)
 
@@ -407,6 +425,7 @@ def doctor(
         "agents": list(agents) or ["auto-detect"],
         "agent_skills": installer_status,
         "claude_design_bridge": bridge_status,
+        "native_connectors": native_connector_report(home=home, project_root=root),
     }
 
 

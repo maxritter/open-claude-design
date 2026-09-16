@@ -388,9 +388,17 @@ class ClaudeDesignClient:
                     expected_id=expected_id,
                 )
         except urllib.error.HTTPError as error:
-            if error.code in {401, 403}:
+            if error.code == 401:
                 raise ClaudeDesignAuthError(
                     "Claude Design rejected the credential. Run open-claude-design login and try again."
+                ) from error
+            if error.code == 403:
+                raise ClaudeDesignAuthError(
+                    "Claude Design accepted the credential but refused access (HTTP 403). Either the signed-in "
+                    "account has no Claude Design access or the credential lacks the scope for this operation, so "
+                    "repeating the same login will not help: enable Claude Design for the account, ask an "
+                    "Enterprise administrator to enable it, or run open-claude-design login and choose an account "
+                    "that has it."
                 ) from error
             raise ClaudeDesignProtocolError(
                 f"Claude Design HTTP {error.code}: {error.reason or 'request failed'}"

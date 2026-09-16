@@ -30,6 +30,29 @@ CLAUDE_DESIGN_MAX_RESPONSE_BYTES: Final = 4 * 1024 * 1024
 CLAUDE_DESIGN_MAX_SSE_EVENTS: Final = 64
 CLAUDE_DESIGN_MAX_TOOL_PAGES: Final = 64
 CLAUDE_DESIGN_MAX_TOOLS: Final = 4096
+CLAUDE_DESIGN_NATIVE_CONNECTOR_MAX_BYTES: Final = 8 * 1024 * 1024
+CLAUDE_DESIGN_NATIVE_CONNECTOR_MAX_DEPTH: Final = 24
+CLAUDE_DESIGN_NATIVE_CONNECTOR_HOME_CONFIGS: Final = (
+    ("Claude Code", (".claude.json",)),
+    ("Codex", (".codex", "config.toml")),
+    ("Cursor", (".cursor", "mcp.json")),
+    ("Gemini CLI", (".gemini", "settings.json")),
+    ("opencode", (".config", "opencode", "opencode.json")),
+)
+CLAUDE_DESIGN_NATIVE_CONNECTOR_PROJECT_CONFIGS: Final = (
+    ("Claude Code", (".mcp.json",)),
+    ("Cursor", (".cursor", "mcp.json")),
+    ("VS Code", (".vscode", "mcp.json")),
+)
+CLAUDE_DESIGN_NATIVE_CONNECTOR_CONTAINER_KEYS: Final = frozenset(
+    {"args", "command", "env", "headers", "mcp", "mcpServers", "mcp_servers", "servers"}
+)
+CLAUDE_DESIGN_NATIVE_CONNECTOR_REMEDIATION: Final = (
+    "A native Claude Design connector bypasses the bridge's path, etag, backup, and preview safeguards, and "
+    "unless the host holds a Claude Design-scoped token it answers HTTP 403 and reports Claude Design as "
+    "unavailable even while open-claude-design status succeeds. Remove the listed entry (Claude Code: "
+    "claude mcp remove <server>) and use the open-claude-design CLI as the single transport."
+)
 CLAUDE_DESIGN_KEYCHAIN_SERVICE: Final = "Claude Code-credentials"
 CLAUDE_DESIGN_CREDENTIAL_MAX_BYTES: Final = 1024 * 1024
 CLAUDE_DESIGN_MAX_INLINE_FILE_BYTES: Final = 256 * 1024

@@ -18,6 +18,8 @@ In CI, SSH, a dev container, or another runtime without a local browser, never s
 
 Automatic detection fails closed for CI, SSH, and common dev-container environments. `OPEN_CLAUDE_DESIGN_BROWSER_LOGIN=1` is an explicit operator override when a forwarded browser and localhost callback are known to work; `=0` forces the manual route.
 
+Separate the two rejections. An invalid or expired credential is HTTP 401 and a fresh `login` fixes it. HTTP 403 means Claude Design accepted the credential and refused access: the signed-in account has no Claude Design, so repeating the same login changes nothing. Report that the account needs Claude Design enabled—an Enterprise organization must enable it—or that the user should log in with an account that has it. Retrying the same credential in a loop is not a recovery.
+
 ### Remote authoring context budget
 
 For one remote authoring task, load only:

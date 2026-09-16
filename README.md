@@ -125,6 +125,12 @@ Remote access is read-only by default; changes require explicit authorization. F
 | **Update Open Claude Design** | `open-claude-design update --scope global --yes` |
 | **Uninstall Open Claude Design** | `curl -fsSL https://github.com/maxritter/open-claude-design/releases/latest/download/uninstall.sh \| sh` |
 
+### A "claude-design" connector that fails to connect
+
+If your agent lists a Claude Design MCP server of its own that fails with HTTP 403, that connector is signing in with the host agent's account token, which carries no Claude Design scope. Claude Design is not down, and your account is not the problem — the entry simply cannot authenticate, and it bypasses the path, etag, backup, and preview safeguards this CLI enforces. `open-claude-design doctor --json` names the configuration file and entry under `native_connectors`; in Claude Code, remove it with `claude mcp remove <server>`. Open Claude Design never registers an MCP server: the CLI is the one transport.
+
+A 403 from `open-claude-design status` itself is different — the credential was accepted and access refused, so the signed-in account needs Claude Design enabled (Enterprise organizations enable it centrally). Logging in again with the same account will not change it.
+
 ## Open for pull requests
 
 Use the structured forms to [report a bug](https://github.com/maxritter/open-claude-design/issues/new?template=bug_report.yml) or [request a feature](https://github.com/maxritter/open-claude-design/issues/new?template=feature_request.yml). See [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.

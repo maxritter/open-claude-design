@@ -9,8 +9,15 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+import open_claude_design.bridge as bridge_module
 import open_claude_design.installer as installer_module
-from open_claude_design.config import FEATURED_AGENT_IDS, SKILL_NAMES, SKILLS_CLI_VERSION
+from open_claude_design.config import (
+    CLAUDE_CONFIG_ENV,
+    CLAUDE_DESIGN_ENDPOINT,
+    FEATURED_AGENT_IDS,
+    SKILL_NAMES,
+    SKILLS_CLI_VERSION,
+)
 from open_claude_design.installer import (
     InstallError,
     SkillsRuntime,
@@ -348,3 +355,129 @@ def test_data_root_fails_clearly_when_package_data_is_missing(
 
     with pytest.raises(InstallError, match="package data is missing"):
         installer_module._data_root()
+
+
+def _native_connector_home(tmp_path: Path) -> Path:
+    home = tmp_path / "home"
+    home.mkdir(parents=True, exist_ok=True)
+    (home / ".claude.json").write_text(
+        json.dumps({"mcpServers": {"claude-design": {"type": "http", "url": CLAUDE_DESIGN_ENDPOINT}}}),
+        encoding="utf-8",
+    )
+    return home
+
+
+@patch("open_claude_design.installer.resolve_skills_runtime", return_value=_runtime())
+@patch("open_claude_design.installer.subprocess.run")
+def test_doctor_reports_a_native_connector_that_bypasses_the_bridge(
+    run: MagicMock,
+    _resolve: MagicMock,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv(CLAUDE_CONFIG_ENV, raising=False)
+    run.return_value = SimpleNamespace(returncode=0, stdout=_installed_payload(tmp_path), stderr="")
+
+    result = doctor(("codex",), "global", project_root=tmp_path, home=_native_connector_home(tmp_path))
+
+    native = result["native_connectors"]
+    assert native["bypass_detected"] is True
+    assert native["connectors"][0]["server"] == "claude-design"
+    assert "claude mcp remove" in native["remediation"]
+
+
+@patch("open_claude_design.installer.resolve_skills_runtime", return_value=_runtime())
+@patch("open_claude_design.installer.subprocess.run")
+def test_doctor_reports_a_clean_host_without_remediation_noise(
+    run: MagicMock,
+    _resolve: MagicMock,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv(CLAUDE_CONFIG_ENV, raising=False)
+    run.return_value = SimpleNamespace(returncode=0, stdout=_installed_payload(tmp_path), stderr="")
+    clean_home = tmp_path / "clean-home"
+    clean_home.mkdir()
+
+    result = doctor(("codex",), "global", project_root=tmp_path, home=clean_home)
+
+    assert result["native_connectors"] == {"bypass_detected": False, "connectors": []}
+    assert result["claude_design_bridge"]["authentication"] == "not checked"
+
+
+@patch("open_claude_design.installer.resolve_skills_runtime", return_value=_runtime())
+@patch("open_claude_design.installer.subprocess.run")
+def test_doctor_distinguishes_a_verified_credential_from_an_unchecked_one(
+    run: MagicMock,
+    _resolve: MagicMock,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv(CLAUDE_CONFIG_ENV, raising=False)
+    run.return_value = SimpleNamespace(returncode=0, stdout=_installed_payload(tmp_path), stderr="")
+    monkeypatch.setattr(installer_module, "sys_platform_supported", lambda: True)
+    monkeypatch.setattr(
+        bridge_module,
+        "ClaudeDesignClient",
+        lambda: SimpleNamespace(status=lambda: {"authenticated": True, "endpoint": CLAUDE_DESIGN_ENDPOINT}),
+    )
+    clean_home = tmp_path / "clean-home"
+    clean_home.mkdir()
+
+    result = doctor(("codex",), "global", project_root=tmp_path, home=clean_home, check_auth=True)
+
+    assert result["claude_design_bridge"]["authentication"] == "verified"
+    assert result["claude_design_bridge"]["authenticated"] is True
+
+
+@patch("open_claude_design.installer.resolve_skills_runtime", return_value=_runtime())
+@patch("open_claude_design.installer.subprocess.run")
+def test_doctor_marks_a_failed_credential_check_instead_of_leaving_it_unchecked(
+    run: MagicMock,
+    _resolve: MagicMock,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv(CLAUDE_CONFIG_ENV, raising=False)
+    run.return_value = SimpleNamespace(returncode=0, stdout=_installed_payload(tmp_path), stderr="")
+    monkeypatch.setattr(installer_module, "sys_platform_supported", lambda: True)
+
+    def refuse() -> object:
+        raise RuntimeError("Claude Design accepted the credential but refused access (HTTP 403).")
+
+    monkeypatch.setattr(bridge_module, "ClaudeDesignClient", refuse)
+    clean_home = tmp_path / "clean-home"
+    clean_home.mkdir()
+
+    result = doctor(("codex",), "global", project_root=tmp_path, home=clean_home, check_auth=True)
+
+    assert result["claude_design_bridge"]["authentication"] == "failed"
+    assert result["claude_design_bridge"]["authenticated"] is False
+    assert "HTTP 403" in result["claude_design_bridge"]["error"]
+
+
+@patch("open_claude_design.installer.resolve_skills_runtime", return_value=_runtime())
+@patch("open_claude_design.installer.subprocess.run")
+def test_install_surfaces_a_native_connector_only_when_one_is_registered(
+    run: MagicMock,
+    _resolve: MagicMock,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv(CLAUDE_CONFIG_ENV, raising=False)
+    run.return_value = SimpleNamespace(returncode=0, stdout=_installed_payload(tmp_path), stderr="")
+    clean_home = tmp_path / "clean-home"
+    clean_home.mkdir()
+
+    clean = run_skills_action("install", ("codex",), "global", project_root=tmp_path, home=clean_home)
+    conflicted = run_skills_action(
+        "install",
+        ("codex",),
+        "global",
+        project_root=tmp_path,
+        home=_native_connector_home(tmp_path),
+    )
+
+    assert clean["unchanged"] is True
+    assert "native_connectors" not in clean
+    assert conflicted["native_connectors"]["bypass_detected"] is True

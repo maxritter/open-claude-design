@@ -6,6 +6,7 @@ import io
 import json
 import subprocess
 import sys
+import urllib.error
 from argparse import Namespace
 from collections.abc import Callable
 from email.message import Message
@@ -2339,3 +2340,35 @@ def test_delete_names_the_path_when_its_backup_read_fails(tmp_path: Path) -> Non
         run_design_command(args, client_factory=lambda: client, workspace_root=tmp_path)
 
     assert "delete_files" not in [name for name, _arguments in client.calls]
+
+
+@pytest.mark.parametrize(
+    ("status", "expected"),
+    [
+        (401, "Run open-claude-design login and try again"),
+        (403, "refused access"),
+    ],
+)
+def test_client_separates_an_invalid_credential_from_an_account_without_design_access(
+    status: int,
+    expected: str,
+) -> None:
+    def opener(request: Any, *, timeout: int) -> FakeResponse:
+        raise urllib.error.HTTPError(
+            claude_design.CLAUDE_DESIGN_ENDPOINT,
+            status,
+            "Forbidden",
+            Message(),
+            None,
+        )
+
+    client = ClaudeDesignClient(token_reader=lambda: "secret-access-token", opener=opener)
+
+    with pytest.raises(ClaudeDesignAuthError) as failure:
+        client.status()
+
+    message = str(failure.value)
+    assert expected in message
+    assert "secret-access-token" not in message
+    if status == 403:
+        assert "repeating the same login will not help" in message
