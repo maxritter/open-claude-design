@@ -2,6 +2,14 @@
 
 All notable changes to Open Claude Design are documented here. Releases follow semantic versioning and are generated from conventional commits.
 
+## [1.2.2](https://github.com/maxritter/open-claude-design/compare/v1.2.1...v1.2.2) (2026-09-16)
+
+### Fixed
+
+- A native Claude Design connector registered by the host agent (for example an `mcpServers` entry pointing at the Claude Design endpoint) authenticates with the host account's own token, which carries no Claude Design scope. It fails with HTTP 403 and makes the agent report Claude Design as unavailable while the bridge is healthy. `doctor` now reports those entries under `native_connectors` with the file, entry, and removal step, `install`, `update`, and the one-line installer surface the same report when one is registered, and the Claude Design skill treats a failing connector as a host-configuration fault rather than evidence that Claude Design is down.
+- HTTP 403 from Claude Design no longer advises a login that cannot succeed. 401 still means the credential is invalid or expired and a fresh `login` fixes it; 403 now says the account was accepted but has no Claude Design access, so it must be enabled for that account or a different account used.
+- `doctor --json` reported `"authentication": "not checked"` even when it had just verified the credential. The field is now `verified`, `failed`, or `not checked`.
+
 ## [1.2.1](https://github.com/maxritter/open-claude-design/compare/v1.2.0...v1.2.1) (2026-09-02)
 
 ### Added
