@@ -2,6 +2,20 @@
 
 All notable changes to Open Claude Design are documented here. Releases follow semantic versioning and are generated from conventional commits.
 
+## [1.3.0](https://github.com/maxritter/open-claude-design/compare/v1.2.3...v1.3.0) (2026-09-18)
+
+### Added
+
+- The design-system skill can package an extracted system for Claude Design (`references/claude-design-package.md`): the `PROJECT_TYPE_DESIGN_SYSTEM` destination and how to confirm it, the authored layout (`styles.css`, `tokens/`, `components/`, preview cards, `readme.md`, `SKILL.md`), the first-line `@dsCard` marker that indexes a preview card, the files Claude Design compiles and an agent must never write, and the compiled manifest as the acceptance check.
+- The Claude Design skill documents design-system projects: the project type is fixed at creation, `create_project` makes regular projects only, the compiled manifest is the cheapest inventory, and a change to a published system reaches every bound project.
+
+### Changed
+
+- Comment handling follows the current Claude Design contract: `queued_for_claude: true` fetches only the "Send to Claude" queue, its interaction with `changed_since` is spelled out, and `author_is_you` is judged per comment body and per reply rather than per thread.
+- `create_project` guidance resolves the design system before the call, using `is_default` from `list_design_systems` for the user's standard system.
+- The skill states that the project-wide `finalize_plan` scope and the token-less standing write grant are deliberately unused; every helper keeps minting exact-path, etag-checked plans.
+- `pages_written` from `write_files` and `copy_files` is documented as the page to link when a batch mixes pages with support files, and a test pins `push` against the live write result shape.
+
 ## [1.2.3](https://github.com/maxritter/open-claude-design/compare/v1.2.2...v1.2.3) (2026-09-16)
 
 ### Fixed
