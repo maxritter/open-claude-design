@@ -1633,6 +1633,46 @@ def test_design_push_reads_back_and_renders_every_dc_file(
     ]
 
 
+def test_design_push_accepts_live_write_result_and_carries_pages_written(
+    tmp_path: Any,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    class LiveShapePushStubClient(VerifiedPushStubClient):
+        def call_tool(self, name: str, arguments: dict[str, object]) -> dict[str, object]:
+            result = super().call_tool(name, arguments)
+            if name != "write_files":
+                return result
+            written = result["structuredContent"]
+            assert isinstance(written, dict)
+            return {
+                "structuredContent": {
+                    "written": len(written["etags"]),
+                    "url": "https://claude.ai/design/p/project-1?file=Example.dc.html",
+                    "etags": written["etags"],
+                    "pages_written": ["Example.dc.html"],
+                }
+            }
+
+    source = tmp_path / "Example.dc.html"
+    source.write_text("<x-dc>design</x-dc>\n", encoding="utf-8")
+    client = LiveShapePushStubClient()
+    args = Namespace(
+        design_command="push",
+        project_id="project-1",
+        files=[f"Example.dc.html={source}"],
+        if_matches=["Example.dc.html=0"],
+        plan_token=None,
+        allow_write=True,
+        open_browser=False,
+        json=True,
+    )
+
+    assert run_design_command(args, client_factory=lambda: client, workspace_root=tmp_path) == 0
+    output = json.loads(capsys.readouterr().out)
+    assert output["verification"]["verified"] is True
+    assert output["result"]["structuredContent"]["pages_written"] == ["Example.dc.html"]
+
+
 def test_design_push_returns_unknown_when_preview_cannot_be_created(
     tmp_path: Any,
     capsys: pytest.CaptureFixture[str],

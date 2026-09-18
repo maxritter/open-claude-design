@@ -24,6 +24,7 @@ Read only the required references, resolved relative to this skill:
 | Colors, type, spacing, radii, shadows, motion, breakpoints, or theme tokens | `references/tokens.md` |
 | Reusable UI components, variants, states, composition, or a component inventory | `references/components.md` |
 | A project-local design skill so future agent work follows the product's system automatically | `references/agent-spec.md` |
+| Publishing the system into Claude Design as a design system that projects can bind | `references/claude-design-package.md` |
 
 Use tokens and components together when the user wants a complete system or component library. Token extraction precedes component documentation because component contracts should name real tokens. The agent-facing package comes last and restates that evidence; offer it whenever the extraction is meant to govern later UI work in the repository, since a system that lives only in code is re-explained on every task.
 
@@ -45,4 +46,4 @@ The system is complete when sources and precedence are named, every recorded val
 - Creating a new screen or flow; use `open-claude-ui-design`
 - Auditing a finished UI without extracting reusable structure; use `open-claude-ui-review`
 - Inventing a brand from scratch when there is no source; establish direction through `open-claude-ui-design`
-- Reading or changing a design system stored in Claude Design; use `open-claude-design` for access, then return here for extraction
+- Reading or changing a design system stored in Claude Design; use `open-claude-design` for access, then return here for extraction or for the package shape in `references/claude-design-package.md`

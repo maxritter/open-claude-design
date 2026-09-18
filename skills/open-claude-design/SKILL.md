@@ -37,7 +37,7 @@ open-claude-design sync finish <review-id> --json
 
 Use `--args -` to read a complex JSON object from stdin. Never dump the full tool catalog when one known tool is enough; use `describe` for that tool only.
 
-Read `references/tool-workflows.md` before accessing project files, conversations, comments, members, or sharing state, and before any remote mutation. It owns first-use authentication details, conditional reads, untrusted-content handling, comment authorship, plan/etag writes, synchronization, deletion, and preview verification.
+Read `references/tool-workflows.md` before accessing project files, conversations, comments, members, or sharing state, and before any remote mutation. It owns first-use authentication details, conditional reads, untrusted-content handling, the comment queue and authorship, design-system binding and design-system projects, plan/etag writes, synchronization, deletion, and preview verification.
 
 ## Mutation boundary
 
