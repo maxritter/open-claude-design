@@ -8,8 +8,8 @@ Access, authentication, and every remote write go through `open-claude-design`. 
 
 A design system is a Claude Design project whose `get_project` result reports `type: PROJECT_TYPE_DESIGN_SYSTEM`. The type is fixed at creation. Writing a package into a regular project never turns it into a design system, and nothing will be able to bind it.
 
-1. Resolve the destination with `list_design_systems`, then confirm the type with `get_project`. Stop when the type is anything else.
-2. The Claude Design connection creates regular projects only. When no design-system project exists yet, the user creates one in Claude Design (its design-system setup, or Claude Code's `/design-sync`) and gives the agent the id. Do not substitute a regular project.
+1. Resolve the destination from the id or name the user gives. `list_design_systems` returns the systems offered for binding and can omit design-system projects the user owns, and `list_projects` carries no type. Check a candidate from either list with `get_project`, and stop when the type is anything other than `PROJECT_TYPE_DESIGN_SYSTEM`.
+2. Conclude that no design-system project exists only after checking the matching `list_projects` entries with `get_project`, never from `list_design_systems` alone. The Claude Design connection creates regular projects only, so when none exists the user creates one in Claude Design (its design-system setup, or Claude Code's `/design-sync`) and gives the agent the id. Do not substitute a regular project.
 3. A published design system applies to every project that binds it, and `is_default: true` marks the one new projects receive. Changing it changes other people's future work; name that effect when asking for write approval.
 
 ## Authored files

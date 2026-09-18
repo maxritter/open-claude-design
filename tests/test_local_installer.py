@@ -29,7 +29,8 @@ def _fake_cli_script(trace: Path | None = None) -> str:
         f"{record}"
         'case "${1:-}" in\n'
         "  --version) printf '1.0.0\\n' ;;\n"
-        "  install|uninstall) cat > /dev/null; printf '{}\\n' ;;\n"
+        '  install) cat > /dev/null; printf \'{"action": "install", "verified": true}\\n\' ;;\n'
+        "  uninstall) cat > /dev/null; printf '{}\\n' ;;\n"
         "  status) exit 1 ;;\n"
         "  *) exit 0 ;;\n"
         "esac\n"
@@ -284,6 +285,40 @@ def test_install_dry_run_reports_no_changes_instead_of_success(tmp_path: Path) -
     assert install.returncode == 0, install.stderr
     assert "Dry run: no agent files were changed" in install.stdout
     assert "Automatic design workflows installed" not in install.stdout
+
+
+@pytest.mark.parametrize("flag", ["--help", "-h"])
+def test_install_help_prints_usage_without_installing(tmp_path: Path, flag: str) -> None:
+    environment = _pipe_environment(tmp_path)
+
+    install = _run_script("install.sh", environment, flag)
+
+    assert install.returncode == 0, install.stderr
+    assert install.stdout.startswith("Usage: install.sh")
+    assert "[1/5]" not in install.stdout
+    assert not Path(environment["UV_TRACE"]).exists()
+    assert not (Path(environment["HOME"]) / ".local").exists()
+
+
+def test_install_refuses_success_when_agent_install_returns_no_result(tmp_path: Path) -> None:
+    """A zero exit that installed nothing (e.g. help text) must not read as a verified install."""
+    environment = _pipe_environment(tmp_path)
+    _write_executable(
+        Path(environment["FAKE_OPEN_CLAUDE_DESIGN"]),
+        "#!/bin/sh\n"
+        'case "${1:-}" in\n'
+        "  --version) printf '1.0.0\\n' ;;\n"
+        "  install) printf 'usage: open-claude-design install [-h]\\n' ;;\n"
+        "  *) exit 0 ;;\n"
+        "esac\n",
+    )
+
+    install = _run_script("install.sh", environment)
+
+    assert install.returncode == 1
+    assert "returned no install result" in install.stderr
+    assert "installed and verified" not in install.stdout
+    assert "Open Claude Design is ready" not in install.stdout
 
 
 def test_uninstall_scope_project_routes_scope_to_cli_without_npx_fallback(tmp_path: Path) -> None:

@@ -188,6 +188,8 @@ Root-level and nested `.dc.html` paths are both renderable. The CLI preserves th
 
 A design system is its own project: `get_project` reports `type: PROJECT_TYPE_DESIGN_SYSTEM`, fixed at creation. `create_project` makes regular projects only, so a design system is created in Claude Design and then addressed by id. Check the type before writing to anything the user calls a design system, and before treating a project as bindable.
 
+`list_design_systems` returns the systems offered for binding and can omit design-system projects the user owns, and `list_projects` carries no type. To find a design system by name, check the matching `list_projects` entries with `get_project`. Never report that a design system does not exist because `list_design_systems` did not return it.
+
 Its `_ds_manifest.json`, `_ds_bundle.js`, `_adherence.oxlintrc.json`, and `.thumbnail` are compiled by Claude Design from the authored files. Read the manifest as the cheapest complete inventory of tokens, cards, components, themes, and fonts, and never declare those paths in a write or delete plan. A change to a published design system reaches every project bound to it, so state that reach when asking for approval. `open-claude-design-system` owns the package shape and the `@dsCard` preview-card marker.
 
 ## Remote render verification

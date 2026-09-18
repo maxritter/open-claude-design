@@ -107,6 +107,32 @@ sha256_file() {
   fi
 }
 
+usage() {
+  cat << 'EOF'
+Usage: install.sh [--agents=<ids> | --all-agents] [--scope=project|global] [--yes] [--dry-run]
+
+Installs the Open Claude Design CLI with uv, then its skills for your coding
+agents. Agent options are passed to `open-claude-design install`; without
+--agents, installed agents are detected automatically.
+
+Environment:
+  VERSION=<x.y.z>                    install that release instead of the latest
+  OPEN_CLAUDE_DESIGN_PACKAGE=<path>  install a local wheel or source archive
+  OPEN_CLAUDE_DESIGN_SKIP_LOGIN=1    skip the Claude Design browser login
+EOF
+}
+
+# Answer help before any step runs. Forwarding it to `open-claude-design
+# install` would print that command's help, exit 0, and install nothing.
+for argument; do
+  case "$argument" in
+    -h | --help)
+      usage
+      exit 0
+      ;;
+  esac
+done
+
 case "${HOME:-}" in
   /*) ;;
   *) fail "HOME must be an absolute user directory" ;;
@@ -336,6 +362,11 @@ fi
 if ! open-claude-design install "$@" --json < /dev/null > "$STAGING_DIR/agent-install.json"; then
   cat "$STAGING_DIR/agent-install.json" >&2
   fail "coding-agent integration failed; remove the partial install with uninstall.sh"
+fi
+# A zero exit alone is not an installation: only an install result is.
+if ! grep -q '"action": "install"' "$STAGING_DIR/agent-install.json" 2> /dev/null; then
+  cat "$STAGING_DIR/agent-install.json" >&2
+  fail "coding-agent integration returned no install result; nothing was verified"
 fi
 if [ "$dry_run" -eq 1 ]; then
   info "Dry run: no agent files were changed"
