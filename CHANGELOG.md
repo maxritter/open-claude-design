@@ -2,6 +2,13 @@
 
 All notable changes to Open Claude Design are documented here. Releases follow semantic versioning and are generated from conventional commits.
 
+## [1.3.1](https://github.com/maxritter/open-claude-design/compare/v1.3.0...v1.3.1) (2026-09-18)
+
+### Fixed
+
+- The design-system guidance no longer treats `list_design_systems` as a complete inventory. It can omit design-system projects the user owns, and `list_projects` carries no type, so agents confirm a named system with `get_project` before reporting that it does not exist.
+- `install.sh --help` installed the CLI and then forwarded `--help` to the skill installer, which printed its help, exited 0, and installed nothing while the installer reported "installed and verified". Help is now answered before any step runs, and the installer reports success only when the skill step returns an install result.
+
 ## [1.3.0](https://github.com/maxritter/open-claude-design/compare/v1.2.3...v1.3.0) (2026-09-18)
 
 ### Added
