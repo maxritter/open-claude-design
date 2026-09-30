@@ -5,9 +5,23 @@ from __future__ import annotations
 from typing import Final
 
 PACKAGE_NAME: Final = "open-claude-design"
-VERSION: Final = "1.3.1"
+VERSION: Final = "1.4.0"
 
 CLAUDE_DESIGN_ENDPOINT: Final = "https://api.anthropic.com/v1/design/mcp"
+CLAUDE_DESIGN_RPC_ENDPOINT: Final = "https://api.anthropic.com/anthropic.omelette.api.v1alpha.OmeletteService/"
+CLAUDE_DESIGN_GRANTS_ENDPOINT: Final = "https://api.anthropic.com/v1/design/grants"
+CLAUDE_DESIGN_MAX_TRANSFER_FILE_BYTES: Final = 16 * 1024 * 1024
+CLAUDE_DESIGN_MAX_EXPORT_BYTES: Final = 128 * 1024 * 1024
+CLAUDE_DESIGN_MAX_RPC_RESPONSE_BYTES: Final = 32 * 1024 * 1024
+CLAUDE_DESIGN_MAX_READ_ATTEMPTS: Final = 3
+CLAUDE_DESIGN_MAX_READ_RETRY_SECONDS: Final = 2.0
+CLAUDE_DESIGN_MAX_BATCH_READS: Final = 64
+CLAUDE_DESIGN_OPERATION_LOCK_PARTS: Final = (".config", "open-claude-design", "operation-locks")
+CLAUDE_DESIGN_OPERATION_LOCK_SECONDS: Final = 10.0
+CLAUDE_DESIGN_PROJECT_TYPES: Final = {
+    "project": "PROJECT_TYPE_PROJECT",
+    "design-system": "PROJECT_TYPE_DESIGN_SYSTEM",
+}
 CLAUDE_DESIGN_OAUTH_AUTHORIZE_URL: Final = "https://claude.com/cai/oauth/authorize"
 CLAUDE_DESIGN_OAUTH_TOKEN_URL: Final = "https://platform.claude.com/v1/oauth/token"
 CLAUDE_DESIGN_OAUTH_CLIENT_ID: Final = "59637612-477b-4836-a601-b0589eda7704"
@@ -57,7 +71,7 @@ CLAUDE_DESIGN_KEYCHAIN_SERVICE: Final = "Claude Code-credentials"
 CLAUDE_DESIGN_CREDENTIAL_MAX_BYTES: Final = 1024 * 1024
 CLAUDE_DESIGN_MAX_INLINE_FILE_BYTES: Final = 256 * 1024
 CLAUDE_DESIGN_MAX_BATCH_FILES: Final = 64
-CLAUDE_DESIGN_MAX_BATCH_BYTES: Final = 4 * 1024 * 1024
+CLAUDE_DESIGN_MAX_BATCH_BYTES: Final = 32 * 1024 * 1024
 CLAUDE_DESIGN_MAX_STDIN_BYTES: Final = 1024 * 1024
 CLAUDE_DESIGN_MAX_PLAN_TOKEN_BYTES: Final = 16 * 1024
 CLAUDE_DESIGN_MIN_WRITE_CREDENTIAL_SECONDS: Final = 5 * 60
@@ -140,6 +154,89 @@ FEATURED_AGENT_IDS: Final = (
     "zed",
     "amp",
 )
+SUPPORTED_AGENT_IDS: Final = (
+    "adal",
+    "aider-desk",
+    "amp",
+    "antigravity",
+    "antigravity-cli",
+    "astrbot",
+    "augment",
+    "autohand-code",
+    "bob",
+    "claude-code",
+    "cline",
+    "codearts-agent",
+    "codebuddy",
+    "codemaker",
+    "codestudio",
+    "codex",
+    "command-code",
+    "continue",
+    "cortex",
+    "crush",
+    "cursor",
+    "deepagents",
+    "devin",
+    "dexto",
+    "droid",
+    "eve",
+    "firebender",
+    "forgecode",
+    "fx",
+    "gemini-cli",
+    "github-copilot",
+    "goose",
+    "grok",
+    "hermes-agent",
+    "iflow-cli",
+    "inference-sh",
+    "jazz",
+    "junie",
+    "kilo",
+    "kimchi",
+    "kimi-code-cli",
+    "kiro-cli",
+    "kode",
+    "lingma",
+    "loaf",
+    "mcpjam",
+    "minimax-code",
+    "mistral-vibe",
+    "moxby",
+    "mux",
+    "neovate",
+    "ona",
+    "openclaw",
+    "opencode",
+    "openhands",
+    "pi",
+    "pochi",
+    "posit-assistant",
+    "promptscript",
+    "qoder",
+    "qoder-cn",
+    "qwen-code",
+    "reasonix",
+    "replit",
+    "roo",
+    "rovodev",
+    "sarvam-code",
+    "tabnine-cli",
+    "terramind",
+    "tinycloud",
+    "trae",
+    "trae-cn",
+    "universal",
+    "warp",
+    "windsurf",
+    "zcode",
+    "zed",
+    "zencoder",
+    "zenflow",
+)
+PROJECT_ONLY_AGENT_IDS: Final = frozenset({"eve", "promptscript"})
+MAX_AGENT_VERIFY_WORKERS: Final = 4
 SKILL_NAMES: Final = (
     "open-claude-design-quality",
     "open-claude-ui-design",
@@ -148,7 +245,7 @@ SKILL_NAMES: Final = (
     "open-claude-design",
 )
 SKILLS_CLI_PACKAGE: Final = "skills"
-SKILLS_CLI_VERSION: Final = "1.5.23"
+SKILLS_CLI_VERSION: Final = "1.7.0"
 SKILLS_CLI_NODE_MINIMUM: Final = (22, 20, 0)
 SKILLS_CLI_NODE_VERSION: Final = "22.20.0"
 SKILLS_CLI_NODE_RUNTIME_PARTS: Final = (".local", "share", PACKAGE_NAME, "node")
@@ -165,6 +262,13 @@ BRIDGE_COMMAND_NAMES: Final = (
     "push",
     "delete",
     "sync",
+    "batch",
+    "projects",
+    "project",
+    "design-systems",
+    "export",
+    "validate",
+    "capabilities",
 )
 INSTALL_SCOPES: Final = ("project", "global")
 DEFAULT_INSTALL_SCOPE: Final = "global"

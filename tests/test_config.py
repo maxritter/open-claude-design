@@ -42,9 +42,16 @@ def test_public_command_and_scope_configuration_is_complete() -> None:
         "push",
         "delete",
         "sync",
+        "batch",
+        "projects",
+        "project",
+        "design-systems",
+        "export",
+        "validate",
+        "capabilities",
     )
     assert DEFAULT_INSTALL_SCOPE in INSTALL_SCOPES
     assert "open-claude-design-quality" in SKILL_NAMES
-    assert SKILLS_CLI_VERSION == "1.5.23"
+    assert SKILLS_CLI_VERSION == "1.7.0"
     assert CLAUDE_DESIGN_OAUTH_CLIENT_ID == "59637612-477b-4836-a601-b0589eda7704"  # gitleaks:allow
     assert CLAUDE_DESIGN_OAUTH_SCOPES == ("user:design:read", "user:design:write")

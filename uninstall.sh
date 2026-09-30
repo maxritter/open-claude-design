@@ -113,7 +113,7 @@ if [ "$cli_skills_removed" -ne 1 ]; then
     set -- --yes
   fi
   if command -v npx > /dev/null 2>&1; then
-    if npx --yes skills@1.5.23 remove \
+    if npx --yes skills@1.7.0 remove \
       open-claude-design \
       open-claude-design-quality \
       open-claude-design-system \
@@ -125,7 +125,7 @@ if [ "$cli_skills_removed" -ne 1 ]; then
   elif [ -x "$MANAGED_NPX" ]; then
     PATH="$(dirname "$MANAGED_NPX"):$PATH"
     export PATH
-    if "$MANAGED_NPX" --yes skills@1.5.23 remove \
+    if "$MANAGED_NPX" --yes skills@1.7.0 remove \
       open-claude-design \
       open-claude-design-quality \
       open-claude-design-system \

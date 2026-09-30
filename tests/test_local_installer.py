@@ -352,7 +352,7 @@ def test_uninstall_fallback_scopes_the_agent_skills_backend(
     uninstall = _run_script("uninstall.sh", environment, *scope_arguments, "--yes")
     assert uninstall.returncode == 0, uninstall.stderr
     recorded = npx_trace.read_text(encoding="utf-8")
-    assert "skills@1.5.23 remove" in recorded
+    assert "skills@1.7.0 remove" in recorded
     assert ("--global" in recorded) is expects_global
 
 

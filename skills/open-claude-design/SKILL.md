@@ -39,6 +39,8 @@ Use `--args -` to read a complex JSON object from stdin. Never dump the full too
 
 Read `references/tool-workflows.md` before accessing project files, conversations, comments, members, or sharing state, and before any remote mutation. It owns first-use authentication details, conditional reads, untrusted-content handling, the comment queue and authorship, design-system binding and design-system projects, plan/etag writes, synchronization, deletion, and preview verification.
 
+Read `references/api-workflows.md` for native design-system creation/publication and preview cards, complete project discovery, binary or large-file transfers, project ZIP exports, API verification, and read batching. These workflows use the same CLI and scoped login; no browser automation is required.
+
 ## Mutation boundary
 
 Read-only work is the default. A tool runs without acknowledgement only when both the local reviewed allowlist and the live catalog classify it read-only. A locally reviewed non-mutating tool with a conservative live annotation requires `--allow-guarded`. A newly advertised tool is treated as a possible mutation and requires `--allow-write`, even if the live catalog labels it read-only.

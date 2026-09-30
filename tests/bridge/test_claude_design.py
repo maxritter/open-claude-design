@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import io
 import json
 import subprocess
@@ -30,6 +31,12 @@ from open_claude_design.bridge import (
 )
 
 pytestmark = pytest.mark.unit
+
+VALID_DC = (
+    '<script src="./support.js"></script><x-dc><div>design</div></x-dc>'
+    '<script type="text/x-dc" data-dc-script>'
+    "class Component extends DCLogic { renderVals() { return {}; } }</script>\n"
+)
 
 
 class FakeResponse:
@@ -994,6 +1001,13 @@ class VerifiedFolderCopyStubClient(FileStubClient):
     def call_tool(self, name: str, arguments: dict[str, object]) -> dict[str, object]:
         if name == "list_files":
             self.calls.append((name, arguments))
+            if arguments.get("path") == "Template":
+                return {
+                    "structuredContent": [
+                        {"path": "Template/Payment.dc.html", "type": "file", "etag": "s1"},
+                        {"path": "Template/support.js", "type": "file", "etag": "s2"},
+                    ]
+                }
             return {
                 "structuredContent": [
                     {
@@ -1188,7 +1202,9 @@ def test_planned_copy_rejects_noncanonical_returned_leaf_before_preview(
         design_command="planned-call",
         tool="copy_files",
         project_id="project-1",
-        args=('{"files":[{"src":"Template","dest":"Checkout","leaf_if_match":{"Checkout/Payment.dc.html":"0"}}]}'),
+        args=(
+            '{"files":[{"src":"Template","dest":"Checkout","leaf_if_match":{"Checkout/Payment.dc.html":"0","Checkout/support.js":"0"}}]}'
+        ),
         writes=["Checkout"],
         allow_write=True,
         allow_destructive=True,
@@ -1199,7 +1215,7 @@ def test_planned_copy_rejects_noncanonical_returned_leaf_before_preview(
     assert run_design_command(args, client_factory=lambda: client) == 2
     output = json.loads(capsys.readouterr().out)
     assert "verification" not in output
-    assert [name for name, _arguments in client.calls] == ["finalize_plan", "copy_files"]
+    assert [name for name, _arguments in client.calls] == ["list_files", "finalize_plan", "copy_files"]
 
 
 class DeleteStubClient(StubClient):
@@ -1574,7 +1590,7 @@ def test_design_push_reads_local_file_inside_process_and_requires_etag_and_plan(
 
 def test_design_push_refuses_dc_file_without_same_directory_support_before_write(tmp_path: Any) -> None:
     source = tmp_path / "Example.dc.html"
-    source.write_text("<x-dc>design</x-dc>\n", encoding="utf-8")
+    source.write_text(VALID_DC, encoding="utf-8")
     client = VerifiedPushStubClient(include_support=False)
     args = Namespace(
         design_command="push",
@@ -1598,7 +1614,7 @@ def test_design_push_reads_back_and_renders_every_dc_file(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     source = tmp_path / "Example.dc.html"
-    source.write_text("<x-dc>design</x-dc>\n", encoding="utf-8")
+    source.write_text(VALID_DC, encoding="utf-8")
     client = VerifiedPushStubClient()
     args = Namespace(
         design_command="push",
@@ -1615,7 +1631,7 @@ def test_design_push_reads_back_and_renders_every_dc_file(
     output = json.loads(capsys.readouterr().out)
     assert output["verification"] == {
         "verified": True,
-        "files": [{"path": "Example.dc.html", "etag": "written-1", "bytes": 20}],
+        "files": [{"path": "Example.dc.html", "etag": "written-1", "bytes": len(VALID_DC.encode())}],
         "previews": [
             {
                 "path": "Example.dc.html",
@@ -1654,7 +1670,7 @@ def test_design_push_accepts_live_write_result_and_carries_pages_written(
             }
 
     source = tmp_path / "Example.dc.html"
-    source.write_text("<x-dc>design</x-dc>\n", encoding="utf-8")
+    source.write_text(VALID_DC, encoding="utf-8")
     client = LiveShapePushStubClient()
     args = Namespace(
         design_command="push",
@@ -1678,7 +1694,7 @@ def test_design_push_returns_unknown_when_preview_cannot_be_created(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     source = tmp_path / "Example.dc.html"
-    source.write_text("<x-dc>design</x-dc>\n", encoding="utf-8")
+    source.write_text(VALID_DC, encoding="utf-8")
     client = VerifiedPushStubClient(preview_url=None)
     args = Namespace(
         design_command="push",
@@ -1704,7 +1720,7 @@ def test_design_push_open_uses_short_lived_preview_but_returns_only_durable_url(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     source = tmp_path / "Example.dc.html"
-    source.write_text("<x-dc>design</x-dc>\n", encoding="utf-8")
+    source.write_text(VALID_DC, encoding="utf-8")
     client = VerifiedPushStubClient()
     opened: list[str] = []
     monkeypatch.setattr(claude_design, "_open_preview_url", opened.append)
@@ -1737,7 +1753,7 @@ def test_design_push_browser_failure_keeps_durable_preview_and_returns_unknown(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     source = tmp_path / "Example.dc.html"
-    source.write_text("<x-dc>design</x-dc>\n", encoding="utf-8")
+    source.write_text(VALID_DC, encoding="utf-8")
     client = VerifiedPushStubClient()
 
     def fail_open(_url: str) -> None:
@@ -1908,7 +1924,7 @@ def test_design_push_external_authorization_is_exact_per_operand(
     workspace.mkdir()
     authorized = tmp_path / "authorized.dc.html"
     unauthorized = tmp_path / "unauthorized.dc.html"
-    authorized.write_text("allowed", encoding="utf-8")
+    authorized.write_text(VALID_DC, encoding="utf-8")
     unauthorized.write_text("blocked", encoding="utf-8")
     monkeypatch.setattr(sys, "stdin", io.StringIO("signed-plan\n"))
     client = FileStubClient()
@@ -2081,7 +2097,7 @@ class ConflictFileStubClient(FileStubClient):
 
 def test_design_push_refuses_concurrent_change_after_plan(tmp_path: Any) -> None:
     source = tmp_path / "Example.dc.html"
-    source.write_text("content", encoding="utf-8")
+    source.write_text(VALID_DC, encoding="utf-8")
     client = ConflictFileStubClient()
     args = Namespace(
         design_command="push",
@@ -2099,9 +2115,9 @@ def test_design_push_refuses_concurrent_change_after_plan(tmp_path: Any) -> None
     assert [name for name, _arguments in client.calls] == ["finalize_plan"]
 
 
-def test_design_push_refuses_file_over_inline_cap(tmp_path: Any) -> None:
+def test_design_push_refuses_file_over_transfer_cap(tmp_path: Any) -> None:
     source = tmp_path / "large.dc.html"
-    source.write_bytes(b"x" * (256 * 1024 + 1))
+    source.write_bytes(b"x" * (16 * 1024 * 1024 + 1))
     client = FileStubClient()
     args = Namespace(
         design_command="push",
@@ -2113,7 +2129,7 @@ def test_design_push_refuses_file_over_inline_cap(tmp_path: Any) -> None:
         json=True,
     )
 
-    with pytest.raises(ClaudeDesignSafetyError, match="256 KiB"):
+    with pytest.raises(ClaudeDesignSafetyError, match="byte safety cap"):
         run_design_command(args, client_factory=lambda: client, workspace_root=tmp_path)
 
     assert client.calls == []
@@ -2126,7 +2142,14 @@ def test_design_push_base64_encodes_binary_inside_process(
 ) -> None:
     source = tmp_path / "asset.bin"
     source.write_bytes(b"\xff\x00")
-    client = FileStubClient()
+
+    class BinaryFileStub(FileStubClient):
+        def read_raw_file(self, project_id: str, path: str) -> claude_design.RemoteFile:
+            return claude_design.RemoteFile(
+                base64.b64decode(self.written[path]), "124", "application/octet-stream", True
+            )
+
+    client = BinaryFileStub()
     args = Namespace(
         design_command="push",
         project_id="project-1",

@@ -28,7 +28,9 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 from urllib.parse import ParseResult, urlparse
 
+from open_claude_design.api import DesignAPI, RemoteFile, read_retry_delay
 from open_claude_design.auth import DesignAuthError, load_standalone_credential
+from open_claude_design.binary import PNG_SIGNATURE, original_png_bytes
 from open_claude_design.config import (
     CLAUDE_CONFIG_DIRNAME,
     CLAUDE_CONFIG_ENV,
@@ -46,12 +48,14 @@ from open_claude_design.config import (
     CLAUDE_DESIGN_MAX_BATCH_FILES,
     CLAUDE_DESIGN_MAX_INLINE_FILE_BYTES,
     CLAUDE_DESIGN_MAX_PLAN_TOKEN_BYTES,
+    CLAUDE_DESIGN_MAX_READ_ATTEMPTS,
     CLAUDE_DESIGN_MAX_RESPONSE_BYTES,
     CLAUDE_DESIGN_MAX_SSE_EVENTS,
     CLAUDE_DESIGN_MAX_STDIN_BYTES,
     CLAUDE_DESIGN_MAX_SYNC_DIFF_BYTES,
     CLAUDE_DESIGN_MAX_TOOL_PAGES,
     CLAUDE_DESIGN_MAX_TOOLS,
+    CLAUDE_DESIGN_MAX_TRANSFER_FILE_BYTES,
     CLAUDE_DESIGN_MIN_WRITE_CREDENTIAL_SECONDS,
     CLAUDE_DESIGN_MUTATION_SUCCESS_KEYS,
     CLAUDE_DESIGN_NON_MUTATING_GUARDED_TOOLS,
@@ -65,6 +69,12 @@ from open_claude_design.config import (
     DEFAULT_FILE_LIST_DEPTH,
     VERSION,
 )
+from open_claude_design.errors import (
+    ClaudeDesignAuthError,
+    ClaudeDesignError,
+    ClaudeDesignProtocolError,
+    ClaudeDesignSafetyError,
+)
 from open_claude_design.sync import (
     REVIEW_ID_PATTERN,
     SyncPair,
@@ -76,6 +86,7 @@ from open_claude_design.sync import (
     seal_receipt,
     validate_receipt,
 )
+from open_claude_design.validation import validate_html
 
 
 class _RejectAuthenticatedRedirects(urllib.request.HTTPRedirectHandler):
@@ -90,22 +101,6 @@ _CLAUDE_DESIGN_OPENER = urllib.request.build_opener(_RejectAuthenticatedRedirect
 
 def _open_claude_design(request: urllib.request.Request, *, timeout: int) -> Any:
     return _CLAUDE_DESIGN_OPENER.open(request, timeout=timeout)
-
-
-class ClaudeDesignError(RuntimeError):
-    """Base error for actionable Claude Design bridge failures."""
-
-
-class ClaudeDesignAuthError(ClaudeDesignError):
-    """Claude Design authentication is unavailable or expired."""
-
-
-class ClaudeDesignProtocolError(ClaudeDesignError):
-    """Claude Design returned an invalid or failed MCP response."""
-
-
-class ClaudeDesignSafetyError(ClaudeDesignError):
-    """A mutating tool call lacked the explicit write opt-in."""
 
 
 def _has_unsafe_text_character(value: str) -> bool:
@@ -345,6 +340,108 @@ class ClaudeDesignClient:
         self._session_id: str | None = None
         self._initialize_result: dict[str, Any] | None = None
         self._next_id = 1
+        self._tools: list[dict[str, Any]] | None = None
+        self._api = DesignAPI(token_reader=self._token, opener=opener, timeout=timeout)
+
+    def read_raw_file(self, project_id: str, path: str) -> RemoteFile:
+        """Read original text or binary bytes without the MCP window cap."""
+        remote = self._api.get_file(project_id, path)
+        if remote.binary and remote.data.startswith(PNG_SIGNATURE):
+            parent = PurePosixPath(path).parent.as_posix()
+            entries = _tool_result_value(
+                self.call_tool(
+                    "list_files", {"project_id": project_id, "path": "" if parent == "." else parent, "depth": 1}
+                ),
+                tool="list_files",
+            )
+            if not isinstance(entries, list):
+                raise ClaudeDesignProtocolError("The raw image has no original-file inventory.")
+            entry = next((entry for entry in entries if isinstance(entry, dict) and entry.get("path") == path), None)
+            if (
+                not isinstance(entry, dict)
+                or entry.get("etag") != remote.etag
+                or not isinstance(entry.get("size"), int)
+            ):
+                raise ClaudeDesignProtocolError("The raw image changed or has no original byte count.")
+            data = original_png_bytes(remote.data, entry["size"])
+            remote = RemoteFile(data, remote.etag, remote.content_type, remote.binary)
+        return remote
+
+    def list_projects(self, project_type: str | None = None) -> list[dict[str, Any]]:
+        return self._api.list_projects(project_type)
+
+    def design_settings(self) -> dict[str, Any]:
+        return self._api.settings()
+
+    def project_metadata(self, project_id: str) -> dict[str, Any]:
+        return self._api.project_metadata(project_id)
+
+    def set_design_system_default(self, project_id: str, *, expected_current: str) -> dict[str, Any]:
+        self.require_write_window()
+        return self._api.set_default(project_id, expected_current=expected_current)
+
+    def rename_project(self, project_id: str, name: str, *, allow_grant: bool) -> dict[str, Any]:
+        self.require_write_window()
+        return self._api.rename_project(project_id, name, allow_grant=allow_grant)
+
+    def bind_design_systems(
+        self, project_id: str, ids: list[str], *, expected_current: list[str], allow_grant: bool
+    ) -> dict[str, Any]:
+        self.require_write_window()
+        return self._api.bind_systems(
+            project_id,
+            ids,
+            expected_current=expected_current,
+            allow_grant=allow_grant,
+        )
+
+    def delete_project(self, project_id: str, *, expected_version: str, allow_grant: bool) -> None:
+        self.require_write_window()
+        self._api.delete_project(project_id, expected_version=expected_version, allow_grant=allow_grant)
+
+    def create_design_system(self, name: str) -> str:
+        self.require_write_window()
+        return self._api.create_design_system(name)
+
+    def set_design_system_published(self, project_id: str, published: bool, *, allow_grant: bool) -> dict[str, Any]:
+        self.require_write_window()
+        return self._api.set_published(project_id, published, allow_grant=allow_grant)
+
+    def list_design_system_assets(self, project_id: str) -> list[dict[str, Any]]:
+        return self._api.list_assets(project_id)
+
+    def register_asset(self, project_id: str, asset: dict[str, object], *, allow_grant: bool) -> None:
+        self.require_write_window()
+        self._api.register_asset(project_id, asset, allow_grant=allow_grant)
+
+    def unregister_asset(self, project_id: str, path: str, *, allow_grant: bool) -> None:
+        self.require_write_window()
+        self._api.unregister_asset(project_id, path, allow_grant=allow_grant)
+
+    def verify_preview(self, project_id: str, path: str, serve_url: str) -> dict[str, object]:
+        """Check the API-issued render and original structure without a browser."""
+        _validate_serve_preview_url(serve_url)
+        request = urllib.request.Request(serve_url, headers={"User-Agent": f"open-claude-design/{VERSION}"})
+        try:
+            with self._opener(request, timeout=self._timeout) as response:
+                body = _read_bounded_response(response)
+                content_type = response.headers.get("Content-Type", "")
+                status = response.status
+        except (urllib.error.URLError, TimeoutError) as error:
+            # Never stringify an error that carries the capability URL.
+            raise ClaudeDesignProtocolError("The API-issued Claude Design preview could not be fetched.") from error
+        if status != 200 or "text/html" not in content_type or not body.strip():
+            raise ClaudeDesignProtocolError("Claude Design preview returned empty or non-HTML output.")
+        original = self.read_raw_file(project_id, path)
+        result = self.call_tool("list_files", {"project_id": project_id, "path": "", "depth": -1})
+        entries = _tool_result_value(result, tool="list_files")
+        if not isinstance(entries, list):
+            raise ClaudeDesignProtocolError("Preview validation returned no resource inventory.")
+        available = {
+            entry["path"] for entry in entries if isinstance(entry, dict) and isinstance(entry.get("path"), str)
+        }
+        structural = validate_html(path, original.data, available)
+        return {"http_status": status, "bytes": len(body), **structural}
 
     def _token(self) -> str:
         if self._token_reader is not None:
@@ -376,17 +473,30 @@ class ClaudeDesignClient:
             method="POST",
         )
 
+        retry_safe = method in {"initialize", "tools/list", "notifications/initialized"} or (
+            method == "tools/call" and params is not None and params.get("name") in CLAUDE_DESIGN_KNOWN_READ_ONLY_TOOLS
+        )
+        parsed = None
         try:
-            with self._opener(request, timeout=self._timeout) as response:
-                body = _read_bounded_response(response)
-                session_id = response.headers.get("Mcp-Session-Id")
-                if session_id:
-                    self._session_id = session_id
-                parsed = parse_mcp_response(
-                    body,
-                    response.headers.get("Content-Type", ""),
-                    expected_id=expected_id,
-                )
+            for attempt in range(CLAUDE_DESIGN_MAX_READ_ATTEMPTS):
+                try:
+                    with self._opener(request, timeout=self._timeout) as response:
+                        body = _read_bounded_response(response)
+                        session_id = response.headers.get("Mcp-Session-Id")
+                        if session_id:
+                            self._session_id = session_id
+                        parsed = parse_mcp_response(
+                            body,
+                            response.headers.get("Content-Type", ""),
+                            expected_id=expected_id,
+                        )
+                    break
+                except urllib.error.HTTPError as error:
+                    delay = read_retry_delay(error, attempt) if retry_safe else None
+                    if delay is None:
+                        raise
+                    error.close()
+                    time.sleep(delay)
         except urllib.error.HTTPError as error:
             if error.code == 401:
                 raise ClaudeDesignAuthError(
@@ -477,6 +587,8 @@ class ClaudeDesignClient:
 
     def list_tools(self) -> list[dict[str, Any]]:
         """List the live Claude Design tool catalog."""
+        if self._tools is not None:
+            return self._tools
         self._initialize()
         tools: list[dict[str, Any]] = []
         cursor: str | None = None
@@ -495,6 +607,7 @@ class ClaudeDesignClient:
                 raise ClaudeDesignProtocolError("Claude Design returned too many tools.")
             next_cursor = result.get("nextCursor")
             if not isinstance(next_cursor, str) or not next_cursor:
+                self._tools = tools
                 return tools
             if next_cursor in seen_cursors:
                 raise ClaudeDesignProtocolError("Claude Design repeated a tool pagination cursor.")
@@ -567,10 +680,39 @@ def _decode_read_file_result(result: dict[str, Any]) -> tuple[str, str]:
     etag_match = re.search(r'\betag="([^"]+)"', wrapper.group(1))
     if etag_match is None:
         raise ClaudeDesignProtocolError("Claude Design read_file returned no etag.")
+    attributes = wrapper.group(1)
+    lines = re.search(r'\blines="(\d+)-(\d+)"', attributes)
+    total = re.search(r'\btotal_lines="(\d+)"', attributes)
+    if "truncated_line=" in attributes or (
+        lines is not None and (total is None or int(lines.group(1)) != 1 or int(lines.group(2)) != int(total.group(1)))
+    ):
+        raise ClaudeDesignProtocolError(
+            "Claude Design returned only part of the file. Use the raw API transfer; "
+            "partial content cannot become a full file or recovery backup."
+        )
     decoded = wrapper.group(2).replace("&lt;", "<").replace("&gt;", ">").replace("&amp;", "&")
     if len(decoded.encode("utf-8")) > CLAUDE_DESIGN_MAX_INLINE_FILE_BYTES:
         raise ClaudeDesignProtocolError("Claude Design file exceeds the 256 KiB local transfer limit.")
     return decoded, etag_match.group(1)
+
+
+def _read_remote_bytes(client: Any, project_id: str, path: str) -> RemoteFile:
+    reader = getattr(client, "read_raw_file", None)
+    if callable(reader):
+        remote = reader(project_id, path)
+        if not isinstance(remote, RemoteFile):
+            raise ClaudeDesignProtocolError("Claude Design raw reader returned invalid file metadata.")
+        return remote
+    decoded, etag = _decode_read_file_result(client.call_tool("read_file", {"project_id": project_id, "path": path}))
+    return RemoteFile(decoded.encode("utf-8"), etag, "text/plain", False)
+
+
+def _read_remote_text(client: Any, project_id: str, path: str) -> tuple[str, str]:
+    remote = _read_remote_bytes(client, project_id, path)
+    try:
+        return remote.data.decode("utf-8"), remote.etag
+    except UnicodeError as error:
+        raise ClaudeDesignProtocolError(f"Claude Design file is binary; use pull or export: {path}") from error
 
 
 def _repository_root(path: Path) -> Path | None:
@@ -736,6 +878,7 @@ def _read_local_file(
     *,
     workspace_root: Path,
     authorized_external_paths: list[str],
+    maximum_bytes: int = CLAUDE_DESIGN_MAX_INLINE_FILE_BYTES,
 ) -> tuple[Path, bytes]:
     """Read one regular file through pinned directory descriptors with a hard cap."""
     resolved = _resolve_local_path(
@@ -761,7 +904,7 @@ def _read_local_file(
         if not stat.S_ISREG(os.fstat(file_fd).st_mode):
             raise ValueError(f"Local design file is not a regular file: {resolved}")
         chunks: list[bytes] = []
-        remaining = CLAUDE_DESIGN_MAX_INLINE_FILE_BYTES + 1
+        remaining = maximum_bytes + 1
         while remaining > 0:
             chunk = os.read(file_fd, min(64 * 1024, remaining))
             if not chunk:
@@ -769,10 +912,9 @@ def _read_local_file(
             chunks.append(chunk)
             remaining -= len(chunk)
         data = b"".join(chunks)
-        if len(data) > CLAUDE_DESIGN_MAX_INLINE_FILE_BYTES:
+        if len(data) > maximum_bytes:
             raise ClaudeDesignSafetyError(
-                f"Local file exceeds Open Claude Design's 256 KiB inline safety cap: {resolved}. "
-                "Use a server-side copy or the native Claude Design transfer path."
+                f"Local file exceeds Open Claude Design's {maximum_bytes} byte safety cap: {resolved}."
             )
         return resolved, data
     finally:
@@ -1017,6 +1159,26 @@ def _read_authoring_cache(
 
 
 def _authoring_context_payload(args: argparse.Namespace, client: Any, *, root: Path) -> dict[str, object]:
+    metadata_reader = getattr(client, "project_metadata", None)
+    if args.design_system_id is None and callable(metadata_reader):
+        metadata = metadata_reader(args.project_id)
+        if not isinstance(metadata, dict):
+            raise ClaudeDesignProtocolError("Claude Design returned invalid project bindings.")
+        bindings = metadata.get("designSystems", [])
+        if not isinstance(bindings, list):
+            raise ClaudeDesignProtocolError("Claude Design returned invalid project bindings.")
+        ids = [
+            binding["dsProjectId"]
+            for binding in bindings
+            if isinstance(binding, dict) and isinstance(binding.get("dsProjectId"), str)
+        ]
+        if len(ids) > 1:
+            raise ClaudeDesignSafetyError(
+                "This project binds multiple design systems. "
+                "Inspect its bindings and choose the relevant --design-system."
+            )
+        if ids:
+            args.design_system_id = ids[0]
     for label, value in (("project id", args.project_id), ("authoring skill", args.skill)):
         if not isinstance(value, str) or not value or len(value) > 256 or _has_unsafe_text_character(value):
             raise ValueError(f"Claude Design {label} is invalid.")
@@ -1125,11 +1287,22 @@ def _local_write_payload(
             local_path,
             workspace_root=workspace_root,
             authorized_external_paths=getattr(args, "external_local_paths", []),
+            maximum_bytes=CLAUDE_DESIGN_MAX_TRANSFER_FILE_BYTES,
         )
         total_bytes += len(data)
         if total_bytes > CLAUDE_DESIGN_MAX_BATCH_BYTES:
             raise ClaudeDesignSafetyError("A push batch exceeds the aggregate local byte limit.")
         file_payload: dict[str, object] = {"path": remote_path, "if_match": etags[remote_path]}
+        if remote_path.endswith(".dc.html"):
+            structural = validate_html(remote_path, data)
+            if structural["valid"] is not True:
+                issues = structural.get("issues", [])
+                if not isinstance(issues, list):
+                    raise ClaudeDesignProtocolError("Invalid structural validation result.")
+                raise ClaudeDesignSafetyError(
+                    f"Refusing a non-editable Design Component at {remote_path}: "
+                    + "; ".join(str(issue) for issue in issues)
+                )
         try:
             file_payload["data"] = data.decode("utf-8")
         except UnicodeDecodeError:
@@ -1211,9 +1384,9 @@ def _local_delete_payload(
     backups: list[str] = []
     total_backup_bytes = 0
     for path in paths:
-        read_result = client.call_tool("read_file", {"project_id": args.project_id, "path": path})
         try:
-            decoded, current_etag = _decode_read_file_result(read_result)
+            remote = _read_remote_bytes(client, args.project_id, path)
+            current_etag = remote.etag
         except ClaudeDesignProtocolError as error:
             raise ClaudeDesignProtocolError(f"Could not read {path} for the delete backup: {error}") from error
         if current_etag != etags[path]:
@@ -1222,7 +1395,7 @@ def _local_delete_payload(
             )
         etag_key = hashlib.sha256(current_etag.encode("utf-8")).hexdigest()[:12]
         target = backup_root / safe_project / etag_key / Path(*path.split("/"))
-        encoded = decoded.encode("utf-8")
+        encoded = remote.data
         total_backup_bytes += len(encoded)
         if total_backup_bytes > CLAUDE_DESIGN_MAX_BATCH_BYTES:
             raise ClaudeDesignSafetyError("Delete recovery backups exceed the aggregate local byte limit.")
@@ -1231,6 +1404,7 @@ def _local_delete_payload(
                 str(target),
                 workspace_root=workspace_root,
                 authorized_external_paths=[],
+                maximum_bytes=CLAUDE_DESIGN_MAX_TRANSFER_FILE_BYTES,
             )
             if existing != encoded:
                 raise ClaudeDesignSafetyError(f"A different delete backup already exists: {target}")
@@ -1359,6 +1533,24 @@ def _mutation_result_matches_request(
         return False
     if status is not None and not successful_status:
         return False
+    nested_results = value.get("results")
+    if isinstance(nested_results, list):
+        for entry in nested_results:
+            if not isinstance(entry, dict):
+                return False
+            if any(entry.get(key) for key in ("error", "errors", "failed", "failure", "refused", "conflicts")):
+                return False
+            entry_status = entry.get("status")
+            if entry_status is not None and entry_status not in {
+                "complete",
+                "completed",
+                "copied",
+                "ok",
+                "success",
+                "succeeded",
+                "written",
+            }:
+                return False
     if arguments is None:
         return successful_status
 
@@ -1370,6 +1562,19 @@ def _mutation_result_matches_request(
     expected_paths = _paths_from_mutation_value(arguments)
     returned_paths = _paths_from_mutation_value(value)
     if tool == "copy_files" and returned_paths:
+        files = arguments.get("files")
+        expected_leaves: set[str] = set()
+        if isinstance(files, list):
+            for file in files:
+                if not isinstance(file, dict):
+                    return False
+                leaves = file.get("leaf_if_match")
+                if isinstance(leaves, dict):
+                    expected_leaves.update(str(path) for path in leaves)
+                elif isinstance(file.get("dest"), str):
+                    expected_leaves.add(file["dest"])
+        if returned_paths != expected_leaves:
+            return False
         try:
             for path in returned_paths:
                 _validate_remote_path(path)
@@ -1577,7 +1782,7 @@ def _expected_write_bytes(payload: dict[str, object]) -> dict[str, bytes | None]
         if item.get("encoding") == "base64":
             if path.endswith((".html", ".dc.html")):
                 raise ClaudeDesignSafetyError(f"Renderable Claude Design files must be UTF-8 text: {path}")
-            expected[path] = None
+            expected[path] = base64.b64decode(data, validate=True)
         else:
             expected[path] = data.encode("utf-8")
     return expected
@@ -1597,9 +1802,8 @@ def _verify_written_files(
             if expected_bytes is None:
                 files.append({"path": path, "bytes": None, "readback": "write-evidence-only"})
                 continue
-            result = client.call_tool("read_file", {"project_id": project_id, "path": path})
-            decoded, etag = _decode_read_file_result(result)
-            actual = decoded.encode("utf-8")
+            remote = _read_remote_bytes(client, project_id, path)
+            actual, etag = remote.data, remote.etag
             if actual != expected_bytes:
                 raise ClaudeDesignProtocolError(f"Claude Design readback did not match the written bytes: {path}")
             files.append({"path": path, "etag": etag, "bytes": len(actual)})
@@ -1645,6 +1849,15 @@ def _verify_remote_previews(
             _validate_durable_preview_url(open_url)
             preview_result: dict[str, object] = {"path": path, "open_url": open_url, "opened": False}
             previews.append(preview_result)
+            checker = getattr(client, "verify_preview", None)
+            if callable(checker):
+                serve_url = preview.get("serve_url")
+                if not isinstance(serve_url, str) or not serve_url:
+                    raise ClaudeDesignProtocolError("Claude Design returned no preview for API verification.")
+                checked = checker(project_id, path, serve_url)
+                preview_result["validation"] = checked
+                if not isinstance(checked, dict) or checked.get("valid") is not True:
+                    raise ClaudeDesignProtocolError(f"Claude Design preview failed structural/resource checks: {path}")
             if open_browser:
                 serve_url = preview.get("serve_url")
                 if not isinstance(serve_url, str) or not serve_url:
@@ -1705,6 +1918,34 @@ def _planned_call_payload(args: argparse.Namespace, client: Any) -> dict[str, ob
                 raise ClaudeDesignSafetyError(
                     "Every copy_files item requires if_match or a non-empty leaf_if_match map."
                 )
+            else:
+                source = item.get("src")
+                source_project = item.get("src_project_id", args.project_id)
+                if not isinstance(source, str) or not isinstance(source_project, str):
+                    raise ClaudeDesignSafetyError("A folder copy requires a valid source and source project.")
+                _validate_remote_path(source)
+                source_entries = _tool_result_value(
+                    client.call_tool("list_files", {"project_id": source_project, "path": source, "depth": -1}),
+                    tool="list_files",
+                )
+                if not isinstance(source_entries, list):
+                    raise ClaudeDesignProtocolError("Folder-copy source listing returned no files.")
+                expected_leaves: set[str] = set()
+                for entry in source_entries:
+                    if not isinstance(entry, dict) or entry.get("type") != "file":
+                        continue
+                    source_path = entry.get("path")
+                    if not isinstance(source_path, str) or not source_path.startswith(source + "/"):
+                        raise ClaudeDesignProtocolError("Folder-copy source listing escaped its source directory.")
+                    _validate_remote_path(source_path)
+                    expected_leaves.add(destination + source_path[len(source) :])
+                if not expected_leaves or set(leaf_if_match) != expected_leaves:
+                    raise ClaudeDesignSafetyError(
+                        "Folder copies require one current leaf_if_match etag for every source leaf, "
+                        "with no extra paths. Re-list the source and destination before copying."
+                    )
+                if any(not isinstance(etag, str) or not etag for etag in leaf_if_match.values()):
+                    raise ClaudeDesignSafetyError("Every folder-copy leaf requires a non-empty etag.")
         if destinations != set(writes):
             raise ClaudeDesignSafetyError("Every copy destination needs one matching --write declaration.")
 
@@ -1987,6 +2228,7 @@ def _sync_optional_local(root: Path, raw_path: str) -> tuple[str, bool, bytes]:
         str(candidate),
         workspace_root=root,
         authorized_external_paths=[],
+        maximum_bytes=CLAUDE_DESIGN_MAX_TRANSFER_FILE_BYTES,
     )
     return local_path, True, data
 
@@ -2028,13 +2270,13 @@ def _sync_remote_contents(
         if revision["exists"] is not True:
             contents[path] = b""
             continue
-        result = client.call_tool("read_file", {"project_id": project_id, "path": path})
-        decoded, etag = _decode_read_file_result(result)
+        remote = _read_remote_bytes(client, project_id, path)
+        etag = remote.etag
         if etag != revision["etag"]:
             raise ClaudeDesignSafetyError(
                 f"Claude Design changed while the sync review was being prepared: {path}. Review again."
             )
-        contents[path] = decoded.encode("utf-8")
+        contents[path] = remote.data
     return contents
 
 
@@ -2089,6 +2331,7 @@ def _sync_read_snapshot(root: Path, relative_path: str) -> bytes:
         str(root / relative_path),
         workspace_root=root,
         authorized_external_paths=[],
+        maximum_bytes=CLAUDE_DESIGN_MAX_TRANSFER_FILE_BYTES,
     )
     return data
 
@@ -2510,12 +2753,8 @@ def _sync_apply_to_design(
     applied_remote: list[dict[str, Any]] = []
     try:
         for remote_path, expected in sorted(expected_bytes.items()):
-            readback = client.call_tool(
-                "read_file",
-                {"project_id": receipt["project_id"], "path": remote_path},
-            )
-            decoded, etag = _decode_read_file_result(readback)
-            data = decoded.encode("utf-8")
+            remote = _read_remote_bytes(client, str(receipt["project_id"]), remote_path)
+            data, etag = remote.data, remote.etag
             if data != expected:
                 return _sync_mark_unknown(
                     root,
@@ -2576,33 +2815,54 @@ def _sync_apply_to_code(
 ) -> int:
     remote_cache: dict[str, tuple[str, bytes]] = {}
     changed: list[dict[str, str]] = []
+    raw_reader = getattr(client, "read_raw_file", None)
+    current_metadata = (
+        _sync_remote_metadata(
+            client, str(receipt["project_id"]), {str(pair["remote_path"]) for pair in receipt["pairs"]}
+        )
+        if callable(raw_reader)
+        else None
+    )
     for pair in receipt["pairs"]:
         remote_path = str(pair["remote_path"])
         if remote_path not in remote_cache:
             try:
-                result = client.call_tool(
-                    "read_file",
-                    {
-                        "project_id": receipt["project_id"],
-                        "path": remote_path,
-                        "if_none_match": pair["remote_etag"],
-                    },
-                )
-                try:
-                    conditional = _tool_result_object(result, tool="read_file")
-                except ClaudeDesignProtocolError:
-                    conditional = {}
-                if conditional.get("unchanged") is True:
-                    etag = conditional.get("etag")
-                    path = conditional.get("path")
-                    if etag != pair["remote_etag"] or path != remote_path:
-                        raise ClaudeDesignProtocolError(
-                            "Claude Design returned invalid conditional-read metadata during sync apply."
+                if current_metadata is not None:
+                    revision = current_metadata[remote_path]
+                    if not revision["exists"]:
+                        remote_cache[remote_path] = ("0", b"")
+                    elif revision["etag"] == pair["remote_etag"]:
+                        remote_cache[remote_path] = (
+                            str(revision["etag"]),
+                            _sync_read_snapshot(root, str(pair["remote_snapshot"])),
                         )
-                    remote_cache[remote_path] = (str(etag), _sync_read_snapshot(root, str(pair["remote_snapshot"])))
+                    else:
+                        remote = _read_remote_bytes(client, str(receipt["project_id"]), remote_path)
+                        remote_cache[remote_path] = (remote.etag, remote.data)
                 else:
-                    decoded, etag = _decode_read_file_result(result)
-                    remote_cache[remote_path] = (etag, decoded.encode("utf-8"))
+                    result = client.call_tool(
+                        "read_file",
+                        {
+                            "project_id": receipt["project_id"],
+                            "path": remote_path,
+                            "if_none_match": pair["remote_etag"],
+                        },
+                    )
+                    try:
+                        conditional = _tool_result_object(result, tool="read_file")
+                    except ClaudeDesignProtocolError:
+                        conditional = {}
+                    if conditional.get("unchanged") is True:
+                        etag = conditional.get("etag")
+                        path = conditional.get("path")
+                        if etag != pair["remote_etag"] or path != remote_path:
+                            raise ClaudeDesignProtocolError(
+                                "Claude Design returned invalid conditional-read metadata during sync apply."
+                            )
+                        remote_cache[remote_path] = (str(etag), _sync_read_snapshot(root, str(pair["remote_snapshot"])))
+                    else:
+                        decoded, etag = _decode_read_file_result(result)
+                        remote_cache[remote_path] = (etag, decoded.encode("utf-8"))
             except ClaudeDesignProtocolError:
                 metadata = _sync_remote_metadata(client, str(receipt["project_id"]), {remote_path})
                 if metadata[remote_path]["exists"] is True:
@@ -2821,6 +3081,10 @@ def run_design_command(
 ) -> int:
     """Execute a parsed `open-claude-design` bridge command."""
     command = args.design_command
+    from open_claude_design.operations import COMMANDS, run_operation
+
+    if command in COMMANDS:
+        return run_operation(args, client_factory(), _design_workspace_root(workspace_root))
     if command == "sync":
         return _run_sync_command(
             args,
@@ -2929,16 +3193,26 @@ def run_design_command(
         if not isinstance(open_url, str) or not open_url:
             raise ClaudeDesignProtocolError("Claude Design render_preview returned no durable open_url.")
         _validate_durable_preview_url(open_url)
+        verification = None
+        checker = getattr(client, "verify_preview", None)
+        if callable(checker):
+            serve_url = preview.get("serve_url")
+            if not isinstance(serve_url, str) or not serve_url:
+                raise ClaudeDesignProtocolError("Claude Design returned no preview for API verification.")
+            checked = checker(args.project_id, args.remote_path, serve_url)
+            if not isinstance(checked, dict):
+                raise ClaudeDesignProtocolError("Claude Design preview verification returned invalid metadata.")
+            verification = checked
         if args.open_browser:
             serve_url = preview.get("serve_url")
             if not isinstance(serve_url, str) or not serve_url:
                 raise ClaudeDesignProtocolError("Claude Design render_preview returned no short-lived render URL.")
             _open_preview_url(serve_url)
-        _print_design_result(
-            {"tool": "render_preview", "open_url": open_url, "opened": args.open_browser},
-            json_mode=args.json,
-        )
-        return 0
+        output = {"tool": "render_preview", "open_url": open_url, "opened": args.open_browser}
+        if verification is not None:
+            output["verification"] = verification
+        _print_design_result(output, json_mode=args.json)
+        return 0 if verification is None or verification.get("valid") is True else 2
 
     if command == "pull":
         _validate_remote_path(args.remote_path)
@@ -2953,9 +3227,8 @@ def run_design_command(
         if target.exists() and not args.force:
             raise ClaudeDesignSafetyError(f"Local output already exists: {target}. Pass --force to replace it.")
         client = client_factory()
-        result = client.call_tool("read_file", {"project_id": args.project_id, "path": args.remote_path})
-        decoded, etag = _decode_read_file_result(result)
-        encoded = decoded.encode("utf-8")
+        remote = _read_remote_bytes(client, args.project_id, args.remote_path)
+        encoded, etag = remote.data, remote.etag
         _atomic_write_local(
             target,
             encoded,
@@ -3119,6 +3392,9 @@ def build_parser() -> argparse.ArgumentParser:
     """Build the standalone bridge CLI parser."""
     parser = argparse.ArgumentParser(prog="open-claude-design")
     subparsers = parser.add_subparsers(dest="design_command", required=True)
+    from open_claude_design.operations import add_parsers
+
+    add_parsers(subparsers)
 
     status_parser = subparsers.add_parser("status", help="Verify authentication and connectivity.")
     status_parser.add_argument("--json", action="store_true", help="Output compact JSON.")

@@ -2,6 +2,31 @@
 
 All notable changes to Open Claude Design are documented here. Releases follow semantic versioning and are generated from conventional commits.
 
+## [1.4.0](https://github.com/maxritter/open-claude-design/compare/v1.3.1...v1.4.0) (2026-09-30)
+
+### Added
+
+- First-party API access through the existing scoped login: native design-system creation, complete typed inventory, publication/unpublication, preview-card registration/removal, organization-default management, project renaming, binding inspection and replacement (including multiple systems), and guarded whole-project deletion.
+- Original text and binary transfers up to 16 MiB, 32 MiB write/sync batches, and revision-checked project ZIP exports up to 128 MiB with a checksum manifest. Read-added PNG provenance is reconciled against original size/revision metadata; ambiguous reconstruction fails closed.
+- Portable HTML structure, JavaScript syntax, declared-resource, and API preview-delivery checks without browser control. Validation reports that JavaScript/layout execution remains outside these checks.
+- Read-only batches sharing one MCP session/catalog, bounded transient-read retries, automatic single-binding authoring context, and local serialization of temporary project grants.
+- The pinned skills adapter is updated to 1.7.0. All-agent checks cover all 79 supported identifiers (77 global integrations; Eve and PromptScript require project scope), using bounded parallel verification.
+
+### Fixed
+
+- Partial/windowed file responses can no longer be saved as full files, sync snapshots, or deletion backups.
+- Folder copies require a complete source-leaf etag map before planning; nested conflicts and missing copied leaves cannot report verified success.
+- Binary writes and synchronization require complete original-byte readback. Large and binary to-code sync reuses revision-checked immutable snapshots.
+- Complete project discovery supplies the required type filter for each native API inventory instead of issuing an invalid unfiltered request.
+- Non-editable Design Component structure and invalid logic-script syntax are rejected before a write. Preview verification checks the actual API-issued response and reports its precise scope.
+- Collaboration guidance follows current destructive annotations, and standalone versus in-conversation Design availability and settings are distinguished.
+
+### Safety and boundaries
+
+- New metadata grants require explicit acknowledgement, are revoked and checked after success or failure, and preserve pre-existing grants. Organization defaults update only the reviewed default field; sharing restrictions remain untouched.
+- File mutations retain atomic server etag protection. Metadata preflight/readback checks and local locks do not claim cross-device atomicity.
+- Browser-only artifact migration/sharing and native PDF/PPTX/Google Slides export are not advertised as supported APIs. Design-system compilation remains distinct from publication.
+
 ## [1.3.1](https://github.com/maxritter/open-claude-design/compare/v1.3.0...v1.3.1) (2026-09-18)
 
 ### Fixed

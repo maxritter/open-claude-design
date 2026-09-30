@@ -19,6 +19,8 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    outputs:
+      commit: ${{ steps.release_ref.outputs.commit }}
     permissions:
       contents: read
       id-token: write
@@ -26,8 +28,14 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: main
+          ref: ${{ github.sha }}
           persist-credentials: false
+      - name: Bind release to the checked commit
+        id: release_ref
+        run: |
+          BUILD_SHA="$(git rev-parse HEAD)"
+          test "$BUILD_SHA" = "$GITHUB_SHA"
+          echo "commit=$BUILD_SHA" >> "$GITHUB_OUTPUT"
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
           python-version: "3.12"
@@ -114,12 +122,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           RELEASE_VERSION: ${{ inputs.version }}
+          RELEASE_COMMIT: ${{ needs.build.outputs.commit }}
         run: |
           if gh release view "v$RELEASE_VERSION" >/dev/null 2>&1; then
             echo "Release v$RELEASE_VERSION already exists; refusing to replace it." >&2
             exit 1
           fi
           gh release create "v$RELEASE_VERSION" \
+            --target "$RELEASE_COMMIT" \
             dist/install.sh \
             dist/uninstall.sh \
             dist/open-claude-design.tar.gz \

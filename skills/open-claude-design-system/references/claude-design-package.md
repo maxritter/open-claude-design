@@ -9,7 +9,7 @@ Access, authentication, and every remote write go through `open-claude-design`. 
 A design system is a Claude Design project whose `get_project` result reports `type: PROJECT_TYPE_DESIGN_SYSTEM`. The type is fixed at creation. Writing a package into a regular project never turns it into a design system, and nothing will be able to bind it.
 
 1. Resolve the destination from the id or name the user gives. `list_design_systems` returns the systems offered for binding and can omit design-system projects the user owns, and `list_projects` carries no type. Check a candidate from either list with `get_project`, and stop when the type is anything other than `PROJECT_TYPE_DESIGN_SYSTEM`.
-2. Conclude that no design-system project exists only after checking the matching `list_projects` entries with `get_project`, never from `list_design_systems` alone. The Claude Design connection creates regular projects only, so when none exists the user creates one in Claude Design (its design-system setup, or Claude Code's `/design-sync`) and gives the agent the id. Do not substitute a regular project.
+2. Conclude that no design-system project exists only after checking the matching `list_projects` entries with `get_project`, never from `list_design_systems` alone. When the user requested a new system, `open-claude-design design-systems create` creates and verifies the native type through the API. Never substitute a regular project. `design-systems list` provides the complete typed inventory.
 3. A published design system applies to every project that binds it, and `is_default: true` marks the one new projects receive. Changing it changes other people's future work; name that effect when asking for write approval.
 
 ## Authored files
@@ -30,7 +30,7 @@ These are the files the agent writes. Keep the repository's own token names and 
 
 ## Preview cards
 
-The Design System pane builds its card index from a marker on the first line of each preview file. A file without the marker is not a card, whatever its name.
+The Design System pane builds its card index from a marker on the first line of each preview file. For manually authored cards, `design-systems register` also registers an existing preview file through the API and verifies its metadata. `design-systems cards` lists these entries; registration does not imply review approval.
 
 ```html
 <!-- @dsCard group="Spacing & Shape" viewport="700x210" name="Spacing scale" subtitle="4px base" -->
@@ -59,7 +59,7 @@ Read `_ds_manifest.json` after publishing as the acceptance check: every token, 
 1. Build the package in a repository-local scratch directory and render each card locally against the local `styles.css` first.
 2. List the destination and compare structure. Publish incrementally, one component or token group at a time. Never replace a whole design system to land one change, and never delete remote files the user did not name.
 3. Write through `open-claude-design push` with an etag for every path, inside one exact-path plan per batch. Exclude the compiled files from every plan.
-4. Verify each written card through the normal render gate, then confirm it in the manifest.
-5. Report the durable project URL and which bound projects the change reaches.
+4. Verify each written card through the API gate. Use `design-systems publish` only after explicit organization-visibility approval, then inspect the manifest. Registration and publication are available without browser control; host-side compilation remains distinct and must be reported pending when absent.
+5. Report the durable project URL and which bound projects the change reaches. Changing the organization default is a separate authorized operation: read `design-systems settings`, then use `design-systems default <id> --if-current <reviewed-id> --allow-write`. It changes only the default field, never sharing restrictions.
 
-Binary assets above the inline write limit cannot be pushed from disk. Keep fonts and images small, or have the user upload them in Claude Design.
+Text and binary files up to 16 MiB can be pushed and read back through the CLI; batches are bounded at 32 MiB. Use exact-path etags and require byte-for-byte verification. `export` produces a revision-checked ZIP with original assets and a checksum manifest.

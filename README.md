@@ -40,7 +40,7 @@ To invoke Open Claude Design, mention **Claude Design** in your request to one o
 **Prerequisites:** macOS, Linux, or WSL2 and a [Claude Pro, Max, Team, or Enterprise account](https://support.claude.com/en/articles/14604416-getting-started-with-claude-design). You can install before your coding agent; Claude Code is not required.
 
 > [!IMPORTANT]
-> Free accounts are not currently eligible. Claude Design uses the paid plan's shared usage limits. [Enterprise administrators](https://support.claude.com/en/articles/14604406-claude-design-admin-guide-for-team-and-enterprise-plans) must enable it under Organization settings → Capabilities.
+> The standalone connection requires Claude Design access; the detailed Design guide currently lists paid plans. General Free-plan artifacts do not establish Free access to this scoped API. Claude Design uses the plan's shared usage limits. [Enterprise administrators](https://support.claude.com/en/articles/14604406-claude-design-admin-guide-for-team-and-enterprise-plans) must enable standalone access under Organization settings → Claude Design; the newer Design template in conversations has a separate Artifacts setting.
 
 1. **Run the one-line installer above.** It installs the CLI and shared workflows, connects detected agents, and opens the standalone Claude login when a local browser is available.
 
@@ -64,9 +64,12 @@ Design decisions stop living in a separate side conversation. They become part o
 
 ## What you can do
 
-- **Full Claude Design access.** Projects, files, previews, design systems, conversations, comments, members, and sharing.
+- **Claude Design workspace access.** Projects, files, previews, design systems, conversations, comments, members, and sharing through the live MCP catalog plus the first-party design-system API.
 - **Current guidance, lean context.** Live authoring context is cached on disk and loaded only when needed.
-- **Fail-closed design creation.** Root-level and nested `.dc.html` files keep their requested paths, are rejected without same-directory `support.js`, and must produce a durable preview URL after exact readback instead of leaving an unviewable design behind.
+- **Native design-system workflows.** Create, discover, inspect, publish, unpublish, manage preview cards, and change the organization default from any coding agent.
+- **Original assets and archives.** Read and write text or binary files up to 16 MiB; export revision-checked project ZIPs including fonts, images, and a checksum manifest.
+- **Portable verification.** Reject incomplete reads, incomplete folder-copy guards, partial copy success, and non-editable `.dc.html` structure. Check JavaScript syntax, declared resources, and API preview delivery without opening a browser.
+- **Faster reads and installation checks.** Batch read-only calls through one MCP session; retry bounded transient reads; independently verify supported agent installs with bounded concurrency.
 
 ## Works with Impeccable
 
@@ -87,11 +90,11 @@ Every supported agent receives the same automatic workflows and CLI access.
 | Mistral Vibe · Hermes · Reasonix · Grok Build · OpenClaw | ✅ Full |
 | Warp · Zed · Amp · other Agent Skills hosts | ✅ Full |
 
-The installer auto-detects installed agents. Use `--all-agents` only when every available integration is wanted.
+The installer auto-detects installed agents through pinned `skills@1.7.0`. Explicit installs support all 79 agent identifiers; `--all-agents` verifies every integration for the chosen scope. Eve and PromptScript support project scope only. All agents receive the same five skills through that single mechanism.
 
 ### Included capabilities
 
-**The full Claude Design tool catalog.** The latest authenticated audit found these 23 operations. The bridge discovers the catalog dynamically as it evolves.
+**The live MCP catalog.** The authenticated audit on September 30, 2026 found these 23 operations. The bridge discovers it dynamically; this is tool coverage, not a claim that every feature of the Claude web app has an API.
 
 | Area | Bridged capabilities |
 |---|---|
@@ -100,7 +103,24 @@ The installer auto-detects installed agents. Use `--all-agents` only when every 
 | **Conversations and comments** (4) | Read a conversation · update a conversation · list comments · acknowledge comments |
 | **Members and sharing** (5) | List members · add a member · remove a member · change a member role · update sharing |
 
-Remote access is read-only by default; changes require explicit authorization. File writes, copies, deletes, support JavaScript, previews, and authoring plans never run as generic calls — they are only reachable through the guarded `push`, `delete`, `planned-call`, and `preview` helpers, which keep plan tokens, etag checks, backups, and verification inside one process. `push` requires exact readback; both local writes and server-side copies return success for renderable files only after runtime validation and durable preview creation. `--open` also opens the isolated render locally.
+Remote access is read-only by default; changes require explicit authorization. File writes, copies, deletes, support JavaScript, previews, and authoring plans never run as generic calls — they are only reachable through the guarded `push`, `delete`, `planned-call`, and `preview` helpers, which keep plan tokens, etag checks, backups, and verification inside one process. `push` requires exact readback; local writes require exact original-byte readback, and renderable writes/copies require structural/resource checks, API preview delivery, and a durable link. JavaScript/layout/interaction execution remains separate visual review (`render_executed: false`). `--open` is an optional explicit browser convenience.
+
+**Additional API and CLI workflows:**
+
+| Capability | Command |
+|---|---|
+| Complete project and design-system inventory | `projects`, `design-systems list` |
+| Native design-system creation and publication | `design-systems create`, `publish`, `unpublish` |
+| Preview-card management and compiled manifest inspection | `design-systems cards`, `register`, `unregister`, `inspect` |
+| Organization defaults | `design-systems settings`, `default --if-current …` |
+| Project lifecycle and design-system bindings | `project rename`, `project inspect`, `project bind`, `project delete` |
+| Original binary/large-file transfers and project ZIPs | `pull`, `push`, `export` |
+| Browser-free source checks and batched reads | `validate`, `preview`, `batch` |
+| Current feature boundaries | `capabilities --json` |
+
+The same scoped login serves both APIs. Metadata operations can use an explicitly acknowledged temporary project grant; new grants are revoked and checked after the operation, while existing grants are preserved. File writes keep atomic etag protection. Metadata updates have preflight/readback checks but no claimed cross-device atomicity.
+
+The newer in-conversation artifacts experience, artifact migration, public/group artifact sharing, and native PDF/PPTX/Google Slides exports have no verified interface under this scoped connection. ZIP export is available. Host-generated design-system compilation remains distinct from publication. Open Claude Design does not imitate these missing interfaces with browser control.
 
 **Five automatically invoked Agent Skills:**
 

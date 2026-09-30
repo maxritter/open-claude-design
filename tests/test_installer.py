@@ -14,9 +14,10 @@ import open_claude_design.installer as installer_module
 from open_claude_design.config import (
     CLAUDE_CONFIG_ENV,
     CLAUDE_DESIGN_ENDPOINT,
-    FEATURED_AGENT_IDS,
+    PROJECT_ONLY_AGENT_IDS,
     SKILL_NAMES,
     SKILLS_CLI_VERSION,
+    SUPPORTED_AGENT_IDS,
 )
 from open_claude_design.installer import (
     InstallError,
@@ -252,11 +253,13 @@ def test_doctor_all_agents_verifies_every_agent_without_a_literal_wildcard(
     result = doctor(("*",), "global", project_root=tmp_path)
 
     commands = [call.args[0] for call in run.call_args_list]
-    assert len(commands) == len(FEATURED_AGENT_IDS)
-    assert {command[command.index("--agent") + 1] for command in commands} == set(FEATURED_AGENT_IDS)
+    assert len(commands) == len(set(SUPPORTED_AGENT_IDS) - PROJECT_ONLY_AGENT_IDS)
+    assert {command[command.index("--agent") + 1] for command in commands} == (
+        set(SUPPORTED_AGENT_IDS) - PROJECT_ONLY_AGENT_IDS
+    )
     assert all("*" not in command and "--global" in command for command in commands)
     assert result["agent_skills"]["ready"] is True
-    assert set(result["agent_skills"]["agents"]) == set(FEATURED_AGENT_IDS)
+    assert set(result["agent_skills"]["agents"]) == (set(SUPPORTED_AGENT_IDS) - PROJECT_ONLY_AGENT_IDS)
 
 
 @patch("open_claude_design.installer.resolve_skills_runtime", return_value=_runtime())

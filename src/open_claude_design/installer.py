@@ -7,18 +7,21 @@ import os
 import shutil
 import subprocess
 import tempfile
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
 from open_claude_design.config import (
-    FEATURED_AGENT_IDS,
+    MAX_AGENT_VERIFY_WORKERS,
     PACKAGE_NAME,
+    PROJECT_ONLY_AGENT_IDS,
     SKILL_NAMES,
     SKILLS_CLI_NODE_MINIMUM,
     SKILLS_CLI_NODE_RUNTIME_PARTS,
     SKILLS_CLI_PACKAGE,
     SKILLS_CLI_VERSION,
+    SUPPORTED_AGENT_IDS,
     SUPPORTED_PLATFORM_LABELS,
     VERSION,
 )
@@ -28,7 +31,7 @@ Scope = Literal["project", "global"]
 Action = Literal["install", "update", "uninstall"]
 
 SKILLS = SKILL_NAMES
-AGENTS = FEATURED_AGENT_IDS
+AGENTS = SUPPORTED_AGENT_IDS
 
 
 class InstallError(RuntimeError):
@@ -212,7 +215,11 @@ def _verified_install_state(
     scope: Scope,
 ) -> tuple[dict[str, bool], dict[str, dict[str, bool]], list[str]]:
     """Verify byte-complete skills independently for every requested agent."""
-    targets = AGENTS if agents == ("*",) else agents
+    targets = (
+        tuple(agent for agent in AGENTS if scope != "global" or agent not in PROJECT_ONLY_AGENT_IDS)
+        if agents == ("*",)
+        else agents
+    )
     if not targets:
         listed, paths = _installed_skills(runtime, root, (), scope)
         state = _installed_skill_state(paths)
@@ -222,8 +229,16 @@ def _verified_install_state(
     aggregate = {skill: True for skill in SKILLS}
     agent_state: dict[str, dict[str, bool]] = {}
     errors: list[str] = []
-    for agent in targets:
-        listed, paths = _installed_skills(runtime, root, (agent,), scope)
+
+    def verify(agent: str) -> tuple[subprocess.CompletedProcess[str], dict[str, Path]]:
+        return _installed_skills(runtime, root, (agent,), scope)
+
+    if agents == ("*",):
+        with ThreadPoolExecutor(max_workers=MAX_AGENT_VERIFY_WORKERS) as pool:
+            results = list(pool.map(verify, targets))
+    else:
+        results = [verify(agent) for agent in targets]
+    for agent, (listed, paths) in zip(targets, results, strict=True):
         state = _installed_skill_state(paths)
         agent_state[agent] = state
         for skill, ready in state.items():
@@ -426,6 +441,7 @@ def doctor(
         "agent_skills": installer_status,
         "claude_design_bridge": bridge_status,
         "native_connectors": native_connector_report(home=home, project_root=root),
+        "project_only_agents": sorted(PROJECT_ONLY_AGENT_IDS) if agents == ("*",) and scope == "global" else [],
     }
 
 
