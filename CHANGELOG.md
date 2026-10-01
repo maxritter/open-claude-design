@@ -2,6 +2,18 @@
 
 All notable changes to Open Claude Design are documented here. Releases follow semantic versioning and are generated from conventional commits.
 
+## [1.4.1](https://github.com/maxritter/open-claude-design/compare/v1.4.0...v1.4.1) (2026-10-01)
+
+### Fixed
+
+- Pages written below the project root were reported as verified although Claude Design's editor never lists them. The Pages menu shows only root-level `.html` and `.dc.html` files, so a page pushed to a folder rendered by direct link, passed readback and the durable-preview check, and left the user with an empty Pages menu and a blank canvas. `push`, `planned-call` (`copy_files`, including every leaf of a folder copy, and `create_support_js`), `sync review` and `sync apply` to design, and generic calls of newly advertised file-writing tools now refuse a nested page before any remote call and name the root path to use. `--allow-nested-page` is the explicit opt-out for a page the user wants kept out of the menu.
+- Every verification preview now reports `page_listed`. A written nested page makes `verification.verified` false (exit `2`) with `nested_pages` and the root path to use, unless the opt-out was given, in which case verification passes with a `warning`. `preview` on a nested page stays read-only but returns `page_listed: false` and a warning.
+- The tool-workflows reference told agents that root-level and nested `.dc.html` paths were equally complete and not to flatten a design to make it visible. It now states the rule: pages at the project root, assets in subfolders.
+
+### Added
+
+- `project pages <project-id>` is a read-only audit that lists listed and nested pages, a suggested root path for each nested page (folder-prefixed when the plain name is taken), and whether root `support.js` exists. It exits `2` when any page is nested.
+
 ## [1.4.0](https://github.com/maxritter/open-claude-design/compare/v1.3.1...v1.4.0) (2026-09-30)
 
 ### Added
