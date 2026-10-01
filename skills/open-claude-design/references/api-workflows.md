@@ -78,11 +78,14 @@ ZIP exports include project files plus a checksum/revision manifest. The complet
 open-claude-design validate --local ./scratch/Page.dc.html --json
 open-claude-design validate <project-id> Page.dc.html --json
 open-claude-design preview <project-id> Page.dc.html --json
+open-claude-design project pages <project-id> --json
 open-claude-design batch --args '{"calls":[{"tool":"get_project","args":{"project_id":"<id>"}},{"tool":"list_members","args":{"project_id":"<id>"}}]}' --json
 open-claude-design capabilities --json
 ```
 
 Creation rejects non-editable `.dc.html` structure. Preview verification checks the API-issued HTML response and project resources without opening a browser. The installed Node runtime also parses logic scripts without executing them; syntax-check availability is reported. `render_executed: false` means JavaScript, layout, accessibility, and interactions still need visual/behavioral review. Never equate these checks with a screenshot or successful browser execution.
+
+A durable preview proves a page renders by direct link, not that Claude Design's editor lists it: the Pages menu shows only root-level `.html` and `.dc.html` files. Every preview therefore reports `page_listed`, and `project pages` is the read-only inventory check: it lists root pages, nested pages with the root path each should use, and whether root `support.js` exists, and exits `2` when any page is nested. Keep pages at the root and assets in subfolders; `--allow-nested-page` on the write helpers is an explicit opt-out.
 
 `batch` validates the entire group first and accepts only locally reviewed read-only tools. It uses one connection/catalog and stops at the first tool error. It cannot write, acknowledge comments, mint preview capabilities, or call unknown tools. Reads retry only bounded transient HTTP failures; mutations never automatically retry after an ambiguous outcome.
 

@@ -58,6 +58,7 @@ from open_claude_design.config import (
     CLAUDE_DESIGN_MAX_TRANSFER_FILE_BYTES,
     CLAUDE_DESIGN_MIN_WRITE_CREDENTIAL_SECONDS,
     CLAUDE_DESIGN_MUTATION_SUCCESS_KEYS,
+    CLAUDE_DESIGN_NON_FILE_MUTATING_TOOLS,
     CLAUDE_DESIGN_NON_MUTATING_GUARDED_TOOLS,
     CLAUDE_DESIGN_PROTOCOL_VERSION,
     CLAUDE_DESIGN_SERVE_PREVIEW_HOST_SUFFIX,
@@ -74,6 +75,14 @@ from open_claude_design.errors import (
     ClaudeDesignError,
     ClaudeDesignProtocolError,
     ClaudeDesignSafetyError,
+)
+from open_claude_design.pages import (
+    ALLOW_NESTED_PAGE_FLAG,
+    nested_page_guidance,
+    nested_page_message,
+    nested_pages,
+    page_listed,
+    write_target_paths,
 )
 from open_claude_design.sync import (
     REVIEW_ID_PATTERN,
@@ -1019,6 +1028,18 @@ def _validate_remote_path(path: str) -> str:
     return path
 
 
+def _refuse_nested_pages(paths: list[str], *, allow: bool) -> None:
+    """Refuse a write that would land a page where Claude Design's Pages menu cannot list it."""
+    nested = nested_pages(paths)
+    if nested and not allow:
+        raise ClaudeDesignSafetyError(
+            "Refusing to write a page outside the project root. "
+            + nested_page_message(nested)
+            + f" Pass {ALLOW_NESTED_PAGE_FLAG} only when the user explicitly wants a page that stays out of "
+            "the Pages menu."
+        )
+
+
 def _tool_result_value(result: dict[str, Any], *, tool: str) -> Any:
     if result.get("isError") is True:
         raise ClaudeDesignProtocolError(f"Claude Design {tool} returned an error.")
@@ -1794,6 +1815,7 @@ def _verify_written_files(
     expected: dict[str, bytes | None],
     *,
     open_browser: bool,
+    allow_nested_page: bool = False,
 ) -> dict[str, object]:
     """Read back written text and require a durable preview for every HTML deliverable."""
     files: list[dict[str, object]] = []
@@ -1820,6 +1842,7 @@ def _verify_written_files(
         list(expected),
         open_browser=open_browser,
         check_support=False,
+        allow_nested_page=allow_nested_page,
     )
     return {"files": files, **preview_verification}
 
@@ -1831,9 +1854,16 @@ def _verify_remote_previews(
     *,
     open_browser: bool,
     check_support: bool,
+    allow_nested_page: bool = False,
 ) -> dict[str, object]:
-    """Require a valid durable preview for every renderable remote path."""
+    """Require a valid durable preview for every renderable remote path.
+
+    A durable preview proves only that a page renders by direct link. Claude Design's Pages menu
+    lists root-level pages alone, so every preview also reports ``page_listed`` and a nested page
+    fails verification unless the caller explicitly allowed it.
+    """
     renderable = sorted({path for path in paths if path.endswith(".html")})
+    nested = nested_pages(renderable)
     previews: list[dict[str, object]] = []
     try:
         if check_support:
@@ -1847,7 +1877,12 @@ def _verify_remote_previews(
             if not isinstance(open_url, str) or not open_url:
                 raise ClaudeDesignProtocolError(f"Claude Design returned no durable preview after writing: {path}")
             _validate_durable_preview_url(open_url)
-            preview_result: dict[str, object] = {"path": path, "open_url": open_url, "opened": False}
+            preview_result: dict[str, object] = {
+                "path": path,
+                "open_url": open_url,
+                "opened": False,
+                "page_listed": page_listed(path),
+            }
             previews.append(preview_result)
             checker = getattr(client, "verify_preview", None)
             if callable(checker):
@@ -1867,8 +1902,25 @@ def _verify_remote_previews(
                 _open_preview_url(serve_url)
                 preview_result["opened"] = True
     except (ClaudeDesignError, ValueError) as error:
-        return {"verified": False, "previews": previews, "error": str(error)}
-    return {"verified": True, "previews": previews}
+        failed: dict[str, object] = {"verified": False, "previews": previews, "error": str(error)}
+        if nested:
+            failed["nested_pages"] = nested
+        return failed
+    result: dict[str, object] = {"verified": True, "previews": previews}
+    if nested:
+        result["nested_pages"] = nested
+        if allow_nested_page:
+            result["warning"] = (
+                f"{ALLOW_NESTED_PAGE_FLAG} was given: the nested page(s) render by direct link but do not "
+                f"appear in Claude Design's Pages menu: {', '.join(nested)}."
+            )
+        else:
+            result["verified"] = False
+            result["error"] = (
+                "A written page is outside the project root and is not listed in Claude Design's Pages menu. "
+                + nested_page_message(nested)
+            )
+    return result
 
 
 def _planned_call_payload(args: argparse.Namespace, client: Any) -> dict[str, object]:
@@ -1889,6 +1941,9 @@ def _planned_call_payload(args: argparse.Namespace, client: Any) -> dict[str, ob
         raise ClaudeDesignSafetyError("planned-call write paths must be unique and within the batch limit.")
     for path in writes:
         _validate_remote_path(path)
+    # Refuse before any network call: a copy can land a page by destination or by folder leaf.
+    landing_paths = [*writes, *write_target_paths({"files": arguments.get("files")})]
+    _refuse_nested_pages(landing_paths, allow=getattr(args, "allow_nested_page", False))
 
     expected_etags: dict[str, str] = {}
     if args.tool == "create_support_js":
@@ -2361,6 +2416,12 @@ def _sync_review(args: argparse.Namespace, client: Any, root: Path) -> int:
         raise ValueError("A to-design sync needs exactly one local source for every remote path.")
     for pair in pairs:
         _validate_remote_path(pair.remote_path)
+    if args.direction == "to-design":
+        # Refuse while the user has not yet been asked to approve a revision the editor would not list.
+        _refuse_nested_pages(
+            [pair.remote_path for pair in pairs],
+            allow=getattr(args, "allow_nested_page", False),
+        )
 
     local_cache: dict[str, tuple[bool, bytes]] = {}
     normalized_pairs: list[SyncPair] = []
@@ -2773,6 +2834,7 @@ def _sync_apply_to_design(
         list(expected_bytes),
         open_browser=getattr(args, "open_browser", False),
         check_support=False,
+        allow_nested_page=getattr(args, "allow_nested_page", False),
     )
     if verification.get("verified") is not True:
         return _sync_mark_unknown(
@@ -2905,6 +2967,12 @@ def _sync_apply(args: argparse.Namespace, client: Any, root: Path) -> int:
     receipt = _sync_load_receipt(root, args.review_id)
     if receipt["state"] != "reviewed":
         raise ValueError(f"Sync review {args.review_id} state is {receipt['state']}; it cannot be applied.")
+    if receipt["direction"] == "to-design":
+        # The receipt stays "reviewed", so a refusal here changes nothing and can be retried with the flag.
+        _refuse_nested_pages(
+            [str(pair["remote_path"]) for pair in receipt["pairs"]],
+            allow=getattr(args, "allow_nested_page", False),
+        )
     if (
         receipt["direction"] == "to-design"
         and receipt.get("requires_reconciliation") is True
@@ -3140,11 +3208,13 @@ def run_design_command(
             )
         _validate_plan_token_source(getattr(args, "plan_token", None))
         root = _design_workspace_root(workspace_root)
-        client = client_factory()
-        _require_write_window(client)
         remote_paths = list(_parse_mappings(args.files, option="--file"))
         for remote_path in remote_paths:
             _validate_remote_path(remote_path)
+        allow_nested_page = getattr(args, "allow_nested_page", False)
+        _refuse_nested_pages(remote_paths, allow=allow_nested_page)
+        client = client_factory()
+        _require_write_window(client)
         payload = _local_write_payload(args, client, workspace_root=root)
         expected = _expected_write_bytes(payload)
         _require_design_support(client, args.project_id, remote_paths)
@@ -3169,6 +3239,7 @@ def run_design_command(
             args.project_id,
             expected,
             open_browser=getattr(args, "open_browser", False),
+            allow_nested_page=allow_nested_page,
         )
         _print_design_result(
             {
@@ -3208,10 +3279,23 @@ def run_design_command(
             if not isinstance(serve_url, str) or not serve_url:
                 raise ClaudeDesignProtocolError("Claude Design render_preview returned no short-lived render URL.")
             _open_preview_url(serve_url)
-        output = {"tool": "render_preview", "open_url": open_url, "opened": args.open_browser}
+        preview_output: dict[str, object] = {
+            "tool": "render_preview",
+            "open_url": open_url,
+            "opened": args.open_browser,
+        }
+        if nested_pages([args.remote_path]):
+            # Read-only, so the exit code is unchanged, but the preview must not be mistaken for a listed page.
+            preview_output["page_listed"] = False
+            preview_output["warning"] = (
+                "This page renders by direct link only; Claude Design's Pages menu will not list it. "
+                + nested_page_guidance()
+            )
+        elif page_listed(args.remote_path):
+            preview_output["page_listed"] = True
         if verification is not None:
-            output["verification"] = verification
-        _print_design_result(output, json_mode=args.json)
+            preview_output["verification"] = verification
+        _print_design_result(preview_output, json_mode=args.json)
         return 0 if verification is None or verification.get("valid") is True else 2
 
     if command == "pull":
@@ -3305,6 +3389,7 @@ def run_design_command(
                     copied_paths,
                     open_browser=getattr(args, "open_browser", False),
                     check_support=True,
+                    allow_nested_page=getattr(args, "allow_nested_page", False),
                 )
             if verification.get("verified") is not True:
                 exit_code = 2
@@ -3364,6 +3449,9 @@ def run_design_command(
     if mutation:
         _require_write_window(client)
     tool_arguments = _parse_tool_arguments(args.args)
+    if mutation and args.tool not in CLAUDE_DESIGN_NON_FILE_MUTATING_TOOLS:
+        # A tool the catalog newly advertises may write files, so apply the Pages-menu rule to its targets.
+        _refuse_nested_pages(write_target_paths(tool_arguments), allow=getattr(args, "allow_nested_page", False))
     result = client.call_tool(args.tool, tool_arguments)
     _print_design_result({"tool": args.tool, "result": result}, json_mode=args.json)
     return _tool_exit_code(result, tool=args.tool, mutation=mutation, arguments=tool_arguments)
@@ -3386,6 +3474,18 @@ def _stdin_plan_token_marker(value: str) -> str:
     if value != "-":
         raise argparse.ArgumentTypeError("must be '-' so the plan token is read from stdin")
     return value
+
+
+def _add_nested_page_flag(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        ALLOW_NESTED_PAGE_FLAG,
+        dest="allow_nested_page",
+        action="store_true",
+        help=(
+            "Allow a .html/.dc.html page below the project root. Claude Design's Pages menu lists only "
+            "root-level pages, so use this only when the user wants a page that stays out of that menu."
+        ),
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -3442,6 +3542,7 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Allow a locally reviewed read-only tool whose live annotation is conservative.",
     )
+    _add_nested_page_flag(call_parser)
     call_parser.add_argument("--json", action="store_true", help="Output compact JSON.")
 
     planned_parser = subparsers.add_parser(
@@ -3470,6 +3571,7 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Open each copied HTML preview in the local system browser.",
     )
+    _add_nested_page_flag(planned_parser)
     planned_parser.add_argument("--json", action="store_true", help="Output compact JSON.")
 
     preview_parser = subparsers.add_parser(
@@ -3552,6 +3654,7 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Open each freshly rendered HTML preview in the local system browser.",
     )
+    _add_nested_page_flag(push_parser)
     push_parser.add_argument("--json", action="store_true", help="Output compact JSON metadata.")
 
     sync_parser = subparsers.add_parser(
@@ -3573,6 +3676,7 @@ def build_parser() -> argparse.ArgumentParser:
         required=True,
         help="REMOTE_PATH=LOCAL_PATH; repeat for every affected relationship.",
     )
+    _add_nested_page_flag(sync_review)
     sync_review.add_argument("--json", action="store_true", help="Output compact revision metadata.")
 
     sync_apply = sync_commands.add_parser(
@@ -3596,6 +3700,7 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Open each synchronized HTML preview in the local system browser.",
     )
+    _add_nested_page_flag(sync_apply)
     sync_apply.add_argument("--json", action="store_true", help="Output compact revision metadata.")
 
     sync_finish = sync_commands.add_parser(

@@ -69,6 +69,7 @@ Design decisions stop living in a separate side conversation. They become part o
 - **Native design-system workflows.** Create, discover, inspect, publish, unpublish, manage preview cards, and change the organization default from any coding agent.
 - **Original assets and archives.** Read and write text or binary files up to 16 MiB; export revision-checked project ZIPs including fonts, images, and a checksum manifest.
 - **Portable verification.** Reject incomplete reads, incomplete folder-copy guards, partial copy success, and non-editable `.dc.html` structure. Check JavaScript syntax, declared resources, and API preview delivery without opening a browser.
+- **Pages the editor can find.** Claude Design's Pages menu lists only root-level pages, so every write path refuses a `.html` or `.dc.html` page in a folder, verification reports `page_listed` per page, and `project pages` audits an existing project.
 - **Faster reads and installation checks.** Batch read-only calls through one MCP session; retry bounded transient reads; independently verify supported agent installs with bounded concurrency.
 
 ## Works with Impeccable
@@ -103,7 +104,7 @@ The installer auto-detects installed agents through pinned `skills@1.7.0`. Expli
 | **Conversations and comments** (4) | Read a conversation · update a conversation · list comments · acknowledge comments |
 | **Members and sharing** (5) | List members · add a member · remove a member · change a member role · update sharing |
 
-Remote access is read-only by default; changes require explicit authorization. File writes, copies, deletes, support JavaScript, previews, and authoring plans never run as generic calls — they are only reachable through the guarded `push`, `delete`, `planned-call`, and `preview` helpers, which keep plan tokens, etag checks, backups, and verification inside one process. `push` requires exact readback; local writes require exact original-byte readback, and renderable writes/copies require structural/resource checks, API preview delivery, and a durable link. JavaScript/layout/interaction execution remains separate visual review (`render_executed: false`). `--open` is an optional explicit browser convenience.
+Remote access is read-only by default; changes require explicit authorization. File writes, copies, deletes, support JavaScript, previews, and authoring plans never run as generic calls — they are only reachable through the guarded `push`, `delete`, `planned-call`, and `preview` helpers, which keep plan tokens, etag checks, backups, and verification inside one process. `push` requires exact readback; local writes require exact original-byte readback, and renderable writes/copies require structural/resource checks, API preview delivery, and a durable link. Pages must sit at the project root: a page below it renders by direct link but never appears in Claude Design's Pages menu, so `push`, `planned-call`, and `sync` refuse it unless `--allow-nested-page` is passed, and verification fails for it with `page_listed: false`. JavaScript/layout/interaction execution remains separate visual review (`render_executed: false`). `--open` is an optional explicit browser convenience.
 
 **Additional API and CLI workflows:**
 
@@ -114,6 +115,7 @@ Remote access is read-only by default; changes require explicit authorization. F
 | Preview-card management and compiled manifest inspection | `design-systems cards`, `register`, `unregister`, `inspect` |
 | Organization defaults | `design-systems settings`, `default --if-current …` |
 | Project lifecycle and design-system bindings | `project rename`, `project inspect`, `project bind`, `project delete` |
+| Pages the editor will not list (nested `.html`/`.dc.html`) | `project pages` |
 | Original binary/large-file transfers and project ZIPs | `pull`, `push`, `export` |
 | Browser-free source checks and batched reads | `validate`, `preview`, `batch` |
 | Current feature boundaries | `capabilities --json` |

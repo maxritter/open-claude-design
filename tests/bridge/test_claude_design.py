@@ -24,6 +24,7 @@ from open_claude_design.bridge import (
     ClaudeDesignCredential,
     ClaudeDesignProtocolError,
     ClaudeDesignSafetyError,
+    _planned_call_payload,
     _RejectAuthenticatedRedirects,
     parse_mcp_response,
     read_design_credential,
@@ -538,6 +539,69 @@ def test_cmd_design_preflights_authorized_remote_write(capsys: pytest.CaptureFix
     assert client.write_preflights == 1
     assert client.calls == [("add_member", {"project_id": "p", "email": "person@example.com"})]
     assert json.loads(capsys.readouterr().out)["tool"] == "add_member"
+
+
+class NewPageToolStubClient(StubClient):
+    """A catalog that newly advertises a file-writing tool the CLI has not reviewed."""
+
+    def list_tools(self) -> list[dict[str, object]]:
+        return [
+            *super().list_tools(),
+            {
+                "name": "put_page",
+                "description": "Write one page.",
+                "inputSchema": {"type": "object"},
+                "annotations": {"readOnlyHint": False},
+            },
+        ]
+
+    def call_tool(self, name: str, arguments: dict[str, object]) -> dict[str, object]:
+        self.calls.append((name, arguments))
+        return {"content": [{"type": "text", "text": '{"status":"success","project_id":"p"}'}]}
+
+
+def _generic_call_args(tool: str, arguments: str, *, allow_nested_page: bool = False) -> Namespace:
+    return Namespace(
+        design_command="call",
+        tool=tool,
+        args=arguments,
+        allow_write=True,
+        allow_guarded=False,
+        allow_destructive=False,
+        allow_nested_page=allow_nested_page,
+        json=True,
+    )
+
+
+def test_generic_call_of_a_newly_advertised_write_tool_refuses_a_nested_page() -> None:
+    client = NewPageToolStubClient()
+    args = _generic_call_args("put_page", '{"project_id":"p","path":"website/Home.dc.html"}')
+
+    with pytest.raises(ClaudeDesignSafetyError, match="website/Home.dc.html -> Home.dc.html"):
+        run_design_command(args, client_factory=lambda: client)
+
+    assert client.calls == []
+
+
+def test_generic_call_allows_root_pages_and_the_explicit_opt_out(capsys: pytest.CaptureFixture[str]) -> None:
+    client = NewPageToolStubClient()
+
+    root_page = _generic_call_args("put_page", '{"project_id":"p","path":"Home.dc.html"}')
+    assert run_design_command(root_page, client_factory=lambda: client) == 0
+    nested_page = _generic_call_args(
+        "put_page", '{"project_id":"p","path":"website/Home.dc.html"}', allow_nested_page=True
+    )
+    assert run_design_command(nested_page, client_factory=lambda: client) == 0
+
+    assert [arguments["path"] for _name, arguments in client.calls] == ["Home.dc.html", "website/Home.dc.html"]
+    capsys.readouterr()
+
+
+def test_generic_call_page_guard_ignores_tools_that_never_write_files() -> None:
+    client = NewPageToolStubClient()
+    args = _generic_call_args("add_member", '{"project_id":"p","path":"website/Home.dc.html"}')
+
+    assert run_design_command(args, client_factory=lambda: client) == 0
 
 
 def test_generic_delete_is_disabled_even_with_write_permission() -> None:
@@ -1086,6 +1150,7 @@ def test_planned_copy_requires_a_verified_preview_for_copied_dc_files(
                 "path": "Example.dc.html",
                 "open_url": "https://claude.ai/design/p/project-1",
                 "opened": False,
+                "page_listed": True,
             }
         ],
     }
@@ -1120,11 +1185,8 @@ def test_planned_copy_returns_unknown_when_copied_dc_support_is_missing(
     assert "support.js" in output["verification"]["error"]
 
 
-def test_planned_folder_copy_verifies_nested_dc_preview(
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    client = VerifiedFolderCopyStubClient()
-    args = Namespace(
+def _folder_copy_args(*, allow_nested_page: bool) -> Namespace:
+    return Namespace(
         design_command="planned-call",
         tool="copy_files",
         project_id="project-1",
@@ -1136,21 +1198,83 @@ def test_planned_folder_copy_verifies_nested_dc_preview(
         allow_write=True,
         allow_destructive=True,
         open_browser=False,
+        allow_nested_page=allow_nested_page,
         json=True,
     )
 
-    assert run_design_command(args, client_factory=lambda: client) == 0
+
+def test_planned_folder_copy_of_a_page_is_refused_before_any_call_by_default() -> None:
+    client = VerifiedFolderCopyStubClient()
+
+    with pytest.raises(ClaudeDesignSafetyError, match="Pages menu lists only") as refusal:
+        run_design_command(_folder_copy_args(allow_nested_page=False), client_factory=lambda: client)
+
+    assert "Checkout/Payment.dc.html -> Payment.dc.html" in str(refusal.value)
+    assert "--allow-nested-page" in str(refusal.value)
+    assert client.calls == []
+
+
+def test_planned_folder_copy_with_opt_out_verifies_the_page_but_reports_it_unlisted(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    client = VerifiedFolderCopyStubClient()
+
+    assert run_design_command(_folder_copy_args(allow_nested_page=True), client_factory=lambda: client) == 0
     output = json.loads(capsys.readouterr().out)
-    assert output["verification"] == {
-        "verified": True,
-        "previews": [
-            {
-                "path": "Checkout/Payment.dc.html",
-                "open_url": "https://claude.ai/design/p/project-1",
-                "opened": False,
-            }
-        ],
-    }
+    verification = output["verification"]
+    assert verification["verified"] is True
+    assert verification["previews"] == [
+        {
+            "path": "Checkout/Payment.dc.html",
+            "open_url": "https://claude.ai/design/p/project-1",
+            "opened": False,
+            "page_listed": False,
+        }
+    ]
+    assert verification["nested_pages"] == ["Checkout/Payment.dc.html"]
+    assert "do not appear in Claude Design's Pages menu" in verification["warning"]
+
+
+def test_planned_copy_to_a_nested_destination_is_refused_before_any_call(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    client = VerifiedCopyStubClient()
+    args = Namespace(
+        design_command="planned-call",
+        tool="copy_files",
+        project_id="project-1",
+        args='{"files":[{"src":"Template.dc.html","dest":"website/Example.dc.html","if_match":"0"}]}',
+        writes=["website/Example.dc.html"],
+        allow_write=True,
+        allow_destructive=True,
+        open_browser=False,
+        json=True,
+    )
+
+    with pytest.raises(ClaudeDesignSafetyError, match="website/Example.dc.html -> Example.dc.html"):
+        run_design_command(args, client_factory=lambda: client)
+
+    assert client.calls == []
+    assert capsys.readouterr().out == ""
+
+
+def test_planned_support_js_is_not_a_page_and_stays_allowed_below_the_root() -> None:
+    client = FileStubClient()
+    args = Namespace(
+        design_command="planned-call",
+        tool="create_support_js",
+        project_id="project-1",
+        args='{"path":"assets/support.js","if_match":"123"}',
+        writes=["assets/support.js"],
+        allow_write=True,
+        allow_destructive=False,
+        json=True,
+    )
+
+    payload = _planned_call_payload(args, client)
+
+    assert payload["path"] == "assets/support.js"
+    assert payload["plan_token"] == "auto-plan"
 
 
 def test_planned_copy_refuses_success_without_copied_file_etags(
@@ -1209,6 +1333,7 @@ def test_planned_copy_rejects_noncanonical_returned_leaf_before_preview(
         allow_write=True,
         allow_destructive=True,
         open_browser=False,
+        allow_nested_page=True,
         json=True,
     )
 
@@ -1637,6 +1762,7 @@ def test_design_push_reads_back_and_renders_every_dc_file(
                 "path": "Example.dc.html",
                 "open_url": "https://claude.ai/design/p/project-1",
                 "opened": False,
+                "page_listed": True,
             }
         ],
     }
@@ -1647,6 +1773,170 @@ def test_design_push_reads_back_and_renders_every_dc_file(
         "read_file",
         "render_preview",
     ]
+
+
+def _nested_push_args(source: Path, remote_path: str, *, allow_nested_page: bool) -> Namespace:
+    return Namespace(
+        design_command="push",
+        project_id="project-1",
+        files=[f"{remote_path}={source}"],
+        if_matches=[f"{remote_path}=0"],
+        plan_token=None,
+        allow_write=True,
+        open_browser=False,
+        allow_nested_page=allow_nested_page,
+        json=True,
+    )
+
+
+@pytest.mark.parametrize("remote_path", ["website/Example.dc.html", "a/b/Example.html", "Folder/Page.HTML"])
+def test_design_push_refuses_a_nested_page_before_any_call_by_default(tmp_path: Any, remote_path: str) -> None:
+    source = tmp_path / "Example.dc.html"
+    source.write_text(VALID_DC, encoding="utf-8")
+    client = VerifiedPushStubClient()
+    created: list[str] = []
+
+    def factory() -> VerifiedPushStubClient:
+        created.append("client")
+        return client
+
+    args = _nested_push_args(source, remote_path, allow_nested_page=False)
+
+    with pytest.raises(ClaudeDesignSafetyError, match="Pages menu lists only") as refusal:
+        run_design_command(args, client_factory=factory, workspace_root=tmp_path)
+
+    message = str(refusal.value)
+    assert f"{remote_path} -> {remote_path.rsplit('/', 1)[-1]}" in message
+    assert "--allow-nested-page" in message
+    assert "subfolders" in message
+    assert client.calls == []
+    assert created == []
+
+
+def test_design_push_refuses_a_nested_page_inside_a_mixed_batch_without_writing_the_root_page(
+    tmp_path: Any,
+) -> None:
+    root_page = tmp_path / "Home.dc.html"
+    nested_page = tmp_path / "Other.dc.html"
+    root_page.write_text(VALID_DC, encoding="utf-8")
+    nested_page.write_text(VALID_DC, encoding="utf-8")
+    client = VerifiedPushStubClient()
+    args = Namespace(
+        design_command="push",
+        project_id="project-1",
+        files=[f"Home.dc.html={root_page}", f"website/Other.dc.html={nested_page}"],
+        if_matches=["Home.dc.html=0", "website/Other.dc.html=0"],
+        plan_token=None,
+        allow_write=True,
+        open_browser=False,
+        json=True,
+    )
+
+    with pytest.raises(ClaudeDesignSafetyError, match="website/Other.dc.html -> Other.dc.html"):
+        run_design_command(args, client_factory=lambda: client, workspace_root=tmp_path)
+
+    assert client.calls == []
+
+
+def test_design_push_keeps_assets_in_subfolders_without_the_opt_out(tmp_path: Any) -> None:
+    source = tmp_path / "logo.svg"
+    source.write_text("<svg xmlns='http://www.w3.org/2000/svg'/>", encoding="utf-8")
+    client = VerifiedPushStubClient()
+    args = _nested_push_args(source, "assets/logo.svg", allow_nested_page=False)
+
+    assert run_design_command(args, client_factory=lambda: client, workspace_root=tmp_path) == 0
+
+
+def test_design_push_opt_out_writes_a_nested_page_but_reports_it_unlisted(
+    tmp_path: Any,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    source = tmp_path / "Example.dc.html"
+    source.write_text(VALID_DC, encoding="utf-8")
+    client = VerifiedPushStubClient()
+    client.remote["website/support.js"] = ("support-1", "runtime")
+    args = _nested_push_args(source, "website/Example.dc.html", allow_nested_page=True)
+
+    assert run_design_command(args, client_factory=lambda: client, workspace_root=tmp_path) == 0
+    verification = json.loads(capsys.readouterr().out)["verification"]
+    assert verification["verified"] is True
+    assert verification["previews"][0]["page_listed"] is False
+    assert verification["nested_pages"] == ["website/Example.dc.html"]
+    assert "Pages menu" in verification["warning"]
+
+
+def test_verification_never_reports_success_for_a_page_the_editor_will_not_list() -> None:
+    """A durable preview only proves the page renders by direct link."""
+    client = VerifiedPushStubClient()
+
+    verification = claude_design._verify_remote_previews(
+        client,
+        "project-1",
+        ["Home.dc.html", "website/Other.dc.html", "assets/logo.svg"],
+        open_browser=False,
+        check_support=False,
+    )
+
+    previews = verification["previews"]
+    assert isinstance(previews, list)
+    assert verification["verified"] is False
+    assert verification["nested_pages"] == ["website/Other.dc.html"]
+    assert [(item["path"], item["page_listed"]) for item in previews] == [
+        ("Home.dc.html", True),
+        ("website/Other.dc.html", False),
+    ]
+    assert "not listed in Claude Design's Pages menu" in str(verification["error"])
+    assert "website/Other.dc.html -> Other.dc.html" in str(verification["error"])
+
+
+def test_verification_still_fails_for_a_nested_page_when_a_preview_error_comes_first() -> None:
+    client = VerifiedPushStubClient(preview_url=None)
+
+    verification = claude_design._verify_remote_previews(
+        client,
+        "project-1",
+        ["website/Other.dc.html"],
+        open_browser=False,
+        check_support=False,
+    )
+
+    assert verification["verified"] is False
+    assert verification["nested_pages"] == ["website/Other.dc.html"]
+    assert "durable preview" in str(verification["error"])
+
+
+def test_preview_flags_a_nested_page_without_failing_the_read_only_command(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    client = VerifiedPushStubClient()
+    args = Namespace(
+        design_command="preview",
+        project_id="project-1",
+        remote_path="website/Example.dc.html",
+        open_browser=False,
+        json=True,
+    )
+
+    assert run_design_command(args, client_factory=lambda: client) == 0
+    output = json.loads(capsys.readouterr().out)
+    assert output["page_listed"] is False
+    assert "Pages menu will not list it" in output["warning"]
+
+
+def test_preview_marks_a_root_page_as_listed(capsys: pytest.CaptureFixture[str]) -> None:
+    client = VerifiedPushStubClient()
+    args = Namespace(
+        design_command="preview",
+        project_id="project-1",
+        remote_path="Example.dc.html",
+        open_browser=False,
+        json=True,
+    )
+
+    assert run_design_command(args, client_factory=lambda: client) == 0
+    output = json.loads(capsys.readouterr().out)
+    assert output["page_listed"] is True
+    assert "warning" not in output
 
 
 def test_design_push_accepts_live_write_result_and_carries_pages_written(
@@ -1743,6 +2033,7 @@ def test_design_push_open_uses_short_lived_preview_but_returns_only_durable_url(
         "path": "Example.dc.html",
         "open_url": "https://claude.ai/design/p/project-1",
         "opened": True,
+        "page_listed": True,
     }
     assert "claudeusercontent.com" not in raw
 
@@ -1779,6 +2070,7 @@ def test_design_push_browser_failure_keeps_durable_preview_and_returns_unknown(
             "path": "Example.dc.html",
             "open_url": "https://claude.ai/design/p/project-1",
             "opened": False,
+            "page_listed": True,
         }
     ]
     assert "browser open failure" in output["verification"]["error"]

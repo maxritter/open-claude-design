@@ -7,7 +7,7 @@ import hashlib
 import io
 import json
 import zipfile
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 from open_claude_design import bridge
@@ -19,6 +19,13 @@ from open_claude_design.config import (
     CLAUDE_DESIGN_PROJECT_TYPES,
 )
 from open_claude_design.errors import ClaudeDesignProtocolError, ClaudeDesignSafetyError
+from open_claude_design.pages import (
+    is_page_path,
+    nested_page_guidance,
+    nested_pages,
+    page_listed,
+    root_page_suggestions,
+)
 from open_claude_design.validation import validate_html
 
 COMMANDS = frozenset({"batch", "projects", "project", "design-systems", "export", "validate", "capabilities"})
@@ -44,6 +51,12 @@ def add_parsers(subparsers: Any) -> None:
             command.add_argument("--allow-write", action="store_true")
             command.add_argument("--allow-project-grant", action="store_true")
         command.add_argument("--json", action="store_true")
+    pages = project_commands.add_parser(
+        "pages",
+        help="Read-only check for pages Claude Design's Pages menu will not list; exits 2 when any exist.",
+    )
+    pages.add_argument("project_id")
+    pages.add_argument("--json", action="store_true")
     bind = project_commands.add_parser("bind", help="Replace the reviewed project's design-system bindings.")
     bind.add_argument("project_id")
     bind.add_argument("--design-system", dest="system_ids", action="append", default=[])
@@ -162,6 +175,36 @@ def _files(client: Any, project_id: str, path: str = "") -> dict[str, str]:
             raise ClaudeDesignProtocolError("Claude Design returned a duplicate or out-of-scope file.")
         files[remote_path] = etag
     return files
+
+
+def _pages_report(client: Any, project_id: str) -> dict[str, object]:
+    """Classify every page by whether Claude Design's Pages menu lists it; reads only."""
+    files = _files(client, project_id)
+    pages = sorted(path for path in files if is_page_path(path))
+    nested = nested_pages(pages)
+    suggestions = root_page_suggestions(nested, taken=files)
+    report: dict[str, object] = {
+        "project_id": project_id,
+        "ok": not nested,
+        "listed_pages": [path for path in pages if page_listed(path)],
+        "nested_pages": [
+            {
+                "path": path,
+                "suggested_root_path": suggestions[path],
+                "root_path_taken": PurePosixPath(path).name in files,
+            }
+            for path in nested
+        ],
+        "root_support_js": "support.js" in files,
+    }
+    if nested:
+        report["guidance"] = (
+            nested_page_guidance()
+            + " Copy each nested page to its suggested root path (planned-call copy_files, or push), re-point "
+            "its relative asset references, run this check again, and delete the nested copy only with the "
+            "user's explicit authorization. A .dc.html page also needs support.js at the project root."
+        )
+    return report
 
 
 def _require_system(client: Any, project_id: str) -> dict[str, Any]:
@@ -289,6 +332,9 @@ def run_operation(args: argparse.Namespace, client: Any, root: Path) -> int:
                 args.project_id, expected_version=args.if_version, allow_grant=args.allow_project_grant
             )
             payload = {"verified_absent": True, "project_id": args.project_id}
+        elif args.project_command == "pages":
+            payload = _pages_report(client, args.project_id)
+            code = 0 if payload["ok"] else 2
         else:
             payload = {"project": client.project_metadata(args.project_id)}
     elif command == "export":

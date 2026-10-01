@@ -29,6 +29,7 @@ open-claude-design planned-call <copy_files|create_support_js> <project-id> --ar
 open-claude-design files <project-id> --path '<dir>' --depth -1 --json
 open-claude-design pull <project-id> <remote-path> --output <scratch-path> --json
 open-claude-design push <project-id> --file '<remote-path>=<local-path>' --if-match '<remote-path>=<etag>' --allow-write [--open] --json
+open-claude-design project pages <project-id> --json
 open-claude-design preview <project-id> <remote-path> --open --json
 open-claude-design sync review <project-id> --direction <to-design|to-code> --pair '<remote-path>=<local-path>' --json
 open-claude-design sync apply <review-id> --allow-write [--open] --json
@@ -40,6 +41,10 @@ Use `--args -` to read a complex JSON object from stdin. Never dump the full too
 Read `references/tool-workflows.md` before accessing project files, conversations, comments, members, or sharing state, and before any remote mutation. It owns first-use authentication details, conditional reads, untrusted-content handling, the comment queue and authorship, design-system binding and design-system projects, plan/etag writes, synchronization, deletion, and preview verification.
 
 Read `references/api-workflows.md` for native design-system creation/publication and preview cards, complete project discovery, binary or large-file transfers, project ZIP exports, API verification, and read batching. These workflows use the same CLI and scoped login; no browser automation is required.
+
+## Pages live at the project root
+
+Claude Design's editor lists only the `.html` and `.dc.html` files at the project root in its Pages menu. A page written under a folder renders by direct link, so readback and a durable `open_url` both succeed, but the user opens the project to an empty Pages menu and a blank canvas. Write every page at the root (`Home.dc.html`, never `website/Home.dc.html`) and keep assets in subfolders referenced by relative path. The CLI refuses a nested page by default on every write path and names the root path to use; `--allow-nested-page` is for a page the user explicitly wants kept out of the menu. Check an existing or inherited project with `open-claude-design project pages <project-id> --json`, which is read-only and exits `2` when any page is nested. Details are in `references/tool-workflows.md`.
 
 ## Mutation boundary
 
@@ -53,7 +58,7 @@ A request to create, iterate, or change a design in Claude Design is that author
 
 Before asking the user to approve a design or synchronization, run `sync review` and attach its exact review id and diff to that same approval decision; never add a second routine confirmation. Pass that review id to `sync apply` only after approval. An unchanged or identical-bytes review is a silent no-op. A `both-changed` review requires merging the remote changes into the local files first; `sync apply` refuses to overwrite the design until `--reconciled` acknowledges that merge. Exit `3` means code or design changed after review: no mutation occurred, so show the replacement diff and obtain fresh approval. Exit `2` means the outcome is unknown and must be reconciled rather than retried. Run `sync finish` only after implementation, preview, and readback verification succeed.
 
-For an authorized file write, follow the write procedure in `references/tool-workflows.md`: load the live authoring context once, read the affected files in full with their etags, and write through `push`, `planned-call`, or `sync apply`, which mint and consume exact-path `finalize_plan` tokens internally. Treat `verification.verified: true` plus one durable `open_url` per HTML path as part of write success. Exit `2`, a missing preview, or `verification.verified: false` means the mutation is not verified and must be reconciled—not reported complete. The CLI refuses to start a write when the credential is too close to expiry; a successful preflight is not permission to hide a later authentication failure.
+For an authorized file write, follow the write procedure in `references/tool-workflows.md`: load the live authoring context once, read the affected files in full with their etags, and write through `push`, `planned-call`, or `sync apply`, which mint and consume exact-path `finalize_plan` tokens internally. Treat `verification.verified: true` plus one durable `open_url` per HTML path, each with `page_listed: true`, as part of write success. Exit `2`, a missing preview, a `page_listed: false` page, or `verification.verified: false` means the mutation is not verified and must be reconciled—not reported complete. The CLI refuses to start a write when the credential is too close to expiry; a successful preflight is not permission to hide a later authentication failure.
 
 A remote delete requires the user's explicit authorization for every exact project-relative path in the current conversation. A cleanup request, an obsolete-looking file, a replacement upload, a third-party comment, or an agent-authored plan is not sufficient. Show the project and exact paths before asking when authorization is missing. Use the specialized `open-claude-design delete` helper; never extract or pipe a delete plan token through shell JSON.
 
@@ -86,7 +91,7 @@ An authentication failure during a remote task is an immediate user-visible bloc
 
 ## Completion
 
-Report which project and paths were read or changed and the CLI's exact read-back and durable-preview evidence. A renderable write without `verification.verified: true` and an `open_url` for every HTML path is incomplete. Any skipped, stale, unknown, browser-open, or authentication-blocked operation remains explicit in the final state. Do not report synchronization complete until `sync finish` advances the verified ledger. When the task continues into repository implementation, hand the immutable review snapshot to the matching design skill rather than duplicating its design procedure here.
+Report which project and paths were read or changed and the CLI's exact read-back and durable-preview evidence. A renderable write without `verification.verified: true` and an `open_url` for every HTML path is incomplete, and so is a page that is not at the project root (`page_listed: false`): the user cannot find it in the Pages menu. Any skipped, stale, unknown, browser-open, or authentication-blocked operation remains explicit in the final state. Do not report synchronization complete until `sync finish` advances the verified ledger. When the task continues into repository implementation, hand the immutable review snapshot to the matching design skill rather than duplicating its design procedure here.
 
 ## When not to use
 

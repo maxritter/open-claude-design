@@ -189,6 +189,22 @@ def test_manual_release_is_gated_and_reproducible() -> None:
         assert all(re.fullmatch(r"[0-9a-f]{40}", ref) for ref in refs)
 
 
+def test_skill_documents_the_root_page_rule_and_its_opt_out_and_check() -> None:
+    skill = (ROOT / "skills" / "open-claude-design" / "SKILL.md").read_text(encoding="utf-8")
+    workflows = (ROOT / "skills" / "open-claude-design" / "references" / "tool-workflows.md").read_text(
+        encoding="utf-8"
+    )
+
+    for document in (skill, workflows):
+        assert "Pages live at the project root" in document
+        assert "--allow-nested-page" in document
+        assert "project pages" in document
+        assert "page_listed" in document
+    assert "Pages menu" in skill
+    # The earlier guidance told agents nested pages were as good as root pages.
+    assert "do not move or flatten a design" not in workflows
+
+
 def test_wheel_force_include_matches_runtime_skill_files_without_benchmarks() -> None:
     project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     force_include = project["tool"]["hatch"]["build"]["targets"]["wheel"]["force-include"]

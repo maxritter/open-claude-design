@@ -216,3 +216,93 @@ def test_structural_checks_catch_missing_dependencies_and_self_closing_component
     assert not validate_html(
         "page.dc.html", VALID_DC.replace("<div>Design</div>", '<dc-import name="Child"/>').encode()
     )["valid"]
+
+
+class Inventory:
+    """A project whose list_files inventory is fixed; any other call is a failure."""
+
+    def __init__(self, paths: list[str]) -> None:
+        self.paths = paths
+        self.calls: list[tuple[str, dict[str, object]]] = []
+
+    def call_tool(self, name: str, arguments: dict[str, object]) -> dict[str, object]:
+        self.calls.append((name, arguments))
+        assert name == "list_files", "project pages must stay read-only"
+        return {
+            "structuredContent": [
+                {"path": path, "type": "file", "etag": f"etag-{index}", "size": 1}
+                for index, path in enumerate(self.paths)
+            ]
+        }
+
+
+def _pages_check(client: Inventory, tmp_path: Path) -> int:
+    args = build_parser().parse_args(["project", "pages", "p", "--json"])
+    return run_design_command(args, client_factory=lambda: client, workspace_root=tmp_path)
+
+
+def test_project_pages_passes_when_every_page_is_at_the_root(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    client = Inventory(["Home.dc.html", "About.html", "support.js", "assets/logo.svg", "assets/fonts/a.woff2"])
+
+    code = _pages_check(client, tmp_path)
+
+    report = json.loads(capsys.readouterr().out)
+    assert code == 0
+    assert report == {
+        "project_id": "p",
+        "ok": True,
+        "listed_pages": ["About.html", "Home.dc.html"],
+        "nested_pages": [],
+        "root_support_js": True,
+    }
+    assert [name for name, _arguments in client.calls] == ["list_files"]
+    assert client.calls[0][1] == {"project_id": "p", "path": "", "depth": -1}
+
+
+def test_project_pages_lists_nested_pages_with_the_root_path_to_use(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    client = Inventory(
+        [
+            "website/QualityLayer Website v8.dc.html",
+            "website/support.js",
+            "website/assets/hero.png",
+            "Home.dc.html",
+            "other/Home.dc.html",
+            "partials/nav.html",
+        ]
+    )
+
+    code = _pages_check(client, tmp_path)
+
+    report = json.loads(capsys.readouterr().out)
+    assert code == 2
+    assert report["ok"] is False
+    assert report["listed_pages"] == ["Home.dc.html"]
+    assert report["root_support_js"] is False
+    assert report["nested_pages"] == [
+        {"path": "other/Home.dc.html", "suggested_root_path": "other-Home.dc.html", "root_path_taken": True},
+        {"path": "partials/nav.html", "suggested_root_path": "nav.html", "root_path_taken": False},
+        {
+            "path": "website/QualityLayer Website v8.dc.html",
+            "suggested_root_path": "QualityLayer Website v8.dc.html",
+            "root_path_taken": False,
+        },
+    ]
+    assert "Pages menu lists only" in report["guidance"]
+    assert "support.js at the project root" in report["guidance"]
+    assert [name for name, _arguments in client.calls] == ["list_files"]
+
+
+def test_project_pages_reports_a_project_without_pages_as_ok(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    client = Inventory(["styles.css", "assets/logo.svg"])
+
+    code = _pages_check(client, tmp_path)
+
+    report = json.loads(capsys.readouterr().out)
+    assert code == 0
+    assert report["listed_pages"] == [] and report["nested_pages"] == []

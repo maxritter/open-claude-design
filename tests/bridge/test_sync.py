@@ -457,6 +457,7 @@ def test_sync_to_design_applies_reviewed_bytes_once_and_finishes_verified_ledger
                 "path": "Example.dc.html",
                 "open_url": "https://claude.ai/design/p/project-1",
                 "opened": False,
+                "page_listed": True,
             }
         ],
     }
@@ -555,6 +556,7 @@ def test_sync_browser_failure_keeps_durable_preview_and_marks_receipt_unknown(
             "path": "Example.dc.html",
             "open_url": "https://claude.ai/design/p/project-1",
             "opened": False,
+            "page_listed": True,
         }
     ]
     assert "browser open failure" in applied["error"]
@@ -911,3 +913,93 @@ def test_sync_review_records_baseline_for_identical_bytes_without_writing(
         == 0
     )
     assert json.loads(capsys.readouterr().out)["classification"] == "local-only"
+
+
+NESTED_REMOTE = "website/Example.dc.html"
+
+
+def _nested_client() -> SyncStubClient:
+    client = SyncStubClient()
+    client.remote = {
+        NESTED_REMOTE: ("remote-1", "<main>remote</main>\n"),
+        "website/support.js": ("support-1", "runtime\n"),
+    }
+    return client
+
+
+def _nested_review_args(local: Path, *, direction: str = "to-design", allow_nested_page: bool = False) -> Namespace:
+    return Namespace(
+        design_command="sync",
+        sync_command="review",
+        project_id="project-1",
+        direction=direction,
+        pairs=[f"{NESTED_REMOTE}={local}"],
+        allow_nested_page=allow_nested_page,
+        json=True,
+    )
+
+
+def test_sync_review_to_design_refuses_a_nested_page_before_any_remote_call(tmp_path: Path) -> None:
+    local = tmp_path / "Example.dc.html"
+    local.write_text("<main>local</main>\n", encoding="utf-8")
+    client = _nested_client()
+
+    with pytest.raises(ClaudeDesignSafetyError, match="website/Example.dc.html -> Example.dc.html"):
+        run_design_command(_nested_review_args(local), client_factory=lambda: client, workspace_root=tmp_path)
+
+    assert client.calls == []
+    assert not (tmp_path / ".open-claude-design" / "sync" / "reviews").exists()
+
+
+def test_sync_review_to_code_may_read_a_nested_page(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    local = tmp_path / "Example.dc.html"
+    local.write_text("<main>local</main>\n", encoding="utf-8")
+    client = _nested_client()
+
+    args = _nested_review_args(local, direction="to-code")
+    assert run_design_command(args, client_factory=lambda: client, workspace_root=tmp_path) == 0
+    assert json.loads(capsys.readouterr().out)["state"] == "reviewed"
+
+
+def test_sync_apply_to_design_requires_the_opt_out_again_and_keeps_the_review_retryable(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    local = tmp_path / "Example.dc.html"
+    local.write_text("<main>local</main>\n", encoding="utf-8")
+    client = _nested_client()
+    review = _nested_review_args(local, allow_nested_page=True)
+    assert run_design_command(review, client_factory=lambda: client, workspace_root=tmp_path) == 0
+    review_id = _receipt_id(capsys)
+    client.calls.clear()
+
+    def apply_args(*, allow_nested_page: bool) -> Namespace:
+        return Namespace(
+            design_command="sync",
+            sync_command="apply",
+            review_id=review_id,
+            allow_write=True,
+            allow_nested_page=allow_nested_page,
+            json=True,
+        )
+
+    with pytest.raises(ClaudeDesignSafetyError, match="Pages menu lists only"):
+        run_design_command(apply_args(allow_nested_page=False), client_factory=lambda: client, workspace_root=tmp_path)
+    assert client.calls == []
+    status_args = Namespace(design_command="sync", sync_command="status", review_id=review_id, json=True)
+    assert run_design_command(status_args, client_factory=lambda: client, workspace_root=tmp_path) == 0
+    assert json.loads(capsys.readouterr().out)["state"] == "reviewed"
+
+    assert (
+        run_design_command(apply_args(allow_nested_page=True), client_factory=lambda: client, workspace_root=tmp_path)
+        == 0
+    )
+    applied = json.loads(capsys.readouterr().out)
+    assert applied["state"] == "awaiting_verification"
+    assert applied["verification"]["verified"] is True
+    assert applied["verification"]["previews"][0]["page_listed"] is False
+    assert applied["verification"]["nested_pages"] == [NESTED_REMOTE]
+    assert "Pages menu" in applied["verification"]["warning"]

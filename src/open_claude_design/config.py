@@ -117,6 +117,9 @@ CLAUDE_DESIGN_KNOWN_DESTRUCTIVE_TOOLS: Final = frozenset({"copy_files", "delete_
 CLAUDE_DESIGN_SPECIALIZED_ONLY_TOOLS: Final = frozenset(
     {"copy_files", "create_support_js", "delete_files", "finalize_plan", "render_preview", "write_files"}
 )
+CLAUDE_DESIGN_NON_FILE_MUTATING_TOOLS: Final = CLAUDE_DESIGN_KNOWN_MUTATING_TOOLS - CLAUDE_DESIGN_SPECIALIZED_ONLY_TOOLS
+CLAUDE_DESIGN_PAGE_SUFFIX: Final = ".html"
+CLAUDE_DESIGN_MAX_NESTED_PAGE_EXAMPLES: Final = 8
 CLAUDE_DESIGN_MUTATION_SUCCESS_KEYS: Final = {
     "ack_comments": frozenset({"acked", "acknowledged", "not_queued"}),
     "add_member": frozenset({"account", "member", "member_id", "role"}),

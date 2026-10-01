@@ -147,6 +147,17 @@
         "It offers the durable project URL with ?embed=1 once at the start, pushes the first clean draft with push --open, and then pushes at checkpoints: after each round that changes what the user would notice and before pausing or asking, folding one round's small corrections into one write rather than pushing every edit or waiting to be told.",
         "It does not draft in production code, re-reads the file before each write, rebases on the current content after an etag conflict, and still asks before deletion, sharing, membership, comment acknowledgement, or syncing into code."
       ]
+    },
+    {
+      "id": 14,
+      "name": "pages-stay-at-the-project-root",
+      "prompt": "I asked you to build a three-page marketing site in synthetic Claude Design project 00000000-0000-0000-0000-000000000001. You planned to keep the sources under website/ and push website/Home.dc.html, website/About.dc.html and website/Pricing.dc.html with their images in website/assets/. Describe where each file goes, what you check after pushing, and what you tell the user. This is a benchmark: do not call the service or modify anything.",
+      "expected_output": "Pages written at the project root with assets in subfolders, verified as listed in the Pages menu, never reported complete from a durable preview alone.",
+      "expectations": [
+        "The response pushes Home.dc.html, About.dc.html and Pricing.dc.html at the project root with support.js at the root, keeps the images in a subfolder referenced by relative paths, and explains that Claude Design's Pages menu lists only root-level .html and .dc.html files.",
+        "It does not pass --allow-nested-page to get around the refusal, and treats a nested write that renders by direct link as invisible to the user rather than done.",
+        "It requires verification.verified true with page_listed true and a durable open_url for every page, and for an inherited project runs project pages and repairs nested pages by copying them to their suggested root paths, deleting the nested copies only with the user's explicit authorization."
+      ]
     }
   ]
 }
