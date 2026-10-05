@@ -56,18 +56,21 @@ The coding agent remains the implementation environment. Claude Design remains t
 - Public surface: the GitHub README and Releases; no separate website.
 - Voice: concise, concrete, confident, and outcome-led. Avoid installer internals, safety plumbing, manual skill invocation, and unexplained framework language in the main README.
 - Public examples stay generic. Do not reference private or personal projects.
-- Brand assets:
-  - `docs/media/open-claude-design-hero.png`
-  - `docs/media/open-claude-design-logo.png`
-  - `docs/media/open-claude-design-icon.png`
-- The project is independent and must not imply Anthropic endorsement.
+- Identity: a warm spark with an open centre, selected inside a design-tool frame with hollow corner handles — an idea made editable by any coding agent. The spark is original, never Anthropic's logo. Palette: paper `#F3EFE6`, ink `#16140F`, ink 2 `#57534A`, clay `#D2603A` (dark clay `#E2714B`); clay marks the spark and one highlight per surface, never body text. Type: Instrument Sans for display, IBM Plex Mono for prompts, paths, and labels.
+- Brand assets (source board in the Claude Design project "Open Claude Design — Brand"):
+  - `docs/media/hero-light.webp`, `docs/media/hero-dark.webp` — README hero, served through `<picture>`
+  - `docs/media/social-preview.png` — 1280×640 GitHub social preview
+  - `docs/media/brand/mark.svg`, `mark-dark.svg` — full mark; `mark-small.svg`, `mark-small-dark.svg` — 8-ray mark for 64px and below
+  - `docs/media/brand/icon.svg`, `icon.png` — app icon; `favicon.svg` — spark-only icon for 32px and below
+  - `docs/media/examples/*.webp` — fictional use-case examples (slides, desktop and mobile app, CV, design system)
+- The project is independent and must not imply Anthropic endorsement; public surfaces that travel without the README (social preview) carry the independence line.
 
 ## Evidence on Hand
 
 - A live authenticated audit on 2026-08-30 returned 23 Claude Design MCP tools covering projects, files, prompts, design skills, previews, conversations, comments, members, sharing, and remote writes.
 - The CLI, credential providers, synchronization helpers, installer adapter, skills, and cross-platform tests are implemented locally.
 - The existing Pilot Shell implementation provides the proven CLI-client and disk-backed synchronization architecture being generalized here.
-- Generated hero, logo, and icon assets exist at the paths above.
+- The brand assets listed above were redrawn on 2026-10-05 from a Claude Design brand board, with Imagegen used for concept exploration and example photography.
 - No public user count, adoption benchmark, testimonial, or performance claim exists yet; future public copy must not fabricate one.
 
 ## Product Principles

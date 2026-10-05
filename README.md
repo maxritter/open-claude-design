@@ -1,87 +1,99 @@
 <div align="center">
 
-<img src="docs/media/open-claude-design-hero.png" alt="Open Claude Design — design intelligence for coding agents" width="100%">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/media/hero-dark.webp">
+  <img src="docs/media/hero-light.webp" alt="Open Claude Design: Claude Design, from any coding agent. A coding agent's prompt creates a settings screen on the Claude Design canvas, and the two stay in sync." width="100%">
+</picture>
 
-<h1>Claude Design for any coding agent</h1>
-
-**Use Claude Design from your favorite coding agents—no Claude Code installation or Anthropic API key required.**
+**Create Claude Design files from your real codebase, refine them on the canvas, and sync every change back. Works with Claude Code, Codex, Cursor, Gemini CLI, and 70+ other coding agents.**
 
 ```bash
 curl -fsSL https://github.com/maxritter/open-claude-design/releases/latest/download/install.sh | sh
 ```
 
-**macOS · Linux · WSL2**
+**macOS · Linux · WSL2** · No Claude Code installation or Anthropic API key required
 
-[![GitHub stars](https://img.shields.io/github/stars/maxritter/open-claude-design?style=flat&color=22B8C7)](https://github.com/maxritter/open-claude-design/stargazers)
-[![Release](https://img.shields.io/github/v/release/maxritter/open-claude-design?style=flat&color=8B5CF6)](https://github.com/maxritter/open-claude-design/releases)
-[![Downloads](https://img.shields.io/github/downloads/maxritter/open-claude-design/total?style=flat&color=FF8066)](https://github.com/maxritter/open-claude-design/releases)
-[![PRs welcome](https://img.shields.io/badge/PRs-welcome-22C55E.svg?style=flat)](https://github.com/maxritter/open-claude-design/pulls)
-[![Source available](https://img.shields.io/badge/license-source--available-64748B.svg?style=flat)](LICENSE.md)
+[![GitHub stars](https://img.shields.io/github/stars/maxritter/open-claude-design?style=flat&color=D2603A&labelColor=16140F)](https://github.com/maxritter/open-claude-design/stargazers)
+[![Release](https://img.shields.io/github/v/release/maxritter/open-claude-design?style=flat&color=D2603A&labelColor=16140F)](https://github.com/maxritter/open-claude-design/releases)
+[![Downloads](https://img.shields.io/github/downloads/maxritter/open-claude-design/total?style=flat&color=D2603A&labelColor=16140F)](https://github.com/maxritter/open-claude-design/releases)
+[![Source available](https://img.shields.io/badge/license-source--available-57534A.svg?style=flat&labelColor=16140F)](LICENSE.md)
 
 <a href="#quick-start">Install</a> ·
-<a href="#what-you-can-do">Capabilities</a> ·
-<a href="#agent-compatibility">Agents</a> ·
-<a href="#open-for-pull-requests">Contribute</a>
-
-⭐ **If this makes your favorite coding agents better at design, [give it a star](https://github.com/maxritter/open-claude-design).**
+<a href="#what-you-can-make">Examples</a> ·
+<a href="#how-it-works">How it works</a> ·
+<a href="#works-with-every-coding-agent">Agents</a> ·
+<a href="#reference">Reference</a>
 
 </div>
 
-Claude Design is excellent. Using it alongside your favorite coding agents can still mean switching back and forth: open the visual workspace, export the generated prompt, return to the terminal, restore the context, then repeat after the next visual change.
+Claude Design is Anthropic's visual design workspace. Using it next to a coding agent usually means copying prompts back and forth, and over time the design and the code drift apart.
 
-The design and codebase can also drift apart as each changes independently. A newer component, state, or token can exist on only one side, making the two increasingly difficult to keep synchronized.
-
-Open Claude Design solves both problems. It connects your favorite coding agents and your real codebase directly to Claude Design's visual workspace, so design context stays connected to implementation and changes can move safely in either direction.
-
-To invoke Open Claude Design, mention **Claude Design** in your request to one of your favorite coding agents. It loads the Claude Design access skill and connects to your design workspace automatically.
+Open Claude Design connects the two. Mention **Claude Design** in a request to your coding agent. The agent builds the design from your real components, tokens, and copy, and opens it in Claude Design. When you have adjusted it there, the agent brings your changes back into the code.
 
 ## Quick start
 
-**Prerequisites:** macOS, Linux, or WSL2 and a [Claude Pro, Max, Team, or Enterprise account](https://support.claude.com/en/articles/14604416-getting-started-with-claude-design). You can install before your coding agent; Claude Code is not required.
+**You need** macOS, Linux, or WSL2 and a [Claude Pro, Max, Team, or Enterprise account](https://support.claude.com/en/articles/14604416-getting-started-with-claude-design). You can install before your coding agent.
 
 > [!IMPORTANT]
-> The standalone connection requires Claude Design access; the detailed Design guide currently lists paid plans. General Free-plan artifacts do not establish Free access to this scoped API. Claude Design uses the plan's shared usage limits. [Enterprise administrators](https://support.claude.com/en/articles/14604406-claude-design-admin-guide-for-team-and-enterprise-plans) must enable standalone access under Organization settings → Claude Design; the newer Design template in conversations has a separate Artifacts setting.
+> Open Claude Design needs Claude Design access, which Anthropic's Claude Design guide currently lists for paid plans. It uses your plan's shared usage limits. [Enterprise administrators](https://support.claude.com/en/articles/14604406-claude-design-admin-guide-for-team-and-enterprise-plans) must enable standalone access under Organization settings → Claude Design.
 
-1. **Run the one-line installer above.** It installs the CLI and shared workflows, connects detected agents, and opens the standalone Claude login when a local browser is available.
+1. **Run the installer above.** It installs the CLI, adds the workflows to every coding agent it finds, and opens the Claude login in your browser.
 
-2. **Mention Claude Design in your request to one of your favorite coding agents.** No special command or manual skill selection is needed.
+2. **Ask your coding agent for a design and mention Claude Design.** No special command is needed.
 
    > Create a Claude Design version of this settings flow, using the real components and states from the codebase.
 
-3. **View and edit your design in Claude Design.** Open it from the Claude Design sidebar in the [Claude Desktop app](https://claude.com/download), or use the [Claude Design web app](https://claude.ai/design).
+3. **Open the result in Claude Design.** Use the Claude Design sidebar in the [Claude Desktop app](https://claude.com/download) or the [Claude Design web app](https://claude.ai/design). Change what you like, then ask your agent to bring the changes into the code.
 
-<p align="center">
-<img src="docs/media/claude-design-ui.webp" alt="Claude Design's interactive editor with canvas controls, comments, editing, and a live product preview" width="100%">
-</p>
+## What you can make
 
-## One workflow, both sides
+Fictional examples, each built by a coding agent with Open Claude Design and opened in Claude Design.
 
-Design decisions stop living in a separate side conversation. They become part of the same implementation and verification loop as the code.
+<table>
+<tr>
+<td width="50%" valign="top">
+<img src="docs/media/examples/slides.webp" alt="A pitch deck cover slide for a fictional soil-sensor startup, with a field photo and three key figures">
+<p><strong>Slides and pitch decks</strong><br>
+<em>“Turn the product summary in our README into a seed deck in Claude Design.”</em></p>
+</td>
+<td width="50%" valign="top">
+<img src="docs/media/examples/app.webp" alt="A trail-running app shown as a desktop dashboard and a matching phone screen">
+<p><strong>Apps for desktop and mobile</strong><br>
+<em>“Design the training dashboard and its phone screen in Claude Design with our components.”</em></p>
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
+<img src="docs/media/examples/cv.webp" alt="A one-page CV for a fictional senior product designer, with a portrait, experience, and skills">
+<p><strong>CVs and documents</strong><br>
+<em>“Lay out my CV as a one-page A4 document in Claude Design.”</em></p>
+</td>
+<td width="50%" valign="top">
+<img src="docs/media/examples/design-system.webp" alt="A design system sheet with colours, type scale, buttons, inputs, and switch states">
+<p><strong>Design systems from your code</strong><br>
+<em>“Extract our tokens and components into a Claude Design design system.”</em></p>
+</td>
+</tr>
+</table>
 
-1. **Create from code.** Turn real components, tokens, assets, copy, and states into a Claude Design element.
-2. **Inspect visually.** Open the result in Claude Design, compare options, and tweak it directly in the visual UI.
-3. **Sync both ways.** Approved revisions move safely in either direction. If code or design changes afterward, the new diff comes back for review.
+## How it works
 
-## What you can do
+1. **Create from code.** Your agent reads the real components, tokens, assets, copy, and states, and writes a Claude Design file from them.
+2. **Refine on the canvas.** Open the file in Claude Design, compare options, comment, and edit it directly.
+3. **Sync both ways.** Your agent brings approved changes into the code, or pushes code changes to the design. If both sides changed, it shows you the conflict instead of picking a winner.
 
-- **Claude Design workspace access.** Projects, files, previews, design systems, conversations, comments, members, and sharing through the live MCP catalog plus the first-party design-system API.
-- **Current guidance, lean context.** Live authoring context is cached on disk and loaded only when needed.
-- **Native design-system workflows.** Create, discover, inspect, publish, unpublish, manage preview cards, and change the organization default from any coding agent.
-- **Original assets and archives.** Read and write text or binary files up to 16 MiB; export revision-checked project ZIPs including fonts, images, and a checksum manifest.
-- **Portable verification.** Reject incomplete reads, incomplete folder-copy guards, partial copy success, and non-editable `.dc.html` structure. Check JavaScript syntax, declared resources, and API preview delivery without opening a browser.
-- **Pages the editor can find.** Claude Design's Pages menu lists only root-level pages, so every write path refuses a `.html` or `.dc.html` page in a folder, verification reports `page_listed` per page, and `project pages` audits an existing project.
-- **Faster reads and installation checks.** Batch read-only calls through one MCP session; retry bounded transient reads; independently verify supported agent installs with bounded concurrency.
+## What it can do
 
-## Works with Impeccable
+- **Use your whole Claude Design workspace.** Projects, files, previews, design systems, conversations, comments, members, and sharing.
+- **Manage design systems from your agent.** Create, publish, and unpublish them, manage their preview cards, and set your organization's default.
+- **Move real files.** Upload and download images, fonts, and other files up to 16 MiB, and export a whole project as a ZIP.
+- **Check designs before you open them.** The CLI checks file structure, scripts, and linked resources, and confirms the preview loads.
+- **Keep pages findable.** Claude Design's Pages menu lists only pages at the project root, so the CLI refuses to write a page into a folder.
+- **Stay light on context.** Claude Design's current guidance loads only when a task needs it.
 
-[Impeccable](https://github.com/pbakaus/impeccable) adds refinement workflows, deterministic checks, supporting agents, and edit-time hooks. It remains optional.
+## Works with every coding agent
 
-> [!TIP]
-> **Want the complete engineering system?** [Pilot Shell](https://github.com/maxritter/pilot-shell) is a context and harness engineering system for Claude Code and Codex, built around spec-driven development, TDD, enforced quality, persistent memory, and end-to-end verification. It installs Open Claude Design and the complete Impeccable package as part of that larger system.
-
-## Agent compatibility
-
-Every supported agent receives the same automatic workflows and CLI access.
+Every supported agent gets the same workflows and CLI access through one installer.
 
 | Coding agents | Status |
 |---|:---:|
@@ -91,48 +103,75 @@ Every supported agent receives the same automatic workflows and CLI access.
 | Mistral Vibe · Hermes · Reasonix · Grok Build · OpenClaw | ✅ Full |
 | Warp · Zed · Amp · other Agent Skills hosts | ✅ Full |
 
-The installer auto-detects installed agents through pinned `skills@1.7.0`. Explicit installs support all 79 agent identifiers; `--all-agents` verifies every integration for the chosen scope. Eve and PromptScript support project scope only. All agents receive the same five skills through that single mechanism.
+The installer finds installed agents through pinned `skills@1.7.0`. Explicit installs support all 79 agent identifiers, and `--all-agents` checks every integration for the chosen scope. Eve and PromptScript support project scope only.
 
-### Included capabilities
+## Works with Impeccable
 
-**The live MCP catalog.** The authenticated audit on September 30, 2026 found these 23 operations. The bridge discovers it dynamically; this is tool coverage, not a claim that every feature of the Claude web app has an API.
+[Impeccable](https://github.com/pbakaus/impeccable) adds design refinement commands, automated design checks, and edit-time hooks. It is optional.
 
-| Area | Bridged capabilities |
+> [!TIP]
+> **Want the complete engineering system?** [Pilot Shell](https://github.com/maxritter/pilot-shell) is a context and harness engineering system for Claude Code and Codex, built around spec-driven development, TDD, enforced quality, persistent memory, and end-to-end verification. It installs Open Claude Design and the complete Impeccable package as part of that larger system.
+
+## Reference
+
+<details>
+<summary><strong>Claude Design operations the CLI covers (23)</strong></summary>
+
+An authenticated check on September 30, 2026 found these 23 operations in Claude Design's live tool catalog. The CLI discovers the catalog at runtime. This is tool coverage, not a claim that every feature of the Claude web app has an API.
+
+| Area | Operations |
 |---|---|
 | **Projects and files** (8) | List projects · inspect a project · create a project · list files · read a file · write files · copy files · delete files |
 | **Design guidance and previews** (6) | List design systems · load the project prompt · load a design skill · render a preview · create support JavaScript · finalize an authoring plan |
 | **Conversations and comments** (4) | Read a conversation · update a conversation · list comments · acknowledge comments |
 | **Members and sharing** (5) | List members · add a member · remove a member · change a member role · update sharing |
 
-Remote access is read-only by default; changes require explicit authorization. File writes, copies, deletes, support JavaScript, previews, and authoring plans never run as generic calls — they are only reachable through the guarded `push`, `delete`, `planned-call`, and `preview` helpers, which keep plan tokens, etag checks, backups, and verification inside one process. `push` requires exact readback; local writes require exact original-byte readback, and renderable writes/copies require structural/resource checks, API preview delivery, and a durable link. Pages must sit at the project root: a page below it renders by direct link but never appears in Claude Design's Pages menu, so `push`, `planned-call`, and `sync` refuse it unless `--allow-nested-page` is passed, and verification fails for it with `page_listed: false`. JavaScript/layout/interaction execution remains separate visual review (`render_executed: false`). `--open` is an optional explicit browser convenience.
+The newer in-conversation artifacts, artifact migration, public or group artifact sharing, and native PDF, PPTX, and Google Slides exports have no verified interface under this connection. ZIP export is available. Open Claude Design does not imitate missing interfaces with browser control.
 
-**Additional API and CLI workflows:**
+</details>
+
+<details>
+<summary><strong>CLI commands</strong></summary>
 
 | Capability | Command |
 |---|---|
 | Complete project and design-system inventory | `projects`, `design-systems list` |
-| Native design-system creation and publication | `design-systems create`, `publish`, `unpublish` |
-| Preview-card management and compiled manifest inspection | `design-systems cards`, `register`, `unregister`, `inspect` |
+| Design-system creation and publication | `design-systems create`, `publish`, `unpublish` |
+| Preview cards and compiled manifests | `design-systems cards`, `register`, `unregister`, `inspect` |
 | Organization defaults | `design-systems settings`, `default --if-current …` |
 | Project lifecycle and design-system bindings | `project rename`, `project inspect`, `project bind`, `project delete` |
-| Pages the editor will not list (nested `.html`/`.dc.html`) | `project pages` |
-| Original binary/large-file transfers and project ZIPs | `pull`, `push`, `export` |
-| Browser-free source checks and batched reads | `validate`, `preview`, `batch` |
+| Pages the editor will not list | `project pages` |
+| Original files and project ZIPs | `pull`, `push`, `export` |
+| Checks without a browser and batched reads | `validate`, `preview`, `batch` |
 | Current feature boundaries | `capabilities --json` |
 
-The same scoped login serves both APIs. Metadata operations can use an explicitly acknowledged temporary project grant; new grants are revoked and checked after the operation, while existing grants are preserved. File writes keep atomic etag protection. Metadata updates have preflight/readback checks but no claimed cross-device atomicity.
+</details>
 
-The newer in-conversation artifacts experience, artifact migration, public/group artifact sharing, and native PDF/PPTX/Google Slides exports have no verified interface under this scoped connection. ZIP export is available. Host-generated design-system compilation remains distinct from publication. Open Claude Design does not imitate these missing interfaces with browser control.
+<details>
+<summary><strong>The five Agent Skills</strong></summary>
 
-**Five automatically invoked Agent Skills:**
+Your agent loads these automatically when a request needs them.
 
 | Skill | What it handles |
 |---|---|
-| `open-claude-design` | Claude Design access, collaboration, and two-way synchronization |
+| `open-claude-design` | Claude Design access, collaboration, and two-way sync |
 | `open-claude-ui-design` | Product UI creation and redesign in the real codebase |
 | `open-claude-design-system` | Design-token and component-system extraction or normalization |
 | `open-claude-ui-review` | Accessibility, brand, responsive, theme, state, and UX review |
 | `open-claude-design-quality` | Product-grounded visual quality for every user-visible change |
+
+</details>
+
+<details>
+<summary><strong>How remote changes stay safe</strong></summary>
+
+Access is read-only by default, and changes need your explicit request. File writes, copies, deletes, previews, and authoring plans run only through guarded `push`, `delete`, `planned-call`, and `preview` helpers. Each write is scoped to exact paths, checks that nobody changed the file in the meantime, keeps a backup before deletes, reads the result back, and confirms the preview loads.
+
+Pages must sit at the project root. A page in a folder still opens by direct link but never appears in Claude Design's Pages menu, so `push`, `planned-call`, and `sync` refuse it unless you pass `--allow-nested-page`. Running JavaScript, layout, and interaction remain a separate visual review (`render_executed: false`).
+
+The same login serves both Claude Design APIs. Metadata changes can use a temporary project grant that you acknowledge; new grants are revoked and checked afterwards, and existing grants are kept.
+
+</details>
 
 ## Maintenance
 
@@ -141,33 +180,41 @@ The newer in-conversation artifacts experience, artifact migration, public/group
 | **Reconnect your Claude account** | `open-claude-design login` |
 | **Disconnect your Claude account** | `open-claude-design logout` |
 | **Check the connection** | `open-claude-design status --json` |
-| **Verify detected agent installs** | `open-claude-design doctor --json` |
-| **Verify every supported agent** | `open-claude-design doctor --all-agents --json` |
-| **List the packaged skills** | `open-claude-design list` |
+| **Check installed agents** | `open-claude-design doctor --json` |
+| **Check every supported agent** | `open-claude-design doctor --all-agents --json` |
+| **List the included skills** | `open-claude-design list` |
 | **Update or repair Open Claude Design** | `curl -fsSL https://github.com/maxritter/open-claude-design/releases/latest/download/install.sh \| sh` |
 | **Upgrade an uv-managed CLI and its skills** | `uv tool upgrade open-claude-design && open-claude-design update --scope global --yes` |
 | **Uninstall Open Claude Design** | `curl -fsSL https://github.com/maxritter/open-claude-design/releases/latest/download/uninstall.sh \| sh` |
 
-Public installer releases use a durable `releases/latest` source, so `uv tool upgrade open-claude-design` can resolve future CLI versions. If an older installation reports a deleted temporary wheel path, rerun the installer once to repair its uv receipt. Local development-package installs remain pinned by design.
+If an older installation reports a deleted temporary wheel path during `uv tool upgrade`, run the installer once to repair it.
 
-### A "claude-design" connector that fails to connect
+<details>
+<summary><strong>A "claude-design" connector in your agent fails with HTTP 403</strong></summary>
 
-If your agent lists a Claude Design MCP server of its own that fails with HTTP 403, that connector is signing in with the host agent's account token, which carries no Claude Design scope. Claude Design is not down, and your account is not the problem — the entry simply cannot authenticate, and it bypasses the path, etag, backup, and preview safeguards this CLI enforces. `open-claude-design doctor --json` names the configuration file and entry under `native_connectors`; in Claude Code, remove it with `claude mcp remove <server>`. Open Claude Design never registers an MCP server: the CLI is the one transport.
+That connector signs in with your agent's own account token, which has no Claude Design access. Claude Design is not down and your account is fine; the entry simply cannot sign in, and it skips the safety checks this CLI enforces. `open-claude-design doctor --json` names the configuration file and entry under `native_connectors`. In Claude Code, remove it with `claude mcp remove <server>`. Open Claude Design never registers an MCP server; the CLI is its only connection.
 
-A 403 from `open-claude-design status` itself is different — the credential was accepted and access refused, so the signed-in account needs Claude Design enabled (Enterprise organizations enable it centrally). Logging in again with the same account will not change it.
+A 403 from `open-claude-design status` itself is different: the login worked but access was refused, so the account needs Claude Design enabled. Enterprise organizations enable it centrally. Logging in again with the same account will not change it.
+
+</details>
 
 ## Open for pull requests
 
-Use the structured forms to [report a bug](https://github.com/maxritter/open-claude-design/issues/new?template=bug_report.yml) or [request a feature](https://github.com/maxritter/open-claude-design/issues/new?template=feature_request.yml). See [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
+Use the forms to [report a bug](https://github.com/maxritter/open-claude-design/issues/new?template=bug_report.yml) or [request a feature](https://github.com/maxritter/open-claude-design/issues/new?template=feature_request.yml). Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
 
 ## License
 
 Open Claude Design is free and source-available. Personal and internal commercial use are allowed; redistribution, rebranding, competing publication, and hosted resale are restricted. See [LICENSE.md](LICENSE.md).
 
-This independent project is not affiliated with, sponsored by, or endorsed by Anthropic.
+Open Claude Design is an independent project. It is not affiliated with, sponsored by, or endorsed by Anthropic, and its spark mark is its own.
 
 <div align="center">
 
-Made with 🩵 by [Max Ritter](https://maxritter.net)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/media/brand/mark-small-dark.svg">
+  <img src="docs/media/brand/mark-small.svg" alt="" width="40">
+</picture>
+
+Made by [Max Ritter](https://maxritter.net)
 
 </div>

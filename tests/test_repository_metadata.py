@@ -43,13 +43,15 @@ def test_readme_keeps_activation_order_and_local_links_valid() -> None:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
 
     ordered_sections = [
-        "<h1>Claude Design for any coding agent</h1>",
+        "docs/media/hero-light.webp",
         "## Quick start",
-        "## One workflow, both sides",
-        "## What you can do",
+        "## What you can make",
+        "## How it works",
+        "## What it can do",
+        "## Works with every coding agent",
         "## Works with Impeccable",
         "> [!TIP]",
-        "## Agent compatibility",
+        "## Reference",
         "## Maintenance",
         "## Open for pull requests",
         "## License",
@@ -58,18 +60,26 @@ def test_readme_keeps_activation_order_and_local_links_valid() -> None:
     assert offsets == sorted(offsets)
     assert "How it feels" not in readme
     assert "THIRD_PARTY_NOTICES" not in readme
+    assert "not affiliated with, sponsored by, or endorsed by Anthropic" in readme
 
-    local_targets = [
+    local_links = [
         target
         for target in re.findall(r"\[[^\]]+\]\(([^)]+)\)", readme)
         if not target.startswith(("http://", "https://", "#"))
     ]
-    assert local_targets
-    assert all((ROOT / target).is_file() for target in local_targets)
-    assert (ROOT / "docs" / "media" / "open-claude-design-hero.png").is_file()
-    assert (ROOT / "docs" / "media" / "claude-design-ui.webp").is_file()
-    assert readme.index("## Quick start") < readme.index("docs/media/claude-design-ui.webp")
-    assert readme.index("docs/media/claude-design-ui.webp") < readme.index("## One workflow, both sides")
+    local_media = re.findall(r'(?:src|srcset)="([^"]+)"', readme)
+    assert local_links
+    assert {
+        "docs/media/hero-light.webp",
+        "docs/media/hero-dark.webp",
+        "docs/media/examples/slides.webp",
+        "docs/media/examples/app.webp",
+        "docs/media/examples/cv.webp",
+        "docs/media/examples/design-system.webp",
+    } <= set(local_media)
+    assert all((ROOT / target).is_file() for target in [*local_links, *local_media])
+    assert readme.index("## Quick start") < readme.index("docs/media/examples/slides.webp")
+    assert readme.index("docs/media/examples/slides.webp") < readme.index("## How it works")
 
 
 def test_readme_promotes_the_one_line_installer_above_platforms() -> None:
@@ -78,11 +88,9 @@ def test_readme_promotes_the_one_line_installer_above_platforms() -> None:
 
     assert readme.count(command) == 1
     assert readme.index(command) < readme.index("**macOS · Linux · WSL2**")
-    subtitle = (
-        "**Use Claude Design from your favorite coding agents—no Claude Code installation "
-        "or Anthropic API key required.**"
-    )
-    assert readme.index("<h1>Claude Design for any coding agent</h1>") < readme.index(subtitle) < readme.index(command)
+    lead = "**Create Claude Design files from your real codebase, refine them on the canvas, and sync every change back"
+    assert readme.index("docs/media/hero-light.webp") < readme.index(lead) < readme.index(command)
+    assert "No Claude Code installation or Anthropic API key required" in readme
     assert "img.shields.io/github/stars/maxritter/open-claude-design" in readme
     assert "api.star-history.com" not in readme
 
@@ -120,7 +128,7 @@ def test_installer_has_a_responsive_wordmark_and_completion_guide() -> None:
     install = (ROOT / "install.sh").read_text(encoding="utf-8")
 
     assert "OPEN CLAUDE DESIGN" in install
-    assert "Design intelligence for coding agents" in install
+    assert "Claude Design, from any coding agent" in install
     assert "terminal_columns" in install
     assert "Open Claude Design is ready" in install
     assert "Star Open Claude Design" in install

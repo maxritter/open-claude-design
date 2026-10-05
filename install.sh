@@ -23,15 +23,15 @@ export UV_NO_CONFIG UV_DEFAULT_INDEX
 ORIGINAL_PATH="${PATH:-}"
 
 if [ -t 1 ] && [ "${NO_COLOR:-}" = "" ]; then
-  CYAN='\033[38;5;44m'
-  CORAL='\033[38;5;203m'
+  CLAY='\033[38;5;173m'
+  ACCENT='\033[38;5;209m'
   GREEN='\033[38;5;42m'
   MUTED='\033[38;5;245m'
   BOLD='\033[1m'
   RESET='\033[0m'
 else
-  CYAN=''
-  CORAL=''
+  CLAY=''
+  ACCENT=''
   GREEN=''
   MUTED=''
   BOLD=''
@@ -56,7 +56,7 @@ banner() {
 
   line ""
   if [ "$terminal_columns" -ge 92 ]; then
-    printf '%b' "${CYAN}${BOLD}"
+    printf '%b' "${CLAY}${BOLD}"
     # shellcheck disable=SC2016
     printf '%s\n' \
       '  ___  ___ ___ _  _    ___ _      _  _   _ ___  ___   ___  ___ ___ ___ ___ _  _ ' \
@@ -65,17 +65,17 @@ banner() {
       ' \___/|_| |___|_|\_|  \___|____/_/ \_\___/|___/|___| |___/|___|___/___\___|_|\_|'
     printf '%b' "$RESET"
   else
-    line "  ${CYAN}${BOLD}< OPEN CLAUDE DESIGN >${RESET}"
+    line "  ${CLAY}${BOLD}< OPEN CLAUDE DESIGN >${RESET}"
   fi
   line ""
-  line "  ${CORAL}>${RESET} ${BOLD}Design intelligence for coding agents${RESET}"
-  line "    ${MUTED}Claude Design's visual workflow, inside the agent you already use.${RESET}"
+  line "  ${ACCENT}>${RESET} ${BOLD}Claude Design, from any coding agent${RESET}"
+  line "    ${MUTED}Design from your real codebase. Changes sync back both ways.${RESET}"
   line ""
 }
 
 step() {
   line "${MUTED}${RULE}${RESET}"
-  line "${CORAL}${BOLD}[$1/5]${RESET} ${BOLD}$2${RESET}"
+  line "${ACCENT}${BOLD}[$1/5]${RESET} ${BOLD}$2${RESET}"
 }
 
 info() {
@@ -87,7 +87,7 @@ success() {
 }
 
 fail() {
-  line "${CORAL}Open Claude Design:${RESET} $*" >&2
+  line "${ACCENT}Open Claude Design:${RESET} $*" >&2
   exit 1
 }
 
@@ -406,12 +406,12 @@ line "  ${GREEN}${BOLD}✓ Open Claude Design is ready${RESET}"
 line "    ${MUTED}Create, inspect, and sync without leaving your coding agent.${RESET}"
 line ""
 line "  ${BOLD}Try it${RESET}"
-line "    Ask your agent: ${CYAN}Create a settings screen and open it in Claude Design.${RESET}"
+line "    Ask your agent: ${CLAY}Create a settings screen and open it in Claude Design.${RESET}"
 line ""
-line "  ${CORAL}${BOLD}★ Star Open Claude Design${RESET}"
+line "  ${ACCENT}${BOLD}★ Star Open Claude Design${RESET}"
 line "    https://github.com/$REPOSITORY"
 line ""
-line "  ${CYAN}${BOLD}↗ Go further with Pilot Shell${RESET}"
+line "  ${CLAY}${BOLD}↗ Go further with Pilot Shell${RESET}"
 line "    ${MUTED}Context and harness engineering for Claude Code and Codex${RESET}"
 line "    https://github.com/maxritter/pilot-shell"
 line ""

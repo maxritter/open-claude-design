@@ -7,15 +7,15 @@ MANAGED_UV="$RUNTIME_ROOT/uv/bin/uv"
 MANAGED_NPX="$RUNTIME_ROOT/node/bin/npx"
 
 if [ -t 1 ] && [ "${NO_COLOR:-}" = "" ]; then
-  CYAN='\033[38;5;44m'
-  CORAL='\033[38;5;203m'
+  CLAY='\033[38;5;173m'
+  ACCENT='\033[38;5;209m'
   GREEN='\033[38;5;42m'
   MUTED='\033[38;5;245m'
   BOLD='\033[1m'
   RESET='\033[0m'
 else
-  CYAN=''
-  CORAL=''
+  CLAY=''
+  ACCENT=''
   GREEN=''
   MUTED=''
   BOLD=''
@@ -27,7 +27,7 @@ line() {
 }
 
 step() {
-  line "${CORAL}${BOLD}[$1/3]${RESET} ${BOLD}$2${RESET}"
+  line "${ACCENT}${BOLD}[$1/3]${RESET} ${BOLD}$2${RESET}"
 }
 
 success() {
@@ -39,7 +39,7 @@ info() {
 }
 
 fail() {
-  line "${CORAL}Open Claude Design:${RESET} $*" >&2
+  line "${ACCENT}Open Claude Design:${RESET} $*" >&2
   exit 1
 }
 
@@ -73,9 +73,9 @@ case "$SCOPE" in
 esac
 
 line ""
-line "${CYAN}╭──────────────────────────────────────────────────────────╮${RESET}"
-line "${CYAN}│${RESET}  ${BOLD}Uninstall Open Claude Design${RESET}                            ${CYAN}│${RESET}"
-line "${CYAN}╰──────────────────────────────────────────────────────────╯${RESET}"
+line "${CLAY}╭──────────────────────────────────────────────────────────╮${RESET}"
+line "${CLAY}│${RESET}  ${BOLD}Uninstall Open Claude Design${RESET}                            ${CLAY}│${RESET}"
+line "${CLAY}╰──────────────────────────────────────────────────────────╯${RESET}"
 line ""
 
 if [ "$confirmed" -ne 1 ]; then
