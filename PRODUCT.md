@@ -33,7 +33,7 @@ The coding agent remains the implementation environment. Claude Design remains t
 - Authentication: a Claude Pro, Max, Team, or Enterprise account connected directly through `open-claude-design login`; no Claude Code installation or API key is required. Enterprise organizations must enable Claude Design.
 - Installation: one GitHub-hosted bootstrap installs the persistent CLI and the same portable skills for detected agents.
 - Distribution: GitHub repository and GitHub Releases; no npm or PyPI publication for Open Claude Design.
-- Companion tools: Impeccable is optional in the standalone package. Pilot Shell installs both as part of its wider engineering system.
+- Companion tools: Impeccable is optional. QualityLayer (qualitylayer.dev, formerly Pilot Shell) uses Open Claude Design and Impeccable when they are installed but does not install them.
 
 ## Capabilities and Constraints
 

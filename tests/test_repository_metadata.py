@@ -132,7 +132,8 @@ def test_installer_has_a_responsive_wordmark_and_completion_guide() -> None:
     assert "terminal_columns" in install
     assert "Open Claude Design is ready" in install
     assert "Star Open Claude Design" in install
-    assert "Go further with Pilot Shell" in install
+    assert "Go further with QualityLayer" in install
+    assert "https://qualitylayer.dev" in install
 
 
 def test_product_context_records_the_confirmed_public_constraints() -> None:

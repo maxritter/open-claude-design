@@ -110,7 +110,7 @@ The installer finds installed agents through pinned `skills@1.7.0`. Explicit ins
 [Impeccable](https://github.com/pbakaus/impeccable) adds design refinement commands, automated design checks, and edit-time hooks. It is optional.
 
 > [!TIP]
-> **Want the complete engineering system?** [Pilot Shell](https://github.com/maxritter/pilot-shell) is a context and harness engineering system for Claude Code and Codex, built around spec-driven development, TDD, enforced quality, persistent memory, and end-to-end verification. It installs Open Claude Design and the complete Impeccable package as part of that larger system.
+> **Want the whole path from request to reviewed code?** [QualityLayer](https://qualitylayer.dev), formerly Pilot Shell, is a software factory for Claude Code and Codex. You approve the plan before any code is written. Your agent builds it in small tested steps, and an AI that did not write the code checks the result. When Open Claude Design or Impeccable is installed, QualityLayer uses them to check mockups and sync them to Claude Design.
 
 ## Reference
 
