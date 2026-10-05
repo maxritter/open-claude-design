@@ -16,7 +16,13 @@ from typing import Any
 import pytest
 
 from open_claude_design.api import DesignAPI
-from open_claude_design.binary import PNG_SIGNATURE, original_png_bytes
+from open_claude_design.binary import (
+    PNG_SIGNATURE,
+    has_read_provenance_format,
+    original_image_bytes,
+    original_png_bytes,
+    svg_equivalent,
+)
 from open_claude_design.bridge import ClaudeDesignClient
 from open_claude_design.errors import ClaudeDesignProtocolError, ClaudeDesignSafetyError
 from open_claude_design.operation_locks import operation_lock
@@ -337,6 +343,71 @@ def test_read_added_provenance_is_removed_only_against_the_stored_byte_count() -
     assert original_png_bytes(enhanced, len(enhanced)) == enhanced
     with pytest.raises(ClaudeDesignProtocolError):
         original_png_bytes(enhanced, len(original) - 1)
+
+
+def _jpeg_segment(marker: int, payload: bytes) -> bytes:
+    return bytes((0xFF, marker)) + struct.pack(">H", len(payload) + 2) + payload
+
+
+def _webp(*chunks: bytes) -> bytes:
+    body = b"WEBP" + b"".join(chunks)
+    return b"RIFF" + struct.pack("<I", len(body)) + body
+
+
+def _riff_chunk(kind: bytes, data: bytes) -> bytes:
+    return kind + struct.pack("<I", len(data)) + data + (b"\0" if len(data) % 2 else b"")
+
+
+def test_read_added_jpeg_provenance_is_removed_only_against_the_stored_byte_count() -> None:
+    head = b"\xff\xd8" + _jpeg_segment(0xE0, b"JFIF\0\1\1\0\0\1\0\1\0\0")
+    tail = _jpeg_segment(0xDB, b"quant") + b"\xff\xda" + b"scan-data" + b"\xff\xd9"
+    original = head + tail
+    enhanced = head + _jpeg_segment(0xEB, b"JP\x02\x11manifest") + tail
+
+    assert has_read_provenance_format(enhanced)
+    assert original_image_bytes(enhanced, len(original)) == original
+    assert original_image_bytes(enhanced, len(enhanced)) == enhanced
+    with pytest.raises(ClaudeDesignProtocolError):
+        original_image_bytes(enhanced, len(original) - 1)
+    other_app11 = head + _jpeg_segment(0xEB, b"XX-not-jumbf") + tail
+    with pytest.raises(ClaudeDesignProtocolError):
+        original_image_bytes(other_app11, len(original))
+
+
+def test_read_added_webp_provenance_restores_the_container_size() -> None:
+    image = _riff_chunk(b"VP8X", b"\0" * 10) + _riff_chunk(b"VP8 ", b"frame")
+    original = _webp(image)
+    enhanced = _webp(image, _riff_chunk(b"C2PA", b"manifest"))
+
+    assert has_read_provenance_format(enhanced)
+    assert original_image_bytes(enhanced, len(original)) == original
+    with pytest.raises(ClaudeDesignProtocolError):
+        original_image_bytes(enhanced[:-2], len(original))
+    with pytest.raises(ClaudeDesignProtocolError):
+        original_image_bytes(_webp(image, _riff_chunk(b"EXIF", b"metadata")), len(original))
+
+
+def test_unknown_binary_formats_are_not_reconciled() -> None:
+    assert not has_read_provenance_format(b"GIF89a")
+    with pytest.raises(ClaudeDesignProtocolError):
+        original_image_bytes(b"GIF89a-changed", 6)
+
+
+def test_svg_is_equivalent_after_reserialization_and_c2pa_metadata_only() -> None:
+    written = (
+        b'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10">'
+        b'<path d="M0 0"/><rect width="2" height="1"/></svg>'
+    )
+    stored = (
+        b'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10" xmlns:c2pa="http://c2pa.org/manifest">'
+        b"<metadata><c2pa:manifest>AAAWgmp1bWI</c2pa:manifest></metadata>"
+        b'<path d="M0 0"></path><rect height="1" width="2"></rect></svg>'
+    )
+    assert svg_equivalent(written, stored)
+    assert not svg_equivalent(written, stored.replace(b'd="M0 0"', b'd="M0 1"'))
+    assert not svg_equivalent(written, stored.replace(b"c2pa:manifest", b"other"))
+    assert not svg_equivalent(written, b"<!DOCTYPE svg [<!ENTITY a 'x'>]>" + stored)
+    assert not svg_equivalent(written, b"<svg")
 
 
 def test_ambiguous_or_truncated_png_recovery_is_rejected() -> None:

@@ -30,7 +30,7 @@ from urllib.parse import ParseResult, urlparse
 
 from open_claude_design.api import DesignAPI, RemoteFile, read_retry_delay
 from open_claude_design.auth import DesignAuthError, load_standalone_credential
-from open_claude_design.binary import PNG_SIGNATURE, original_png_bytes
+from open_claude_design.binary import has_read_provenance_format, original_image_bytes, svg_equivalent
 from open_claude_design.config import (
     CLAUDE_CONFIG_DIRNAME,
     CLAUDE_CONFIG_ENV,
@@ -355,7 +355,7 @@ class ClaudeDesignClient:
     def read_raw_file(self, project_id: str, path: str) -> RemoteFile:
         """Read original text or binary bytes without the MCP window cap."""
         remote = self._api.get_file(project_id, path)
-        if remote.binary and remote.data.startswith(PNG_SIGNATURE):
+        if remote.binary and has_read_provenance_format(remote.data):
             parent = PurePosixPath(path).parent.as_posix()
             entries = _tool_result_value(
                 self.call_tool(
@@ -372,7 +372,7 @@ class ClaudeDesignClient:
                 or not isinstance(entry.get("size"), int)
             ):
                 raise ClaudeDesignProtocolError("The raw image changed or has no original byte count.")
-            data = original_png_bytes(remote.data, entry["size"])
+            data = original_image_bytes(remote.data, entry["size"])
             remote = RemoteFile(data, remote.etag, remote.content_type, remote.binary)
         return remote
 
@@ -1809,6 +1809,19 @@ def _expected_write_bytes(payload: dict[str, object]) -> dict[str, bytes | None]
     return expected
 
 
+def _readback_match(path: str, expected: bytes, actual: bytes) -> str | None:
+    """Return how written bytes were confirmed, or None when they were not.
+
+    Claude Design re-serializes SVG on write and adds a C2PA manifest, so an SVG
+    is confirmed as equivalent XML; every other file must read back exactly.
+    """
+    if actual == expected:
+        return "exact"
+    if path.lower().endswith(".svg") and svg_equivalent(expected, actual):
+        return "svg-equivalent"
+    return None
+
+
 def _verify_written_files(
     client: Any,
     project_id: str,
@@ -1826,9 +1839,10 @@ def _verify_written_files(
                 continue
             remote = _read_remote_bytes(client, project_id, path)
             actual, etag = remote.data, remote.etag
-            if actual != expected_bytes:
+            readback = _readback_match(path, expected_bytes, actual)
+            if readback is None:
                 raise ClaudeDesignProtocolError(f"Claude Design readback did not match the written bytes: {path}")
-            files.append({"path": path, "etag": etag, "bytes": len(actual)})
+            files.append({"path": path, "etag": etag, "bytes": len(actual), "readback": readback})
     except (ClaudeDesignError, ValueError) as error:
         return {
             "verified": False,
@@ -2816,7 +2830,7 @@ def _sync_apply_to_design(
         for remote_path, expected in sorted(expected_bytes.items()):
             remote = _read_remote_bytes(client, str(receipt["project_id"]), remote_path)
             data, etag = remote.data, remote.etag
-            if data != expected:
+            if _readback_match(remote_path, expected, data) is None:
                 return _sync_mark_unknown(
                     root,
                     receipt,

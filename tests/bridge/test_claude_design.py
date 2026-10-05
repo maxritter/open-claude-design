@@ -1756,7 +1756,9 @@ def test_design_push_reads_back_and_renders_every_dc_file(
     output = json.loads(capsys.readouterr().out)
     assert output["verification"] == {
         "verified": True,
-        "files": [{"path": "Example.dc.html", "etag": "written-1", "bytes": len(VALID_DC.encode())}],
+        "files": [
+            {"path": "Example.dc.html", "etag": "written-1", "bytes": len(VALID_DC.encode()), "readback": "exact"}
+        ],
         "previews": [
             {
                 "path": "Example.dc.html",
@@ -1845,6 +1847,58 @@ def test_design_push_keeps_assets_in_subfolders_without_the_opt_out(tmp_path: An
     args = _nested_push_args(source, "assets/logo.svg", allow_nested_page=False)
 
     assert run_design_command(args, client_factory=lambda: client, workspace_root=tmp_path) == 0
+
+
+class SvgStampingPushStubClient(VerifiedPushStubClient):
+    """Claude Design re-serializes a written SVG and adds a C2PA manifest."""
+
+    def __init__(self, stored_svg: str) -> None:
+        super().__init__()
+        self.stored_svg = stored_svg
+
+    def call_tool(self, name: str, arguments: dict[str, object]) -> dict[str, object]:
+        result = super().call_tool(name, arguments)
+        if name == "write_files":
+            for path, (etag, _body) in list(self.remote.items()):
+                if path.endswith(".svg"):
+                    self.remote[path] = (etag, self.stored_svg)
+        return result
+
+
+STAMPED_SVG = (
+    '<svg xmlns="http://www.w3.org/2000/svg" xmlns:c2pa="http://c2pa.org/manifest">'
+    '<metadata><c2pa:manifest>AAAW</c2pa:manifest></metadata><path d="M0 0"></path></svg>'
+)
+
+
+def test_design_push_verifies_a_reserialized_and_stamped_svg_as_equivalent(
+    tmp_path: Any,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    source = tmp_path / "logo.svg"
+    source.write_text('<svg xmlns="http://www.w3.org/2000/svg"><path d="M0 0"/></svg>', encoding="utf-8")
+    client = SvgStampingPushStubClient(STAMPED_SVG)
+    args = _nested_push_args(source, "assets/logo.svg", allow_nested_page=False)
+
+    assert run_design_command(args, client_factory=lambda: client, workspace_root=tmp_path) == 0
+    verification = json.loads(capsys.readouterr().out)["verification"]
+    assert verification["verified"] is True
+    assert verification["files"][0]["readback"] == "svg-equivalent"
+
+
+def test_design_push_still_fails_when_a_stored_svg_differs_beyond_provenance(
+    tmp_path: Any,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    source = tmp_path / "logo.svg"
+    source.write_text('<svg xmlns="http://www.w3.org/2000/svg"><path d="M0 0"/></svg>', encoding="utf-8")
+    client = SvgStampingPushStubClient(STAMPED_SVG.replace("M0 0", "M9 9"))
+    args = _nested_push_args(source, "assets/logo.svg", allow_nested_page=False)
+
+    assert run_design_command(args, client_factory=lambda: client, workspace_root=tmp_path) == 2
+    verification = json.loads(capsys.readouterr().out)["verification"]
+    assert verification["verified"] is False
+    assert "readback did not match" in verification["error"]
 
 
 def test_design_push_opt_out_writes_a_nested_page_but_reports_it_unlisted(
