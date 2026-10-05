@@ -1,3 +1,15 @@
 {
-  "buildPath": "comp"
+  "buildPath": "comp",
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "overused-font",
+        "value": "instrument sans",
+        "createdAt": "2026-10-05T09:11:36.855Z",
+        "reason": "Agent: Instrument Sans is the committed brand display face recorded in PRODUCT.md; it is not in the rule's listed overused set"
+      }
+    ]
+  }
 }
