@@ -117,7 +117,7 @@ The installer finds installed agents through pinned `skills@1.7.0`. Explicit ins
 <details>
 <summary><strong>Claude Design operations the CLI covers (23)</strong></summary>
 
-An authenticated check on September 30, 2026 found these 23 operations in Claude Design's live tool catalog. The CLI discovers the catalog at runtime. This is tool coverage, not a claim that every feature of the Claude web app has an API.
+An authenticated check on October 5, 2026 found these 23 operations in Claude Design's live tool catalog. The CLI discovers the catalog at runtime. This is tool coverage, not a claim that every feature of the Claude web app has an API.
 
 | Area | Operations |
 |---|---|
@@ -141,6 +141,7 @@ The newer in-conversation artifacts, artifact migration, public or group artifac
 | Organization defaults | `design-systems settings`, `default --if-current …` |
 | Project lifecycle and design-system bindings | `project rename`, `project inspect`, `project bind`, `project delete` |
 | Pages the editor will not list | `project pages` |
+| A live window that refreshes on every write | `project live` |
 | Original files and project ZIPs | `pull`, `push`, `export` |
 | Checks without a browser and batched reads | `validate`, `preview`, `batch` |
 | Current feature boundaries | `capabilities --json` |
@@ -167,7 +168,7 @@ Your agent loads these automatically when a request needs them.
 
 Access is read-only by default, and changes need your explicit request. File writes, copies, deletes, previews, and authoring plans run only through guarded `push`, `delete`, `planned-call`, and `preview` helpers. Each write is scoped to exact paths, checks that nobody changed the file in the meantime, keeps a backup before deletes, reads the result back, and confirms the preview loads.
 
-Pages must sit at the project root. A page in a folder still opens by direct link but never appears in Claude Design's Pages menu, so `push`, `planned-call`, and `sync` refuse it unless you pass `--allow-nested-page`. Running JavaScript, layout, and interaction remain a separate visual review (`render_executed: false`).
+Pages must sit at the project root. A page in a folder still opens by direct link but never appears in Claude Design's Pages menu, so `push`, `planned-call`, and `sync` refuse it unless you pass `--allow-nested-page`. `push` also refuses a design file the Claude Design editor could not edit: an expression inside `{{ }}`, a capitalized component tag, or an element left without its closing tag. Running JavaScript, layout, and interaction remain a separate visual review (`render_executed: false`).
 
 The same login serves both Claude Design APIs. Metadata changes can use a temporary project grant that you acknowledge; new grants are revoked and checked afterwards, and existing grants are kept.
 

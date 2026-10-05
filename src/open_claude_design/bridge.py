@@ -1721,7 +1721,8 @@ def _validate_serve_preview_url(url: str) -> None:
 
 
 def _open_preview_url(url: str) -> None:
-    _validate_serve_preview_url(url)
+    """Open a durable claude.ai/design link; the token-bearing serve_url never reaches the user's browser."""
+    _validate_durable_preview_url(url)
     if sys.platform == "darwin":
         opener = "/usr/bin/open"
     else:
@@ -1739,9 +1740,9 @@ def _open_preview_url(url: str) -> None:
             check=False,
         )
     except (OSError, subprocess.SubprocessError) as error:
-        raise ClaudeDesignSafetyError("Could not open the isolated Claude Design preview.") from error
+        raise ClaudeDesignSafetyError("Could not open the Claude Design link in the system browser.") from error
     if result.returncode != 0:
-        raise ClaudeDesignSafetyError("Could not open the isolated Claude Design preview.")
+        raise ClaudeDesignSafetyError("Could not open the Claude Design link in the system browser.")
 
 
 def _support_path_for_design(path: str) -> str:
@@ -1908,12 +1909,7 @@ def _verify_remote_previews(
                 if not isinstance(checked, dict) or checked.get("valid") is not True:
                     raise ClaudeDesignProtocolError(f"Claude Design preview failed structural/resource checks: {path}")
             if open_browser:
-                serve_url = preview.get("serve_url")
-                if not isinstance(serve_url, str) or not serve_url:
-                    raise ClaudeDesignProtocolError(
-                        f"Claude Design returned no short-lived browser preview after writing: {path}"
-                    )
-                _open_preview_url(serve_url)
+                _open_preview_url(open_url)
                 preview_result["opened"] = True
     except (ClaudeDesignError, ValueError) as error:
         failed: dict[str, object] = {"verified": False, "previews": previews, "error": str(error)}
@@ -3289,10 +3285,7 @@ def run_design_command(
                 raise ClaudeDesignProtocolError("Claude Design preview verification returned invalid metadata.")
             verification = checked
         if args.open_browser:
-            serve_url = preview.get("serve_url")
-            if not isinstance(serve_url, str) or not serve_url:
-                raise ClaudeDesignProtocolError("Claude Design render_preview returned no short-lived render URL.")
-            _open_preview_url(serve_url)
+            _open_preview_url(open_url)
         preview_output: dict[str, object] = {
             "tool": "render_preview",
             "open_url": open_url,
@@ -3583,7 +3576,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--open",
         dest="open_browser",
         action="store_true",
-        help="Open each copied HTML preview in the local system browser.",
+        help="Open each copied HTML page in Claude Design in the local system browser.",
     )
     _add_nested_page_flag(planned_parser)
     planned_parser.add_argument("--json", action="store_true", help="Output compact JSON.")
@@ -3598,7 +3591,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--open",
         dest="open_browser",
         action="store_true",
-        help="Open the isolated render locally while returning only its durable Claude Design URL.",
+        help="Open the durable Claude Design editor link in the local system browser.",
     )
     preview_parser.add_argument("--json", action="store_true", help="Output compact JSON.")
 
@@ -3666,7 +3659,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--open",
         dest="open_browser",
         action="store_true",
-        help="Open each freshly rendered HTML preview in the local system browser.",
+        help="Open each written HTML page in Claude Design in the local system browser.",
     )
     _add_nested_page_flag(push_parser)
     push_parser.add_argument("--json", action="store_true", help="Output compact JSON metadata.")
@@ -3712,7 +3705,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--open",
         dest="open_browser",
         action="store_true",
-        help="Open each synchronized HTML preview in the local system browser.",
+        help="Open each synchronized HTML page in Claude Design in the local system browser.",
     )
     _add_nested_page_flag(sync_apply)
     sync_apply.add_argument("--json", action="store_true", help="Output compact revision metadata.")

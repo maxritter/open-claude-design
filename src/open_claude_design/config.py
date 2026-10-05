@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Final
 
 PACKAGE_NAME: Final = "open-claude-design"
-VERSION: Final = "1.4.1"
+VERSION: Final = "1.5.0"
 
 CLAUDE_DESIGN_ENDPOINT: Final = "https://api.anthropic.com/v1/design/mcp"
 CLAUDE_DESIGN_RPC_ENDPOINT: Final = "https://api.anthropic.com/anthropic.omelette.api.v1alpha.OmeletteService/"

@@ -520,7 +520,7 @@ def test_sync_to_design_open_verifies_the_browser_preview(
     )
     assert run_design_command(apply_args, client_factory=lambda: client, workspace_root=tmp_path) == 0
     applied = json.loads(capsys.readouterr().out)
-    assert opened == ["https://preview.claudeusercontent.com/short-lived"]
+    assert opened == ["https://claude.ai/design/p/project-1"]
     assert applied["verification"]["previews"][0]["opened"] is True
 
 

@@ -9,6 +9,7 @@ import json
 import zipfile
 from pathlib import Path, PurePosixPath
 from typing import Any
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from open_claude_design import bridge
 from open_claude_design.config import (
@@ -57,6 +58,13 @@ def add_parsers(subparsers: Any) -> None:
     )
     pages.add_argument("project_id")
     pages.add_argument("--json", action="store_true")
+    live = project_commands.add_parser(
+        "live",
+        help="Return the project's auto-refreshing embed link for the user to watch writes land; reads only.",
+    )
+    live.add_argument("project_id")
+    live.add_argument("--open", dest="open_browser", action="store_true", help="Open it in the system browser.")
+    live.add_argument("--json", action="store_true")
     bind = project_commands.add_parser("bind", help="Replace the reviewed project's design-system bindings.")
     bind.add_argument("project_id")
     bind.add_argument("--design-system", dest="system_ids", action="append", default=[])
@@ -207,6 +215,23 @@ def _pages_report(client: Any, project_id: str) -> dict[str, object]:
     return report
 
 
+def _live_window(client: Any, project_id: str, *, open_browser: bool) -> dict[str, object]:
+    """Build the embed view from the URL get_project returned; Claude Design refreshes it on every write."""
+    project = bridge._tool_result_object(
+        client.call_tool("get_project", {"project_id": project_id}), tool="get_project"
+    )
+    url = project.get("url")
+    if not isinstance(url, str) or not url:
+        raise ClaudeDesignProtocolError("Claude Design returned no project URL.")
+    bridge._validate_durable_preview_url(url)
+    parsed = urlsplit(url)
+    query = [(key, value) for key, value in parse_qsl(parsed.query) if key != "embed"] + [("embed", "1")]
+    live_url = urlunsplit(parsed._replace(query=urlencode(query)))
+    if open_browser:
+        bridge._open_preview_url(live_url)
+    return {"project_id": project_id, "live_url": live_url, "opened": open_browser}
+
+
 def _require_system(client: Any, project_id: str) -> dict[str, Any]:
     metadata = bridge._tool_result_object(
         client.call_tool("get_project", {"project_id": project_id}), tool="get_project"
@@ -335,6 +360,8 @@ def run_operation(args: argparse.Namespace, client: Any, root: Path) -> int:
         elif args.project_command == "pages":
             payload = _pages_report(client, args.project_id)
             code = 0 if payload["ok"] else 2
+        elif args.project_command == "live":
+            payload = _live_window(client, args.project_id, open_browser=args.open_browser)
         else:
             payload = {"project": client.project_metadata(args.project_id)}
     elif command == "export":

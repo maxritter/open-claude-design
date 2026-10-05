@@ -2,6 +2,24 @@
 
 All notable changes to Open Claude Design are documented here. Releases follow semantic versioning and are generated from conventional commits.
 
+## [1.5.0](https://github.com/maxritter/open-claude-design/compare/v1.4.1...v1.5.0) (2026-10-05)
+
+### Added
+
+- `project live <project-id> [--open]` returns the project's `?embed=1` window, built from the URL `get_project` returns. Claude Design refreshes it on every write, so the user can watch a design land while the agent works. Read-only.
+- Validation now enforces the editor contract that Claude Design's live authoring prompt states. A template hole must be a dotted lookup or a literal (`{{ count + 1 }}` fails silently at render), a component mounts through `dc-import` rather than a capitalized tag, and every non-void element inside the template closes explicitly. `push` refuses a Design Component that breaks any of these.
+- Non-blocking `warnings` for a control-flow or import element placed directly under `deck-stage`, `scrollIntoView`, and a design without `a`/`a:hover` colors. Validation also reports `editor_overrides` and `comment_anchors`, so an agent implementing a design in code applies the rules the user made by direct editing.
+
+### Changed
+
+- `--open` on `preview`, `push`, `planned-call`, and `sync apply` now opens the durable `claude.ai/design` editor link. It used to open the short-lived render URL, which carries a project-scoped token, stays in browser history, and stops working minutes later.
+
+### Fixed
+
+- `push` no longer refuses files Claude Design writes itself. A static Design Component without a logic script, a logic script marked `type="text/plain"`, and self-closing SVG children such as `<path/>` are all accepted. A check of 87 Design Components across live projects now reports no false refusals.
+- Pushed SVG, JPEG, and WebP files verify again. Claude Design adds C2PA provenance on read and re-serializes SVG on write, so readback reported `verified: false` for files that had landed intact. Raster files are now compared after removing exactly one provenance block against the stored byte count (`readback: exact`). SVG is compared as canonical XML without the embedded manifest (`readback: svg-equivalent`). Anything ambiguous still fails closed.
+- The tool-workflows reference now says that `create_project` without `design_system_id` binds the organization default design system, and that `project bind --clear` removes it.
+
 ## [1.4.1](https://github.com/maxritter/open-claude-design/compare/v1.4.0...v1.4.1) (2026-10-01)
 
 ### Fixed

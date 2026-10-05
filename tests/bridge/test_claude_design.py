@@ -805,7 +805,7 @@ def test_preview_exposes_only_durable_url(capsys: pytest.CaptureFixture[str]) ->
     assert "claude.ai/design/project" in output
 
 
-def test_preview_open_uses_short_lived_render_without_exposing_it(
+def test_preview_open_launches_the_durable_editor_link_never_the_render_token(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
@@ -830,7 +830,7 @@ def test_preview_open_uses_short_lived_render_without_exposing_it(
     )
 
     assert run_design_command(args, client_factory=PreviewStub) == 0
-    assert opened == ["https://preview-1.claudeusercontent.com/render"]
+    assert opened == ["https://claude.ai/design/project"]
     output = capsys.readouterr().out
     assert "claudeusercontent.com" not in output
     assert json.loads(output)["opened"] is True
@@ -850,6 +850,15 @@ def test_preview_open_uses_short_lived_render_without_exposing_it(
 def test_preview_open_rejects_untrusted_short_lived_urls(url: str) -> None:
     with pytest.raises(ClaudeDesignProtocolError, match="preview URL"):
         claude_design._validate_serve_preview_url(url)
+
+
+def test_browser_opener_refuses_the_token_bearing_render_url(monkeypatch: pytest.MonkeyPatch) -> None:
+    launched: list[object] = []
+    monkeypatch.setattr(claude_design.subprocess, "run", lambda *a, **k: launched.append(a))
+
+    with pytest.raises(ClaudeDesignProtocolError, match="durable preview URL"):
+        claude_design._open_preview_url("https://preview-1.claudeusercontent.com/render")
+    assert launched == []
 
 
 @pytest.mark.parametrize(
@@ -2058,7 +2067,7 @@ def test_design_push_returns_unknown_when_preview_cannot_be_created(
     assert "durable preview" in output["verification"]["error"]
 
 
-def test_design_push_open_uses_short_lived_preview_but_returns_only_durable_url(
+def test_design_push_open_launches_and_returns_only_the_durable_url(
     tmp_path: Any,
     capsys: pytest.CaptureFixture[str],
     monkeypatch: pytest.MonkeyPatch,
@@ -2082,7 +2091,7 @@ def test_design_push_open_uses_short_lived_preview_but_returns_only_durable_url(
     assert run_design_command(args, client_factory=lambda: client, workspace_root=tmp_path) == 0
     raw = capsys.readouterr().out
     output = json.loads(raw)
-    assert opened == ["https://preview.claudeusercontent.com/render"]
+    assert opened == ["https://claude.ai/design/p/project-1"]
     assert output["verification"]["previews"][0] == {
         "path": "Example.dc.html",
         "open_url": "https://claude.ai/design/p/project-1",

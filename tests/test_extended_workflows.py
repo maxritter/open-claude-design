@@ -218,6 +218,61 @@ def test_structural_checks_catch_missing_dependencies_and_self_closing_component
     )["valid"]
 
 
+@pytest.mark.parametrize(
+    ("body", "issue"),
+    [
+        ("<div>{{ count + 1 }}</div>", "Template hole {{ count + 1 }} is an expression"),
+        ('<div title="{{ a ? b : c }}"></div>', "Template hole {{ a ? b : c }} is an expression"),
+        ('<Card item="{{ it }}"></Card>', "Capitalized tag <Card>"),
+        ("<ul><li>One<li>Two</ul>", "Element <li> is closed implicitly"),
+        ("<div><p>Unclosed</div>", "Element <p> is closed implicitly"),
+    ],
+)
+def test_editor_contract_violations_block_a_design_component(body: str, issue: str) -> None:
+    result = validate_html("page.dc.html", VALID_DC.replace("<div>Design</div>", body).encode())
+
+    assert not result["valid"]
+    assert any(issue in found for found in result["issues"])
+
+
+def test_editor_contract_accepts_lookups_literals_and_what_claude_design_writes() -> None:
+    body = (
+        "<div class=\"{{ item.tone }}\">{{ $index }} {{ true }} {{ 3 }} {{ 'x' }}</div>"
+        '<svg viewBox="0 0 4 4"><path d="M0 0h4"/><line x1="0" y1="0" x2="4" y2="4"/></svg>'
+        '<dc-import name="SiteFooter" hint-size="100%,320px"></dc-import>'
+    )
+    styled = VALID_DC.replace("<helmet></helmet>", "<helmet><style>a{color:#111}a:hover{color:#333}</style></helmet>")
+    result = validate_html("page.dc.html", styled.replace("<div>Design</div>", body).encode())
+    assert result["valid"], result["issues"]
+    assert result["warnings"] == []
+
+    # Static pages without logic, and logic marked type="text/plain", are both Claude Design's own output.
+    static = '<script src="./support.js"></script><x-dc><helmet></helmet><main>Static</main></x-dc>'
+    assert validate_html("page.dc.html", static.encode())["valid"]
+    plain = VALID_DC.replace('type="text/x-dc"', 'type="text/plain"')
+    assert validate_html("page.dc.html", plain.encode())["valid"]
+    doubled = VALID_DC + '<script type="text/x-dc" data-dc-script>class Component extends DCLogic {}</script>'
+    assert not validate_html("page.dc.html", doubled.encode())["valid"]
+
+
+def test_editor_advice_warns_without_blocking_and_reports_user_edits() -> None:
+    body = (
+        '<deck-stage width="1280" height="720"><sc-for list="{{ slides }}" as="s"><section></section></sc-for>'
+        '</deck-stage><div data-comment-anchor="c1">Pinned</div>'
+    )
+    source = VALID_DC.replace("<helmet></helmet>", '<helmet><style id="__om-edit-overrides">.x{}</style></helmet>')
+    source = source.replace("<div>Design</div>", body).replace("return {};", "window.scrollIntoView; return {};")
+    result = validate_html("page.dc.html", source.encode())
+
+    assert result["valid"], result["issues"]
+    assert result["editor_overrides"] is True
+    assert result["comment_anchors"] == 1
+    warnings = " ".join(result["warnings"])
+    assert "direct child of <deck-stage>" in warnings
+    assert "scrollIntoView" in warnings
+    assert "a:hover" in warnings
+
+
 class Inventory:
     """A project whose list_files inventory is fixed; any other call is a failure."""
 
@@ -306,3 +361,39 @@ def test_project_pages_reports_a_project_without_pages_as_ok(
     report = json.loads(capsys.readouterr().out)
     assert code == 0
     assert report["listed_pages"] == [] and report["nested_pages"] == []
+
+
+class ProjectStub:
+    def __init__(self, url: str) -> None:
+        self.url = url
+        self.calls: list[str] = []
+
+    def call_tool(self, name: str, arguments: dict[str, object]) -> dict[str, object]:
+        self.calls.append(name)
+        assert name == "get_project", "the live window must stay read-only"
+        return {"structuredContent": {"id": arguments["project_id"], "url": self.url}}
+
+
+def test_project_live_appends_embed_to_the_url_claude_design_returned(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import open_claude_design.bridge as bridge_module
+
+    opened: list[str] = []
+    monkeypatch.setattr(bridge_module, "_open_preview_url", opened.append)
+    client = ProjectStub("https://claude.ai/design/p/p?embed=0")
+    args = build_parser().parse_args(["project", "live", "p", "--open", "--json"])
+
+    assert run_design_command(args, client_factory=lambda: client, workspace_root=tmp_path) == 0
+    report = json.loads(capsys.readouterr().out)
+    assert report == {"project_id": "p", "live_url": "https://claude.ai/design/p/p?embed=1", "opened": True}
+    assert opened == ["https://claude.ai/design/p/p?embed=1"]
+    assert client.calls == ["get_project"]
+
+
+def test_project_live_refuses_a_url_outside_claude_ai(tmp_path: Path) -> None:
+    args = build_parser().parse_args(["project", "live", "p", "--json"])
+    client = ProjectStub("https://claude.ai.attacker.example/design/p/p")
+
+    with pytest.raises(ClaudeDesignProtocolError, match="durable preview URL"):
+        run_design_command(args, client_factory=lambda: client, workspace_root=tmp_path)
