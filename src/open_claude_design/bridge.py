@@ -36,6 +36,7 @@ from open_claude_design.config import (
     CLAUDE_CONFIG_ENV,
     CLAUDE_DESIGN_AUTHORING_CACHE_PARTS,
     CLAUDE_DESIGN_AUTHORING_CACHE_TTL_SECONDS,
+    CLAUDE_DESIGN_BACKENDS,
     CLAUDE_DESIGN_CREDENTIAL_MAX_BYTES,
     CLAUDE_DESIGN_DURABLE_PREVIEW_HOSTS,
     CLAUDE_DESIGN_ENDPOINT,
@@ -76,6 +77,7 @@ from open_claude_design.errors import (
     ClaudeDesignProtocolError,
     ClaudeDesignSafetyError,
 )
+from open_claude_design.migration import resolve_target, standalone_target, transition_status
 from open_claude_design.pages import (
     ALLOW_NESTED_PAGE_FLAG,
     nested_page_guidance,
@@ -559,6 +561,8 @@ class ClaudeDesignClient:
         initialized = self._initialize()
         result: dict[str, Any] = {
             "authenticated": True,
+            "backend": "standalone",
+            "transition": transition_status(),
             "endpoint": CLAUDE_DESIGN_ENDPOINT,
             "server": initialized.get("serverInfo"),
             "protocolVersion": initialized.get("protocolVersion"),
@@ -3159,7 +3163,47 @@ def run_design_command(
 ) -> int:
     """Execute a parsed `open-claude-design` bridge command."""
     command = args.design_command
-    from open_claude_design.operations import COMMANDS, run_operation
+    from open_claude_design.operations import COMMANDS, migration_check, run_operation
+
+    if command == "migration" and args.migration_command in {"status", "resolve"}:
+        payload = (
+            transition_status()
+            if args.migration_command == "status"
+            else {
+                **resolve_target(args.target),
+                "access_verified": False,
+            }
+        )
+        _print_design_result(payload, json_mode=args.json)
+        return 0
+    if getattr(args, "backend", "standalone") == "artifact":
+        _print_design_result(
+            {
+                "backend": "artifact",
+                "implemented": False,
+                "access_verified": False,
+                "error": "Artifact access has no verified portable interface under the Design-scoped connection.",
+                "transition": transition_status(),
+            },
+            json_mode=args.json,
+        )
+        return 2
+    for field in ("project_id", "design_system_id"):
+        value = getattr(args, field, None)
+        if isinstance(value, str) and value:
+            setattr(args, field, standalone_target(value))
+    if hasattr(args, "system_ids"):
+        args.system_ids = [standalone_target(value) for value in args.system_ids]
+    if command in {"call", "planned-call"}:
+        arguments = _parse_tool_arguments(args.args)
+        for field in ("project_id", "design_system_id"):
+            value = arguments.get(field)
+            if isinstance(value, str) and value:
+                arguments[field] = standalone_target(value)
+        args.args = json.dumps(arguments)
+    if command == "migration":
+        _print_design_result(migration_check(client_factory(), args.project_id), json_mode=args.json)
+        return 0
 
     if command in COMMANDS:
         return run_operation(args, client_factory(), _design_workspace_root(workspace_root))
@@ -3505,6 +3549,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     status_parser = subparsers.add_parser("status", help="Verify authentication and connectivity.")
     status_parser.add_argument("--json", action="store_true", help="Output compact JSON.")
+    status_parser.add_argument("--backend", choices=CLAUDE_DESIGN_BACKENDS, default="standalone")
 
     context_parser = subparsers.add_parser(
         "authoring-context",

@@ -5,7 +5,18 @@ from __future__ import annotations
 from typing import Final
 
 PACKAGE_NAME: Final = "open-claude-design"
-VERSION: Final = "1.5.0"
+VERSION: Final = "1.6.0"
+
+CLAUDE_DESIGN_STANDALONE_CLOSE_DATE: Final = "2026-12-14"
+CLAUDE_DESIGN_MIGRATION_GUIDE_URL: Final = (
+    "https://support.claude.com/en/articles/17440474-migrate-from-standalone-claude-design-to-claude"
+)
+CLAUDE_DESIGN_ARTIFACT_GUIDE_URL: Final = "https://code.claude.com/docs/en/artifacts"
+CLAUDE_DESIGN_RESOURCE_HOSTS: Final = frozenset({"claude.ai", "www.claude.ai"})
+CLAUDE_DESIGN_BACKENDS: Final = ("standalone", "artifact")
+CLAUDE_DESIGN_STANDALONE_PATH_PREFIX: Final = "/design/p/"
+CLAUDE_DESIGN_ARTIFACT_PATH_PREFIXES: Final = ("/code/artifact/", "/artifacts/", "/public/artifacts/")
+CLAUDE_DESIGN_EXPORT_METADATA_DIR: Final = "__open_claude_design_export__"
 
 CLAUDE_DESIGN_ENDPOINT: Final = "https://api.anthropic.com/v1/design/mcp"
 CLAUDE_DESIGN_RPC_ENDPOINT: Final = "https://api.anthropic.com/anthropic.omelette.api.v1alpha.OmeletteService/"
@@ -272,6 +283,7 @@ BRIDGE_COMMAND_NAMES: Final = (
     "export",
     "validate",
     "capabilities",
+    "migration",
 )
 INSTALL_SCOPES: Final = ("project", "global")
 DEFAULT_INSTALL_SCOPE: Final = "global"

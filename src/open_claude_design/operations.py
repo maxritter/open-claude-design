@@ -13,6 +13,8 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from open_claude_design import bridge
 from open_claude_design.config import (
+    CLAUDE_DESIGN_BACKENDS,
+    CLAUDE_DESIGN_EXPORT_METADATA_DIR,
     CLAUDE_DESIGN_KNOWN_READ_ONLY_TOOLS,
     CLAUDE_DESIGN_MAX_BATCH_READS,
     CLAUDE_DESIGN_MAX_EXPORT_BYTES,
@@ -20,6 +22,7 @@ from open_claude_design.config import (
     CLAUDE_DESIGN_PROJECT_TYPES,
 )
 from open_claude_design.errors import ClaudeDesignProtocolError, ClaudeDesignSafetyError
+from open_claude_design.migration import history_snapshot, redact_history, standalone_target, transition_status
 from open_claude_design.pages import (
     is_page_path,
     nested_page_guidance,
@@ -135,6 +138,11 @@ def add_parsers(subparsers: Any) -> None:
     export.add_argument("--path", default="", help="Optional project-relative directory to export.")
     export.add_argument("--output", required=True)
     export.add_argument("--force", action="store_true")
+    export.add_argument(
+        "--include-history",
+        action="store_true",
+        help="Also preserve project metadata, chats, and comments; refuse incomplete history.",
+    )
     export.add_argument("--allow-external-local-path", dest="external_local_paths", action="append", default=[])
     export.add_argument("--json", action="store_true")
 
@@ -145,6 +153,26 @@ def add_parsers(subparsers: Any) -> None:
     validate.add_argument("--json", action="store_true")
     capabilities = subparsers.add_parser("capabilities", help="Show live tool coverage and API workflow boundaries.")
     capabilities.add_argument("--json", action="store_true")
+    capabilities.add_argument("--backend", choices=CLAUDE_DESIGN_BACKENDS, default="standalone")
+
+    migration = subparsers.add_parser(
+        "migration", help="Inspect migration support and standalone readiness; never migrates remotely."
+    )
+    migration_commands = migration.add_subparsers(dest="migration_command", required=True)
+    status = migration_commands.add_parser(
+        "status", help="Show closure and backend support without authentication or network access."
+    )
+    status.add_argument("--json", action="store_true")
+    resolve = migration_commands.add_parser(
+        "resolve", help="Identify a project or artifact route offline; does not verify access."
+    )
+    resolve.add_argument("target")
+    resolve.add_argument("--json", action="store_true")
+    check = migration_commands.add_parser(
+        "check", help="Read one standalone project's inventory; host migration validation remains required."
+    )
+    check.add_argument("project_id")
+    check.add_argument("--json", action="store_true")
 
 
 def _project_metadata(project: dict[str, Any]) -> dict[str, object]:
@@ -163,7 +191,7 @@ def _project_metadata(project: dict[str, Any]) -> dict[str, object]:
     }
 
 
-def _files(client: Any, project_id: str, path: str = "") -> dict[str, str]:
+def _file_inventory(client: Any, project_id: str, path: str = "") -> dict[str, dict[str, Any]]:
     if path:
         bridge._validate_remote_path(path)
     result = bridge._tool_result_value(
@@ -171,7 +199,7 @@ def _files(client: Any, project_id: str, path: str = "") -> dict[str, str]:
     )
     if not isinstance(result, list):
         raise ClaudeDesignProtocolError("Claude Design did not return a complete file inventory.")
-    files: dict[str, str] = {}
+    files: dict[str, dict[str, Any]] = {}
     for entry in result:
         if not isinstance(entry, dict) or entry.get("type") != "file":
             continue
@@ -181,8 +209,54 @@ def _files(client: Any, project_id: str, path: str = "") -> dict[str, str]:
         bridge._validate_remote_path(remote_path)
         if remote_path in files or (path and not remote_path.startswith(path + "/")):
             raise ClaudeDesignProtocolError("Claude Design returned a duplicate or out-of-scope file.")
-        files[remote_path] = etag
+        files[remote_path] = entry
     return files
+
+
+def _files(client: Any, project_id: str, path: str = "") -> dict[str, str]:
+    return {name: entry["etag"] for name, entry in _file_inventory(client, project_id, path).items()}
+
+
+def migration_check(client: Any, project_id: str) -> dict[str, Any]:
+    metadata = client.project_metadata(project_id)
+    inventory = _file_inventory(client, project_id)
+    sizes: dict[str, int] = {}
+    for path, entry in inventory.items():
+        size = entry.get("size")
+        if isinstance(size, int) and not isinstance(size, bool) and size >= 0:
+            sizes[path] = size
+    is_system = metadata.get("type") == CLAUDE_DESIGN_PROJECT_TYPES["design-system"]
+    return {
+        "backend": "standalone",
+        "project_id": project_id,
+        "project": metadata,
+        "transition": transition_status(),
+        "migration_verified": False,
+        "host_check_required": True,
+        "eligibility": "excluded-empty-design-system"
+        if is_system and not inventory
+        else "requires-host-check"
+        if is_system
+        else "project-procedure-not-yet-documented",
+        "starter_theme_origin": "unknown",
+        "artifact_permissions": "not-checked-by-standalone-connection",
+        "inventory": {
+            "file_count": len(inventory),
+            "known_bytes": sum(sizes.values()),
+            "files_without_size": sorted(set(inventory) - set(sizes)),
+            "uploads": sorted(path for path in inventory if path.startswith("uploads/")),
+            "files_above_cli_transfer_limit": sorted(
+                path for path, size in sizes.items() if size > CLAUDE_DESIGN_MAX_TRANSFER_FILE_BYTES
+            ),
+            "above_cli_export_limit": sum(sizes.values()) > CLAUDE_DESIGN_MAX_EXPORT_BYTES,
+        },
+        "archive_limits_are_artifact_limits": False,
+        "next_step": (
+            "Use Claude's migration checker for file names, types, encoding, size, "
+            "theme origin, and organization permissions."
+        ),
+        "mutated": False,
+    }
 
 
 def _pages_report(client: Any, project_id: str) -> dict[str, object]:
@@ -255,6 +329,10 @@ def _batch(args: argparse.Namespace, client: Any) -> dict[str, object]:
             raise ClaudeDesignSafetyError("Read batches cannot contain write, preview, or unreviewed tools.")
         if not isinstance(arguments, dict):
             raise ValueError("Each batch call's args must be an object.")
+        for field in ("project_id", "design_system_id"):
+            value = arguments.get(field)
+            if isinstance(value, str) and value:
+                arguments[field] = standalone_target(value)
         validated.append((name, arguments))
     catalog = client.list_tools()
     for name, _arguments in validated:
@@ -276,10 +354,15 @@ def _export(args: argparse.Namespace, client: Any, root: Path) -> dict[str, obje
     )
     if target.exists() and not args.force:
         raise ClaudeDesignSafetyError("The export output already exists; use --force to replace it.")
+    if args.include_history and args.path:
+        raise ClaudeDesignSafetyError("History preservation requires a whole-project export; omit --path.")
     revisions = _files(client, args.project_id, args.path)
-    manifest_path = "__open_claude_design_export__/manifest.json"
-    if manifest_path in revisions:
-        raise ClaudeDesignSafetyError("The project already contains the reserved export-manifest path.")
+    manifest_path = f"{CLAUDE_DESIGN_EXPORT_METADATA_DIR}/manifest.json"
+    if manifest_path in revisions or (
+        args.include_history and any(path.startswith(CLAUDE_DESIGN_EXPORT_METADATA_DIR + "/") for path in revisions)
+    ):
+        raise ClaudeDesignSafetyError("The project already contains reserved export metadata paths.")
+    history = history_snapshot(client, args.project_id) if args.include_history else None
     buffer = io.BytesIO()
     entries = []
     total = 0
@@ -302,7 +385,38 @@ def _export(args: argparse.Namespace, client: Any, root: Path) -> dict[str, obje
             )
         if _files(client, args.project_id, args.path) != revisions:
             raise ClaudeDesignSafetyError("Claude Design changed during export; no archive was saved.")
-        archive.writestr(manifest_path, json.dumps({"schema": 1, "files": entries}, sort_keys=True))
+        if history is not None:
+            if history_snapshot(client, args.project_id) != history:
+                raise ClaudeDesignSafetyError("Claude Design history changed during export; no archive was saved.")
+            for key, value in history.items():
+                data = json.dumps(redact_history(value), ensure_ascii=True, sort_keys=True).encode()
+                total += len(data)
+                if total > CLAUDE_DESIGN_MAX_EXPORT_BYTES:
+                    raise ClaudeDesignSafetyError("The project and history exceed the 128 MiB export limit.")
+                path = f"{CLAUDE_DESIGN_EXPORT_METADATA_DIR}/{key}.json"
+                archive.writestr(path, data)
+                entries.append(
+                    {"path": path, "bytes": len(data), "sha256": hashlib.sha256(data).hexdigest(), "kind": "history"}
+                )
+            if _files(client, args.project_id, args.path) != revisions:
+                raise ClaudeDesignSafetyError(
+                    "Claude Design changed during history verification; no archive was saved."
+                )
+        archive.writestr(
+            manifest_path,
+            json.dumps(
+                {
+                    "schema": 2 if history is not None else 1,
+                    "backend": "standalone",
+                    "project_id": args.project_id,
+                    "files": entries,
+                    "history_included": history is not None,
+                    "history_redacted": history is not None,
+                    "snapshot_atomic": False,
+                },
+                sort_keys=True,
+            ),
+        )
     data = buffer.getvalue()
     bridge._atomic_write_local(
         target, data, force=args.force, workspace_root=root, authorized_external_paths=args.external_local_paths
@@ -311,7 +425,9 @@ def _export(args: argparse.Namespace, client: Any, root: Path) -> dict[str, obje
         "verified": True,
         "format": "zip",
         "output": str(target),
-        "files": len(entries),
+        "files": len(revisions),
+        "history_included": history is not None,
+        "snapshot_atomic": False,
         "source_bytes": total,
         "archive_bytes": len(data),
         "sha256": hashlib.sha256(data).hexdigest(),
@@ -387,6 +503,8 @@ def run_operation(args: argparse.Namespace, client: Any, root: Path) -> int:
         code = 0 if payload["valid"] else 2
     elif command == "capabilities":
         payload = {
+            "backend": "standalone",
+            "transition": transition_status(),
             "tools": [bridge._compact_tool(tool) for tool in client.list_tools()],
             "api_workflows": [
                 "native-design-system-creation",

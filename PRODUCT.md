@@ -20,7 +20,7 @@ Success means the codebase and Claude Design remain aligned without blind overwr
 
 Open Claude Design combines three things in one workflow that neighboring design-prompt packages do not necessarily provide together:
 
-- the complete Claude Design surface Anthropic exposes to coding agents;
+- the standalone Claude Design operations exposed through the reviewed connection;
 - automatic, codebase-grounded design expertise across many coding agents; and
 - conflict-aware synchronization between local code and the visual Claude Design workspace.
 
@@ -29,8 +29,8 @@ The coding agent remains the implementation environment. Claude Design remains t
 ## Operating Context
 
 - Runtime: a shell-capable coding agent on macOS, Linux, or WSL2.
-- Visual workspace: Claude Design's web interface for reviewing and tweaking designs.
-- Authentication: a Claude Pro, Max, Team, or Enterprise account connected directly through `open-claude-design login`; no Claude Code installation or API key is required. Enterprise organizations must enable Claude Design.
+- Visual workspace: standalone Claude Design's web interface for reviewing and tweaking designs. Anthropic announced closure on December 14, 2026; new designs live in Claude Artifacts.
+- Authentication: a Claude account with standalone Design access connected directly through `open-claude-design login`; no Claude Code installation or API key is required. This connection does not prove artifact access.
 - Installation: one GitHub-hosted bootstrap installs the persistent CLI and the same portable skills for detected agents.
 - Distribution: GitHub repository and GitHub Releases; no npm or PyPI publication for Open Claude Design.
 - Companion tools: Impeccable is optional. QualityLayer (qualitylayer.dev, formerly Pilot Shell) uses Open Claude Design and Impeccable when they are installed but does not install them.
@@ -48,6 +48,7 @@ The coding agent remains the implementation environment. Claude Design remains t
 - Use a CLI as the universal agent transport. Open Claude Design is an MCP client internally, not another MCP server for users to configure in every agent.
 - Cover everything Anthropic exposes to agents over MCP; do not claim that web-canvas gestures unavailable over MCP are remotely automated.
 - Install the same five implicit Agent Skills for every supported coding agent through one compatibility mechanism.
+- Diagnose standalone-to-artifact migration and preserve files, chats, comments, and project metadata through an opt-in local archive. Migration eligibility remains Anthropic's decision; artifact authoring is unimplemented pending a verified portable interface.
 - Remain free and source-available while restricting redistribution, rebranding, competing publication, and hosted resale.
 
 ## Brand Commitments
@@ -68,6 +69,7 @@ The coding agent remains the implementation environment. Claude Design remains t
 ## Evidence on Hand
 
 - A live authenticated audit on 2026-08-30 returned 23 Claude Design MCP tools covering projects, files, prompts, design skills, previews, conversations, comments, members, sharing, and remote writes.
+- On 2026-10-09 the standalone connection still authenticated and advertised 23 project-based tools. Read-only live checks verified migration inventory diagnostics and complete history decoding; they did not verify artifact authoring or remote migration.
 - The CLI, credential providers, synchronization helpers, installer adapter, skills, and cross-platform tests are implemented locally.
 - The existing Pilot Shell implementation provides the proven CLI-client and disk-backed synchronization architecture being generalized here.
 - The brand assets listed above were redrawn on 2026-10-05 from a Claude Design brand board, with Imagegen used for concept exploration and example photography.

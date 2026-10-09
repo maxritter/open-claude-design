@@ -2,6 +2,18 @@
 
 All notable changes to Open Claude Design are documented here. Releases follow semantic versioning and are generated from conventional commits.
 
+## [1.6.0](https://github.com/maxritter/open-claude-design/compare/v1.5.0...v1.6.0) (2026-10-09)
+
+### Added
+
+- Offline `migration status` and `migration resolve` commands distinguish standalone projects from Claude artifact URLs. `migration check` reads one standalone inventory and reports preservation limits while leaving migration eligibility to Anthropic's checker.
+- `export --include-history` preserves project metadata, chats, and comments alongside files in a private ZIP. It redacts known credentials and render capabilities, verifies files and history again before saving, and refuses incomplete transcripts or observed concurrent changes.
+
+### Changed
+
+- Status and capabilities identify the standalone backend and its announced December 14, 2026 closure. Selecting `--backend artifact` returns an explicit unsupported result without authentication. Project helpers accept standalone URLs and reject artifact URLs instead of passing them to the standalone service.
+- Agent guidance describes the organization-wide migration, separate original and migrated copies, and preservation before closure. Artifact authoring remains unimplemented pending a verified portable interface.
+
 ## [1.5.0](https://github.com/maxritter/open-claude-design/compare/v1.4.1...v1.5.0) (2026-10-05)
 
 ### Added

@@ -1,12 +1,16 @@
 ---
 name: open-claude-design
-description: Access the Anthropic product named Claude Design when the request contains that exact name, a claude.ai/design URL, or a .dc.html file. Use for its projects, files, design systems, previews, conversations, comments, sharing, and code-to-design or design-to-code synchronization; otherwise stay inactive.
+description: Access the Anthropic product named Claude Design when the request contains that exact name, a claude.ai/design URL, or a .dc.html file. Also use for standalone-to-artifact migration and Claude Design artifact links. Use for projects, files, design systems, previews, conversations, comments, sharing, and code-to-design or design-to-code synchronization; otherwise stay inactive.
 license: Source-available; see LICENSE.md
 ---
 
 # Claude Design
 
 Use Claude Design as an external design workspace without loading its tool catalog into unrelated sessions. This skill owns access and synchronization; `open-claude-ui-design`, `open-claude-design-system`, and `open-claude-ui-review` continue to own product-design judgment and repository implementation.
+
+## Standalone and artifacts
+
+The CLI currently accesses standalone Claude Design, which Anthropic says closes on December 14, 2026. Claude Design in Claude uses artifacts. Read [migration guidance](references/migration.md) for artifact links, transition diagnostics, preservation, and migration requests. `migration status` and `migration resolve <url>` run offline. `status --backend artifact` returns an explicit unsupported result; a successful standalone login never proves artifact access. Do not create a standalone replacement for a requested artifact or pass a bare artifact id into project commands.
 
 ## Use one transport
 

@@ -32,10 +32,10 @@ Open Claude Design connects the two. Mention **Claude Design** in a request to y
 
 ## Quick start
 
-**You need** macOS, Linux, or WSL2 and a [Claude Pro, Max, Team, or Enterprise account](https://support.claude.com/en/articles/14604416-getting-started-with-claude-design). You can install before your coding agent.
+**You need** macOS, Linux, or WSL2 and a Claude account with access to [standalone Claude Design](https://claude.ai/design). You can install before your coding agent.
 
 > [!IMPORTANT]
-> Open Claude Design needs Claude Design access, which Anthropic's Claude Design guide currently lists for paid plans. It uses your plan's shared usage limits. [Enterprise administrators](https://support.claude.com/en/articles/14604406-claude-design-admin-guide-for-team-and-enterprise-plans) must enable standalone access under Organization settings → Claude Design.
+> This CLI connects to standalone Claude Design. Anthropic will close that site on **December 14, 2026**; the new Claude Design lives in Claude Artifacts. Artifact access through this CLI remains unsupported. Use `open-claude-design migration status --json` to check support and [Anthropic's migration guide](https://support.claude.com/en/articles/17440474-migrate-from-standalone-claude-design-to-claude) to move design systems. New Claude Design is available on Free and paid plans; the standalone connection still requires access to that service.
 
 1. **Run the installer above.** It installs the CLI, adds the workflows to every coding agent it finds, and opens the Claude login in your browser.
 
@@ -43,7 +43,7 @@ Open Claude Design connects the two. Mention **Claude Design** in a request to y
 
    > Create a Claude Design version of this settings flow, using the real components and states from the codebase.
 
-3. **Open the result in Claude Design.** Use the Claude Design sidebar in the [Claude Desktop app](https://claude.com/download) or the [Claude Design web app](https://claude.ai/design). Change what you like, then ask your agent to bring the changes into the code.
+3. **Open the result in standalone Claude Design.** Follow the link your agent returns to the [standalone web app](https://claude.ai/design). Change what you like, then ask your agent to bring the changes into the code.
 
 ## What you can make
 
@@ -84,9 +84,10 @@ Fictional examples, each built by a coding agent with Open Claude Design and ope
 
 ## What it can do
 
-- **Use your whole Claude Design workspace.** Projects, files, previews, design systems, conversations, comments, members, and sharing.
+- **Use your standalone Claude Design workspace.** Projects, files, previews, design systems, conversations, comments, members, and sharing.
 - **Manage design systems from your agent.** Create, publish, and unpublish them, manage their preview cards, and set your organization's default.
 - **Move real files.** Upload and download images, fonts, and other files up to 16 MiB, and export a whole project as a ZIP.
+- **Prepare for migration.** Check standalone inventories and preserve chats, comments, and project metadata with `export --include-history`.
 - **Check designs before you open them.** The CLI checks file structure, scripts, and linked resources, and confirms the preview loads.
 - **Keep pages findable.** Claude Design's Pages menu lists only pages at the project root, so the CLI refuses to write a page into a folder.
 - **Stay light on context.** Claude Design's current guidance loads only when a task needs it.
@@ -126,7 +127,27 @@ An authenticated check on October 5, 2026 found these 23 operations in Claude De
 | **Conversations and comments** (4) | Read a conversation · update a conversation · list comments · acknowledge comments |
 | **Members and sharing** (5) | List members · add a member · remove a member · change a member role · update sharing |
 
-The newer in-conversation artifacts, artifact migration, public or group artifact sharing, and native PDF, PPTX, and Google Slides exports have no verified interface under this connection. ZIP export is available. Open Claude Design does not imitate missing interfaces with browser control.
+The newer in-conversation artifacts, artifact migration, public or group artifact sharing, and native PDF, PPTX, and Google Slides exports have no verified interface under this connection. ZIP export can preserve files, chats, comments, and project metadata. Open Claude Design does not imitate missing interfaces with browser control.
+
+</details>
+
+<details>
+<summary><strong>Prepare for the move to Claude Artifacts</strong></summary>
+
+```bash
+open-claude-design migration status --json
+open-claude-design migration resolve 'https://claude.ai/code/artifact/<id>' --json
+open-claude-design migration check <standalone-project-id> --json
+open-claude-design export <standalone-project-id> \
+  --include-history \
+  --output .open-claude-design/archives/project.zip --json
+```
+
+The first two commands run offline. The readiness check reads a single standalone inventory and reports archive limits; Anthropic's own checker determines migration eligibility. History export preserves files, chats, comments, and project metadata, with credentials and preview capabilities redacted. It saves nothing if history is incomplete or changes during export. Chats and comments are not carried over by Anthropic's migration, so preserve anything you need before closure.
+
+Migration affects all design systems in an organization, and published non-private systems become organization-wide on team plans. Originals and migrated copies remain separate. Project-migration details are still pending. The CLI never starts migration or changes visibility as part of a check.
+
+`status --backend artifact` and `capabilities --backend artifact` return exit `2` without connecting. Standalone project commands reject artifact URLs. See the [migration workflow](skills/open-claude-design/references/migration.md) for permission, preservation, and verification details.
 
 </details>
 
