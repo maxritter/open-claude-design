@@ -2,6 +2,24 @@
 
 All notable changes to Open Claude Design are documented here. Releases follow semantic versioning and are generated from conventional commits.
 
+## [1.7.0](https://github.com/maxritter/open-claude-design/compare/v1.6.0...v1.7.0) (2026-10-09)
+
+### Added
+
+- Experimental native Claude Design artifact access from every supported coding agent, without installing Claude Code or invoking a model. Dedicated `login --backend artifact` stores a separate subscription credential; existing standalone and Claude Code logins stay independent.
+- `artifacts list`, `types`, `create`, `inspect`, `files`, `authoring-context`, `pull`, `push`, and `preview`. Creation uses a retained UUID idempotency key. Private Design text writes carry the reviewed artifact version and per-file SHA-256 conditions, preserve omitted/runtime files, and verify exact published bytes. New artboards require their canvas index.
+- `artifacts sync review`, `apply`, `finish`, and offline `status`. Reviews retain immutable snapshots, bind approval to local/remote revisions and the login identity, require reconciliation for both-side changes, consume unknown writes without retrying, and advance baselines only after verification. To-code handoffs preserve production files for the agent's approved implementation.
+
+### Changed
+
+- Agent guidance prefers native artifacts for new Claude Design requests and routes existing standalone links to the existing backend. README documents the experimental scope, separate authentication, actual preview evidence, migration boundaries, and unsupported artifact operations.
+- Artifact status and capabilities now authenticate against the live contract and distinguish implemented workflows from server capabilities. This replaces v1.6's offline unsupported response.
+
+### Verification and limits
+
+- Live Max-account checks covered private creation, first publication, conditional updates, file readback, browser canvas rendering, and both sync directions. Artifact file operations use no model inference; a profile-only OAuth grant was refused. The working grant uses profile, inference, and session scopes.
+- The frame protocol is not a documented public SDK and may change upstream. Free access and other plan/organization combinations are unverified. Artifact preview performs source checks, not rendering. Binary upload, public writes, deletion, sharing, comments, design-system administration, and organization-wide migration are outside this release's scope.
+
 ## [1.6.0](https://github.com/maxritter/open-claude-design/compare/v1.5.0...v1.6.0) (2026-10-09)
 
 ### Added

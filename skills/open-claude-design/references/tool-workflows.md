@@ -1,5 +1,8 @@
 # Claude Design Tool Workflows
 
+These workflows apply to standalone projects. For native Design artifact links, use [artifact workflows](artifacts.md).
+
+
 Read this reference only when a real Claude Design project must be accessed or changed. Tool schemas and annotations are live; inspect them with `open-claude-design describe <tool> --json` before every call whose arguments or safety contract matter.
 
 Claude Design's system prompt and design skills are live host guidance, not bundled documentation. Keep one authority for each concern:

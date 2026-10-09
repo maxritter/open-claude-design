@@ -27,8 +27,6 @@ def no_client() -> Any:
     [
         ["migration", "status"],
         ["migration", "resolve", "https://claude.ai/code/artifact/a"],
-        ["status", "--backend", "artifact"],
-        ["capabilities", "--backend", "artifact"],
     ],
 )
 def test_offline_backend_diagnostics_never_open_a_client(
@@ -36,7 +34,7 @@ def test_offline_backend_diagnostics_never_open_a_client(
 ) -> None:
     code = run_design_command(build_parser().parse_args([*command, "--json"]), client_factory=no_client)
     payload = json.loads(capsys.readouterr().out)
-    assert code == (2 if "--backend" in command else 0)
+    assert code == 0
     assert payload.get("access_verified") is not True
 
 

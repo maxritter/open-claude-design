@@ -106,7 +106,7 @@ def test_logout_removes_only_standalone_credential(
     monkeypatch.setattr(cli, "delete_standalone_credential", lambda: True)
 
     assert main(["logout", "--yes"]) == 0
-    assert capsys.readouterr().out == "Open Claude Design credential removed.\n"
+    assert capsys.readouterr().out == "Open Claude Design standalone credential removed.\n"
 
 
 def test_bridge_commands_are_flat_top_level_commands(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -19,6 +19,7 @@ from open_claude_design.auth import (
 )
 from open_claude_design.config import (
     BRIDGE_COMMAND_NAMES,
+    CLAUDE_DESIGN_BACKENDS,
     DEFAULT_INSTALL_SCOPE,
     INSTALL_SCOPES,
     VERSION,
@@ -80,6 +81,7 @@ def build_parser() -> argparse.ArgumentParser:
     remove.add_argument("--json", action="store_true", help="Output JSON.")
 
     login = subparsers.add_parser("login", help="Connect a Claude.ai account to Claude Design.")
+    login.add_argument("--backend", choices=CLAUDE_DESIGN_BACKENDS, default="standalone")
     login.add_argument(
         "--manual",
         action="store_true",
@@ -93,7 +95,8 @@ def build_parser() -> argparse.ArgumentParser:
         help="Browser callback timeout (default: 300).",
     )
 
-    logout = subparsers.add_parser("logout", help="Remove Open Claude Design's standalone credential.")
+    logout = subparsers.add_parser("logout", help="Remove this CLI's credential for the selected backend.")
+    logout.add_argument("--backend", choices=CLAUDE_DESIGN_BACKENDS, default="standalone")
     logout.add_argument("--yes", "-y", action="store_true", help="Remove without prompting.")
 
     check = subparsers.add_parser("doctor", help="Verify installed artifacts and bridge prerequisites.")
@@ -156,6 +159,7 @@ def main(argv: list[str] | None = None) -> int:
                     "that terminal, not into a coding-agent chat."
                 )
             login_design(
+                backend=args.backend,
                 manual=args.manual,
                 timeout_seconds=args.timeout,
                 allow_manual_fallback=sys.stdin.isatty(),
@@ -169,8 +173,17 @@ def main(argv: list[str] | None = None) -> int:
                 if answer not in {"y", "yes"}:
                     print("Credential kept.")
                     return 0
-            removed = delete_standalone_credential()
-            print("Open Claude Design credential removed." if removed else "No standalone credential was stored.")
+            if args.backend == "artifact":
+                from open_claude_design.artifact_auth import delete_artifact_credential
+
+                removed = delete_artifact_credential()
+            else:
+                removed = delete_standalone_credential()
+            print(
+                f"Open Claude Design {args.backend} credential removed."
+                if removed
+                else f"No {args.backend} credential was stored."
+            )
             return 0
         agents = _selected_agents(args)
         scope = cast(Scope, args.scope)

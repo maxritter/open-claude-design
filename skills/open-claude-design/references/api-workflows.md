@@ -1,5 +1,8 @@
 # API workflows
 
+These workflows apply to standalone projects. For native Design artifact links, use [artifact workflows](artifacts.md).
+
+
 Read this reference for native design-system lifecycle operations, preview cards, large or binary transfers, archives, or batching. All commands use the same scoped login and work in every agent through the CLI. They require no browser control. The first-party API supplements the live MCP catalog; it does not bypass the CLI's authorization, path, readback, and concurrency gates.
 
 ## Native design systems

@@ -1475,6 +1475,9 @@ def _redact_capabilities(value: Any) -> Any:
             normalized = re.sub(r"[^a-z0-9]", "", str(key).lower())
             if normalized in {
                 "accesstoken",
+                "assettoken",
+                "subscriptiontoken",
+                "artifactoauth",
                 "authorizationcode",
                 "bearertoken",
                 "plantoken",
@@ -3160,6 +3163,7 @@ def run_design_command(
     *,
     client_factory: Callable[[], Any] = ClaudeDesignClient,
     workspace_root: Path | None = None,
+    artifact_client_factory: Callable[[], Any] | None = None,
 ) -> int:
     """Execute a parsed `open-claude-design` bridge command."""
     command = args.design_command
@@ -3177,17 +3181,15 @@ def run_design_command(
         _print_design_result(payload, json_mode=args.json)
         return 0
     if getattr(args, "backend", "standalone") == "artifact":
-        _print_design_result(
-            {
-                "backend": "artifact",
-                "implemented": False,
-                "access_verified": False,
-                "error": "Artifact access has no verified portable interface under the Design-scoped connection.",
-                "transition": transition_status(),
-            },
-            json_mode=args.json,
-        )
-        return 2
+        from open_claude_design.artifact_api import ArtifactClient
+
+        artifact_client = (artifact_client_factory or ArtifactClient)()
+        _print_design_result(artifact_client.status(), json_mode=args.json)
+        return 0
+    if command == "artifacts":
+        from open_claude_design.artifact_cli import run_artifact_command
+
+        return run_artifact_command(args, workspace_root=workspace_root, client_factory=artifact_client_factory)
     for field in ("project_id", "design_system_id"):
         value = getattr(args, field, None)
         if isinstance(value, str) and value:
@@ -3546,6 +3548,9 @@ def build_parser() -> argparse.ArgumentParser:
     from open_claude_design.operations import add_parsers
 
     add_parsers(subparsers)
+    from open_claude_design.artifact_cli import add_parsers as add_artifact_parsers
+
+    add_artifact_parsers(subparsers)
 
     status_parser = subparsers.add_parser("status", help="Verify authentication and connectivity.")
     status_parser.add_argument("--json", action="store_true", help="Output compact JSON.")

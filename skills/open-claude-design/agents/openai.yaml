@@ -1,5 +1,5 @@
 interface:
   display_name: "Claude Design"
-  short_description: "Access standalone designs and check migration support"
+  short_description: "Access Claude Design artifacts and standalone projects"
 policy:
   allow_implicit_invocation: true

@@ -33,7 +33,7 @@ def transition_status(*, today: date | None = None) -> dict[str, Any]:
         "artifact_guide_url": CLAUDE_DESIGN_ARTIFACT_GUIDE_URL,
         "backends": {
             "standalone": {"implemented": True, "authentication": "Design-scoped OAuth"},
-            "artifact": {"implemented": False, "reason": "No verified portable authoring interface."},
+            "artifact": {"implemented": True, "experimental": True, "authentication": "Separate subscription OAuth"},
         },
         "preserve_before_closure": ["project files", "chats", "comments", "sharing metadata"],
         "project_migration": "Anthropic has not yet documented the project migration procedure.",
@@ -80,9 +80,8 @@ def standalone_target(value: str) -> str:
     target = resolve_target(value)
     if target["backend"] != "standalone":
         raise ClaudeDesignSafetyError(
-            "This is a Claude artifact, not a standalone Design project. Artifact access is not implemented "
-            "under the Design-scoped connection. Use migration status for current support; "
-            "do not reuse its id with standalone commands."
+            "This is a Claude artifact, not a standalone Design project. Use artifacts commands and "
+            "login --backend artifact; do not reuse its id with standalone commands."
         )
     return target["resource_id"]
 

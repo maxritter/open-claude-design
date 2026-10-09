@@ -8,9 +8,11 @@ license: Source-available; see LICENSE.md
 
 Use Claude Design as an external design workspace without loading its tool catalog into unrelated sessions. This skill owns access and synchronization; `open-claude-ui-design`, `open-claude-design-system`, and `open-claude-ui-review` continue to own product-design judgment and repository implementation.
 
-## Standalone and artifacts
+## Route standalone and artifact tasks
 
-The CLI currently accesses standalone Claude Design, which Anthropic says closes on December 14, 2026. Claude Design in Claude uses artifacts. Read [migration guidance](references/migration.md) for artifact links, transition diagnostics, preservation, and migration requests. `migration status` and `migration resolve <url>` run offline. `status --backend artifact` returns an explicit unsupported result; a successful standalone login never proves artifact access. Do not create a standalone replacement for a requested artifact or pass a bare artifact id into project commands.
+For a new Claude Design with no existing target, prefer the native Design artifact workflow. For `claude.ai/code/artifact/`, `claude.ai/artifacts/`, or migrated artifact links, read [artifact workflows](references/artifacts.md) and use `open-claude-design artifacts`. That reference owns artifact authentication, authoring, canvas indexing, preview evidence, sync, and completion. A standalone login does not prove artifact access. Do not strip an artifact id into standalone project commands or create a standalone replacement.
+
+For an explicit standalone project or `claude.ai/design/p/` link, use the standalone sections below. Those sections' etag/plan tokens, root-only Pages rule, support runtime, MCP operations, and rendered-preview evidence apply only to standalone. Anthropic says that site closes on December 14, 2026. Read [migration guidance](references/migration.md) for transition diagnostics, preservation, and organization-wide migration. `migration status` and `migration resolve <url>` run offline.
 
 ## Use one transport
 

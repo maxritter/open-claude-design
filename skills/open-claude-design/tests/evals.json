@@ -163,11 +163,11 @@
       "id": 15,
       "name": "artifact-url-is-not-a-standalone-project",
       "prompt": "Read and update this Claude Design artifact: https://claude.ai/code/artifact/00000000-0000-0000-0000-000000000001. Describe the current portable workflow only; do not call the service or modify anything.",
-      "expected_output": "Offline resource classification and an explicit artifact transport limitation, without creating a standalone replacement.",
+      "expected_output": "A dedicated native artifact workflow with separate authentication and revision-guarded writes.",
       "expectations": [
-        "The response reads the migration reference and uses migration resolve or migration status before authentication.",
-        "It reports artifact access as unsupported under the CLI Design-scoped connection and never strips the artifact id into a standalone command.",
-        "It never guesses endpoints, extracts host credentials, controls a browser to imitate an API, or invokes Claude Code as a subprocess transport."
+        "It reads artifacts.md, resolves the URL, verifies status --backend artifact, and connects with login --backend artifact when needed.",
+        "It uses artifacts inspect, authoring-context, pull, push or sync with reviewed SHA-256 values and the canvas index; it never passes the artifact id to standalone project commands.",
+        "It uses the CLI transport without Claude Code or borrowing another login, distinguishes readback from browser render verification, and reconciles stale or unknown writes without a blind retry."
       ]
     },
     {
@@ -179,6 +179,17 @@
         "It uses export --include-history with a private worktree-local output, not a file-only ZIP described as a complete backup.",
         "It treats a capped transcript, permission failure, or concurrent change as an incomplete archive and does not claim success.",
         "It does not acknowledge comments, mutate chats, migrate organization-wide systems, or claim the archive provides artifact access."
+      ]
+    },
+    {
+      "id": 17,
+      "name": "new-native-design-uses-canvas-index",
+      "prompt": "Create a new Claude Design from this codebase. Explain the portable workflow without contacting the service.",
+      "expected_output": "A private native Design artifact with indexed editable artboards and explicit visual verification.",
+      "expectations": [
+        "It chooses the artifact workflow, creates with a retained UUID idempotency key, and loads live authoring context.",
+        "It writes project/*.dc.html and a v3 project/canvas.json, uses absence guards only for confirmed new paths, and preserves host runtime files.",
+        "It verifies bytes and then the browser canvas; it never treats render_executed false as successful visual verification or applies the standalone Pages rule."
       ]
     }
   ]
