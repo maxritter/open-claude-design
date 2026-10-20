@@ -1,5 +1,5 @@
 interface:
   display_name: "Claude Design"
-  short_description: "Access Claude Design artifacts and standalone projects"
+  short_description: "Create and edit Claude Design canvases, decks, systems, and artifacts"
 policy:
   allow_implicit_invocation: true

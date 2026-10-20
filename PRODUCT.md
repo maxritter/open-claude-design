@@ -20,7 +20,7 @@ Success means the codebase and Claude Design remain aligned without blind overwr
 
 Open Claude Design combines three things in one workflow that neighboring design-prompt packages do not necessarily provide together:
 
-- native Claude Design artifact authoring plus the existing standalone operations;
+- full native Claude artifact coverage (Design, Slides, Design System, plain pages, assets, comments, the shared database, sharing, and lifecycle) plus the existing standalone operations;
 - automatic, codebase-grounded design expertise across many coding agents; and
 - conflict-aware synchronization between local code and the visual Claude Design workspace.
 
@@ -44,11 +44,12 @@ The coding agent remains the implementation environment. Claude Design remains t
 - Connect the first real Claude Design task automatically on desktop hosts while keeping installs non-interactive and routing headless/dev-container users through a terminal-only manual flow.
 - Create new Claude Design elements from real components, tokens, assets, copy, templates, and interaction states.
 - Load Anthropic's latest live Claude Design prompt and exactly one relevant live authoring skill only at the remote-authoring boundary.
-- Verify remote writes through readback and visual inspection before advancing the synchronization baseline. Standalone previews render through the service. Artifact preview checks structure and returns a canonical link; browser rendering is a separate verification step.
+- Verify remote writes through readback and visual inspection before advancing the synchronization baseline. Standalone previews render through the service. Artifact `render` draws Design artboards and plain pages locally in headless Chrome, in both themes and at phone and desktop widths, before and after a push; Slides and Design System artifacts are checked in Claude.
 - Use a CLI as the universal agent transport. Open Claude Design is an MCP client internally, not another MCP server for users to configure in every agent.
 - Cover everything Anthropic exposes to agents over standalone MCP; do not claim that web-canvas gestures unavailable over MCP are remotely automated.
 - Install the same five implicit Agent Skills for every supported coding agent through one compatibility mechanism.
-- Diagnose standalone-to-artifact migration and preserve files, chats, comments, and project metadata through an opt-in local archive. Migration eligibility remains Anthropic's decision; artifact authoring is experimental and verified through the native frame service, independent of remote migration.
+- Diagnose standalone-to-artifact migration and preserve files, chats, comments, and project metadata through an opt-in local archive. Migration eligibility remains Anthropic's decision; artifact workflows are experimental and verified through the native frame service, independent of remote migration.
+- Stay the default artifact transport for every agent, Claude Code included, by covering the full action set of Claude Code's own Artifact tool and adding local rendering and code synchronization.
 - Remain free and source-available while restricting redistribution, rebranding, competing publication, and hosted resale.
 
 ## Brand Commitments
@@ -70,7 +71,8 @@ The coding agent remains the implementation environment. Claude Design remains t
 
 - A live authenticated audit on 2026-08-30 returned 23 Claude Design MCP tools covering projects, files, prompts, design skills, previews, conversations, comments, members, sharing, and remote writes.
 - On 2026-10-09 the standalone connection still authenticated and advertised 23 project-based tools. Read-only live checks verified migration inventory diagnostics and complete history decoding; they did not verify artifact authoring or remote migration.
-- On 2026-10-09 a separate subscription login verified native Design creation, first publication with a canvas index, SHA-256 guarded updates, private browser rendering, exact file readback, and both artifact sync directions. Artifact receipt identity and revision checks are isolated from standalone. Binary upload, comments, sharing, deletion, and design-system administration are not implemented for artifacts.
+- On 2026-10-09 a separate subscription login verified native Design creation, first publication with a canvas index, SHA-256 guarded updates, private browser rendering, exact file readback, and both artifact sync directions. Artifact receipt identity and revision checks are isolated from standalone.
+- On 2026-10-20, against Claude Code 2.1.304's protocol and runtime contract 0.2.87, live checks verified creation from the Design, Slides, and Design System types; plain-page publishing with capabilities; first publication with the type's follow-up version; additions, removals, and capability-preserving updates; asset upload, listing, byte-exact download, and deletion; version-pinned database writes, per-user paths, queries, and batches; public and private sharing; versions, retitle, pin, delete, diagnostics, and profiles; design-system install; and local rendering. Comment reply and resolve were verified only against the protocol, because no thread had been sent to Claude.
 - The CLI, credential providers, synchronization helpers, installer adapter, skills, and cross-platform tests are implemented locally.
 - The existing Pilot Shell implementation provides the proven CLI-client and disk-backed synchronization architecture being generalized here.
 - The brand assets listed above were redrawn on 2026-10-05 from a Claude Design brand board, with Imagegen used for concept exploration and example photography.

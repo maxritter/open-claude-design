@@ -2,6 +2,33 @@
 
 All notable changes to Open Claude Design are documented here. Releases follow semantic versioning and are generated from conventional commits.
 
+## [1.8.0](https://github.com/maxritter/open-claude-design/compare/v1.7.0...v1.8.0) (2026-10-20)
+
+### Added
+
+- Every artifact type: `create --type` makes Design canvases, Slides decks, Design System artifacts, Dashboards, and Docs. `types`, `type`, and `instances` list templates and the artifacts made from them, including the default design system. Short share links (`claude.ai/artifact/<id>`) resolve to the artifact.
+- `authoring-context` downloads the full live guide for any type (its `SKILL.md` and every reference page), a map from the guide's Artifact-tool calls to CLI commands, and the default or named design system's README and tokens. `contract` downloads the runtime contract prompt and capability typings for plain pages.
+- `publish` creates plain artifact pages with runtime capabilities and a pinned contract. `push` removes files, writes Slides decks and Design System files, carries binary files where the type keeps them as files, and refuses to drop stored capabilities without `--replace-capabilities`.
+- `design-system install` copies a system's tokens into a canvas or deck and records it in the index.
+- `render` draws Design artboards and plain pages locally in headless Chrome, Chromium, or Edge, in light and dark, at each artboard's width or requested widths, from published bytes or local drafts. Pages render in an exact-width frame through a loopback server with the type's runtime and the artifact's assets, with network access limited to the artifact CDN allowlist; console errors and missing files are reported.
+- `assets upload`, `list`, `pull`, `copy`, and `delete` for the artifact asset store.
+- `comments list`, `reply`, and `resolve`. Replies and resolution are limited to threads sent to Claude; each comment reports `author_is_you`.
+- `db get`, `list`, `query`, `set`, `update`, `str-replace`, `delete`, `batch`, and `whoami`. Writes to existing documents are version-pinned, `data/users/me` resolves to the caller, and `--as-level` checks the page's access rules.
+- `share` (private, organization, named people, or public), `versions`, `pull --version`, `retitle`, `pin`, `unpin`, `delete`, `diagnostics`, and `profiles`.
+
+### Changed
+
+- The protocol matches Claude Code 2.1.304 and runtime contract 0.2.87. Readback verifies the exact published version, so the type's automatic follow-up version after a first publish no longer reads as an unknown outcome.
+- New indexes require the `createdOnFiles` marker. A canvas or deck may list planned artboards or slides before their files arrive (reported as `pending`); a design system's index may arrive last.
+- `pull` of a plain page's `index.html` strips the runtime the content host injects and checks the published hash.
+- Agent guidance makes Open Claude Design the artifact transport for every agent, Claude Code included, and moves collaboration and administration into a new `artifact-collaboration` reference.
+- Design refinements of an existing product finish by merging the accepted change into the canonical App or Website model and retiring authorized temporary previews (new `model-consolidation` reference).
+
+### Verification and limits
+
+- Live checks on a Max account on 2026-10-20 covered type creation, first and follow-up publication, file removal, capability preservation, assets, the database, public and private sharing, versions, rename, pin, delete, diagnostics, profiles, design-system install, and local rendering. Comment reply and resolve are covered by protocol tests only, because no live thread had been sent to Claude.
+- Slides and Design System artifacts have no local renderer. Dashboard content lives in the artifact database and Docs content in the Claude Docs connector. Page runtime features (realtime rooms, page endpoints) and live watch subscriptions are not implemented. The frame protocol is not a documented public SDK and may change upstream.
+
 ## [1.7.0](https://github.com/maxritter/open-claude-design/compare/v1.6.0...v1.7.0) (2026-10-09)
 
 ### Added

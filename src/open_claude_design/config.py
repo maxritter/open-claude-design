@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Final
 
 PACKAGE_NAME: Final = "open-claude-design"
-VERSION: Final = "1.7.0"
+VERSION: Final = "1.8.0"
 
 CLAUDE_DESIGN_STANDALONE_CLOSE_DATE: Final = "2026-12-14"
 CLAUDE_DESIGN_MIGRATION_GUIDE_URL: Final = (
@@ -19,7 +19,7 @@ CLAUDE_DESIGN_ARTIFACT_PATH_PREFIXES: Final = ("/code/artifact/", "/artifact/", 
 CLAUDE_DESIGN_EXPORT_METADATA_DIR: Final = "__open_claude_design_export__"
 ARTIFACT_API_ORIGIN: Final = "https://api.anthropic.com"
 ARTIFACT_API_PREFIX: Final = "/api/frame/"
-ARTIFACT_PROTOCOL_CLIENT_VERSION: Final = "2.1.295"
+ARTIFACT_PROTOCOL_CLIENT_VERSION: Final = "2.1.304"
 ARTIFACT_OAUTH_CLIENT_ID: Final = "9d1c250a-e61b-44d9-88ed-5944d1962f5e"
 ARTIFACT_OAUTH_SCOPES: Final = ("user:profile", "user:inference", "user:sessions:claude_code")
 ARTIFACT_OAUTH_BETA: Final = "oauth-2025-04-20"
@@ -38,6 +38,127 @@ ARTIFACT_SYNC_SCHEMA_VERSION: Final = 1
 ARTIFACT_MAX_SYNC_PAIRS: Final = 64
 ARTIFACT_MAX_SYNC_BYTES: Final = 32 * 1024 * 1024
 ARTIFACT_MAX_SYNC_DIFF_BYTES: Final = 8 * 1024 * 1024
+ARTIFACT_CONTENT_HOST_SUFFIX: Final = ".frame.claudeusercontent.com"
+# Artifact type titles as the service lists them, mapped to the content model each one uses.
+ARTIFACT_TYPE_KINDS: Final = {
+    "Design": "design",
+    "Slides": "slides",
+    "Design System": "design-system",
+    "Dashboard": "dashboard",
+    "Docs": "docs",
+}
+# File-backed kinds: the index each keeps under project/ and the index schema version it expects.
+ARTIFACT_FILE_KINDS: Final = {
+    "design": ("project/canvas.json", 3),
+    "slides": ("project/deck.json", 4),
+    "design-system": ("project/design-system.json", 3),
+}
+ARTIFACT_STORE_KINDS: Final = {
+    "dashboard": "Dashboards keep their content in the artifact database; use `artifacts db`.",
+    "docs": "Docs keep their content in the Claude Docs connector; this CLI creates and reads them only.",
+}
+ARTIFACT_KINDS_WITH_DESIGN_SYSTEMS: Final = frozenset({"design", "slides"})
+ARTIFACT_TYPE_OWNED_PATHS: Final = ("index.html", "SKILL.md", "artifact-type/")
+ARTIFACT_TEXT_CONTENT_TYPES: Final = {
+    "html": "text/html",
+    "htm": "text/html",
+    "json": "application/json",
+    "css": "text/css",
+    "js": "text/javascript",
+    "mjs": "text/javascript",
+    "md": "text/markdown",
+    "txt": "text/plain",
+    "csv": "text/csv",
+    "svg": "image/svg+xml",
+    "xml": "application/xml",
+}
+ARTIFACT_ASSET_CONTENT_TYPES: Final = {
+    "png": "image/png",
+    "jpg": "image/jpeg",
+    "jpeg": "image/jpeg",
+    "gif": "image/gif",
+    "webp": "image/webp",
+    "svg": "image/svg+xml",
+    "mp4": "video/mp4",
+    "webm": "video/webm",
+    "pdf": "application/pdf",
+    "woff2": "font/woff2",
+    "woff": "font/woff",
+    "ttf": "font/ttf",
+    "otf": "font/otf",
+    "csv": "text/csv",
+    "md": "text/markdown",
+    "markdown": "text/markdown",
+    "json": "application/json",
+    "txt": "text/plain",
+    "ts": "text/plain",
+    "css": "text/css",
+    "js": "text/javascript",
+    "mjs": "text/javascript",
+    "cjs": "text/javascript",
+}
+ARTIFACT_MAX_ASSET_BYTES: Final = 20 * 1024 * 1024
+ARTIFACT_MAX_SVG_ASSET_BYTES: Final = 2 * 1024 * 1024
+ARTIFACT_ASSET_LIST_LIMIT: Final = 50
+ARTIFACT_MAX_ASSET_COPY: Final = 10
+ARTIFACT_ASSET_UPLOAD_TIMEOUT_SECONDS: Final = 120
+ARTIFACT_MAX_COMMENT_BYTES: Final = 4096
+ARTIFACT_DB_LEVELS: Final = ("view", "interact", "admin")
+ARTIFACT_DB_QUERY_OPERATORS: Final = {
+    "eq": "eq",
+    "ne": "ne",
+    "in": "in",
+    "not-in": "not-in",
+    "lt": "lt",
+    "lte": "lte",
+    "gt": "gt",
+    "gte": "gte",
+    "array-contains": "array-contains",
+    "==": "eq",
+    "!=": "ne",
+    "<": "lt",
+    "<=": "lte",
+    ">": "gt",
+    ">=": "gte",
+}
+ARTIFACT_DB_MAX_PATH_BYTES: Final = 1000
+ARTIFACT_DB_MAX_LIMIT: Final = 1000
+ARTIFACT_DB_MAX_BATCH: Final = 50
+ARTIFACT_DB_MAX_BATCH_BYTES: Final = 1024 * 1024
+ARTIFACT_DB_MAX_WHERE: Final = 10
+ARTIFACT_SHARE_MODES: Final = ("private", "org", "people", "public")
+ARTIFACT_SHARE_ACCESS: Final = ("view", "comment")
+ARTIFACT_MAX_PROFILE_IDS: Final = 64
+ARTIFACT_MAX_DIAGNOSTIC_BYTES: Final = 128 * 1024
+ARTIFACT_RENDER_WIDTHS: Final = (1280, 390)
+ARTIFACT_RENDER_MAX_WIDTHS: Final = 4
+ARTIFACT_RENDER_THEMES: Final = ("light", "dark")
+ARTIFACT_RENDER_TIMEOUT_SECONDS: Final = 60
+ARTIFACT_RENDER_DEFAULT_HEIGHT: Final = 900
+ARTIFACT_RENDER_MAX_HEIGHT: Final = 8000
+ARTIFACT_RENDER_SETTLE_MS: Final = 6000
+ARTIFACT_RENDER_PARTS: Final = (".open-claude-design", "renders")
+ARTIFACT_RENDER_RUNTIME_PATH: Final = "artifact-type/dc-runtime.js"
+ARTIFACT_RENDER_ALLOWED_HOSTS: Final = (
+    "fonts.googleapis.com",
+    "fonts.gstatic.com",
+    "cdnjs.cloudflare.com",
+    "cdn.jsdelivr.net",
+    "unpkg.com",
+    "cdn.tailwindcss.com",
+    "code.jquery.com",
+)
+ARTIFACT_RENDER_BROWSER_ENV: Final = "OPEN_CLAUDE_DESIGN_BROWSER"
+ARTIFACT_RENDER_BROWSERS: Final = (
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    "/Applications/Chromium.app/Contents/MacOS/Chromium",
+    "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+    "google-chrome",
+    "google-chrome-stable",
+    "chromium",
+    "chromium-browser",
+    "microsoft-edge",
+)
 
 CLAUDE_DESIGN_ENDPOINT: Final = "https://api.anthropic.com/v1/design/mcp"
 CLAUDE_DESIGN_RPC_ENDPOINT: Final = "https://api.anthropic.com/anthropic.omelette.api.v1alpha.OmeletteService/"

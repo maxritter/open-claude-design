@@ -35,11 +35,11 @@ Open Claude Design connects the two. Mention **Claude Design** in a request to y
 **You need** macOS, Linux, or WSL2 and a Claude account with access to the workspace you want to use. The new artifact connection was tested with Claude Max. Anthropic documents native artifact publishing for Pro, Max, Team, and Enterprise; Free access through this CLI is unverified.
 
 > [!IMPORTANT]
-> **v1.7 adds experimental native Claude Design artifact support.** Create a private design, edit its files, open the new canvas, and sync changes with your codebase. Connect it separately with `open-claude-design login --backend artifact`. Existing standalone workflows remain available until Anthropic's announced **December 14, 2026** closure. See the [artifact workflow](skills/open-claude-design/references/artifacts.md) and [migration guide](https://support.claude.com/en/articles/17440474-migrate-from-standalone-claude-design-to-claude).
+> **v1.8 covers everything Claude Code's own artifact tools can do, from any coding agent.** Make Design canvases, Slides decks, Design System artifacts, and artifact pages; upload assets; answer comments; read and write an artifact's database; share, version, and delete; and render designs locally in light and dark at desktop and phone widths. Connect it separately with `open-claude-design login --backend artifact`. Existing standalone workflows remain available until Anthropic's announced **December 14, 2026** closure. See the [artifact workflow](skills/open-claude-design/references/artifacts.md) and [migration guide](https://support.claude.com/en/articles/17440474-migrate-from-standalone-claude-design-to-claude).
 
 1. **Run the installer above.** It installs the CLI and adds the workflows to every coding agent it finds. Its existing standalone browser connection remains available; the artifact backend has its own login.
 
-2. **Ask your coding agent for a design and mention Claude Design.** No special agent command is needed. For a new design, the agent uses the artifact workflow and opens the one-time browser connection if needed.
+2. **Ask your coding agent for a design, deck, or design system and mention Claude Design.** No special agent command is needed. The agent creates an artifact, loads Anthropic's current guide for that kind of artifact and your default design system, and opens the one-time browser connection if needed.
 
    > Create a Claude Design version of this settings flow, using the real components and states from the codebase.
 
@@ -84,13 +84,14 @@ Fictional examples, each built by a coding agent with Open Claude Design and ope
 
 ## What it can do
 
-- **Work in the new Claude Design canvas.** Create private native Design artifacts, read and update indexed artboards, and sync approved revisions. Experimental; file operations make no model calls.
+- **Work with every kind of Claude artifact.** Design canvases, Slides decks, Design System artifacts, and plain artifact pages with runtime capabilities. Install a design system into a canvas or deck with one command. Experimental; no operation makes a model call.
+- **Handle what surrounds the design.** Upload and copy assets, answer comment threads sent to Claude, read and write an artifact's shared database, share privately or publicly, list versions, rename, pin, and delete.
 - **Use your standalone Claude Design workspace.** Projects, files, previews, design systems, conversations, comments, members, and sharing.
 - **Manage design systems from your agent.** Create, publish, and unpublish them, manage their preview cards, and set your organization's default.
 - **Move real files.** Upload and download images, fonts, and other files up to 16 MiB, and export a whole project as a ZIP.
 - **Prepare for migration.** Check standalone inventories and preserve chats, comments, and project metadata with `export --include-history`.
-- **Verify design files.** The CLI checks structure and linked resources and reads written bytes back. Standalone previews render through the service; artifact previews require a separate browser check.
-- **Keep pages findable.** Standalone pages stay at the project root. Native artifact artboards live under `project/` and must appear in the canvas index.
+- **Verify design files.** The CLI checks structure and linked resources and reads written bytes back. Standalone previews render through the service. Artifact artboards and pages render locally in headless Chrome, published or still in draft, with console errors reported.
+- **Keep pages findable.** Standalone pages stay at the project root. Artifact artboards live under `project/` and appear in the canvas index.
 - **Stay light on context.** Claude Design's current guidance loads only when a task needs it.
 
 ## Works with every coding agent
@@ -128,46 +129,43 @@ An authenticated check on October 5, 2026 found these 23 operations in Claude De
 | **Conversations and comments** (4) | Read a conversation · update a conversation · list comments · acknowledge comments |
 | **Members and sharing** (5) | List members · add a member · remove a member · change a member role · update sharing |
 
-This catalog belongs to standalone Claude Design. Native Design artifacts use a separate experimental backend described below. Organization-wide artifact migration, artifact sharing/comments administration, and native PDF, PPTX, and Google Slides exports are outside this CLI release's verified scope. ZIP export can preserve files, chats, comments, and project metadata. Open Claude Design does not imitate missing interfaces with browser control.
+This catalog belongs to standalone Claude Design. Claude artifacts use a separate experimental backend described below. Organization-wide artifact migration and native PDF, PPTX, and Google Slides exports are outside this CLI release's verified scope. ZIP export can preserve files, chats, comments, and project metadata. Open Claude Design does not imitate missing interfaces with browser control.
 
 </details>
 
 <details>
-<summary><strong>Native Claude Design artifacts — experimental</strong></summary>
+<summary><strong>Claude artifacts — experimental</strong></summary>
+
+| Area | Commands |
+|---|---|
+| **Find** | `list` (mine, shared, all) · `types` · `type` · `instances` · `inspect` · `files` · `versions` |
+| **Create and author** | `create --type Design\|Slides\|'Design System'\|Dashboard\|Docs` · `authoring-context` · `contract` · `push` · `publish` (plain pages) · `pull` · `design-system install` |
+| **Verify** | `render` (local, light and dark, any width) · `preview` · `diagnostics` |
+| **Sync with code** | `sync review` · `sync apply` · `sync finish` · `sync status` |
+| **Assets** | `assets upload` · `list` · `pull` · `copy` · `delete` |
+| **Comments** | `comments list` · `reply` · `resolve` |
+| **Database** | `db get` · `list` · `query` · `set` · `update` · `str-replace` · `delete` · `batch` · `whoami` |
+| **Share and manage** | `share` · `retitle` · `pin` · `unpin` · `delete` · `profiles` |
 
 ```bash
 open-claude-design login --backend artifact
-open-claude-design status --backend artifact --json
-open-claude-design artifacts list --json
-open-claude-design artifacts create 'Settings flow' \
+open-claude-design artifacts create 'Settings flow' --type Design \
   --idempotency-key '<retained-uuid>' --allow-write --json
-open-claude-design artifacts authoring-context '<artifact-id>' --json
-open-claude-design artifacts files '<artifact-id-or-url>' --json
-open-claude-design artifacts pull '<artifact-id>' project/Main.dc.html \
-  --output .open-claude-design/scratch/Main.dc.html --json
-open-claude-design artifacts preview '<artifact-id>' --open --json
-```
-
-The new backend talks directly to the frame service. It requires no Claude Code installation, API key, or model call. Its subscription authorization screen identifies the native client as **Claude Code**, but Open Claude Design stores its own login and leaves your Claude Code configuration intact. The grant includes profile, inference, and session scopes; a profile-only grant was refused. The backend uses an observed protocol rather than a documented public SDK, so compatibility may change upstream.
-
-Create retains an idempotency key so an interrupted creation can be reconciled without making a duplicate. New artifacts start empty: publish `.dc.html` files under `project/` together with their `project/canvas.json` index. Load the live authoring guidance first. Host runtime files remain untouched. An update needs the reviewed SHA-256 for each file (`0` only for confirmed absence), supplies the artifact version, and verifies exact readback.
-
-```bash
-open-claude-design artifacts push '<artifact-id>' \
-  --file 'project/Main.dc.html=<local-source>' \
-  --file 'project/canvas.json=<local-index>' \
-  --if-match 'project/Main.dc.html=0' \
-  --if-match 'project/canvas.json=0' --allow-write --open --json
-open-claude-design artifacts sync review '<artifact-id>' \
+open-claude-design artifacts authoring-context '<artifact>' --json
+open-claude-design artifacts render '<artifact>' --local 'project/Main.dc.html=draft.dc.html' --json
+open-claude-design artifacts push '<artifact>' \
+  --file 'project/canvas.json=<local-index>' --if-match 'project/canvas.json=0' \
+  --file 'project/Main.dc.html=<local-source>' --if-match 'project/Main.dc.html=0' \
+  --allow-write --open --json
+open-claude-design artifacts sync review '<artifact>' \
   --direction to-code --pair 'project/Main.dc.html=src/settings.tsx' --json
-open-claude-design artifacts sync apply '<review-id>' --allow-write --json
-# Implement and test the local path using the retained remote snapshot, then:
-open-claude-design artifacts sync finish '<review-id>' --json
 ```
 
-Use `to-design` for approved local sources ready to publish; `to-code` provides immutable design snapshots for repository implementation. Apply refuses changed local files, artifact revisions, or login identities. Both-side changes require reconciliation and a fresh approved review. Unknown writes are consumed and must be reconciled before another attempt. Identical sources cause no remote write.
+The backend talks directly to the frame service that Claude Code's own Artifact tool uses (protocol of Claude Code 2.1.304, runtime contract 0.2.87). It requires no Claude Code installation, API key, or model call. Its subscription authorization screen identifies the native client as **Claude Code**, but Open Claude Design stores its own login and leaves your Claude Code configuration intact. The protocol is observed, not a documented public SDK, so compatibility may change upstream.
 
-Preview checks source and canvas structure and opens the durable link; it does not execute or render the artifact. Your agent must verify the actual canvas in a browser. This release supports private native Design text writes and verified file downloads. Binary uploads, artifact deletion, sharing, comments, and design-system administration remain unimplemented. Live testing covered creation, first publication, conditional updates, browser rendering, pull, and both sync directions on a Max account. See [the full artifact workflow](skills/open-claude-design/references/artifacts.md) for guards, limits, and recovery.
+`authoring-context` saves Anthropic's current guide for the artifact's type, a map from the guide's tool calls to these commands, and your default design system's README and tokens. Every write pins the artifact version and each file's SHA-256 (`0` only for confirmed absence) and reads the exact published version back. Public writes, public sharing, removals, and deletes each need their own explicit flag. `render` serves a local copy through a loopback server with the type's runtime and the artifact's assets, limits the network to the artifact CDN allowlist, and reports console errors.
+
+Live testing on a Max account on October 20, 2026 covered every command group except comment replies, which need a thread someone sent to Claude. Slides and Design System artifacts have no local renderer; check them in Claude. Dashboards keep their content in the artifact database and Docs in the Claude Docs connector. See the [artifact workflow](skills/open-claude-design/references/artifacts.md) and [artifact collaboration](skills/open-claude-design/references/artifact-collaboration.md) for guards, limits, and recovery.
 
 </details>
 

@@ -187,9 +187,42 @@
       "prompt": "Create a new Claude Design from this codebase. Explain the portable workflow without contacting the service.",
       "expected_output": "A private native Design artifact with indexed editable artboards and explicit visual verification.",
       "expectations": [
-        "It chooses the artifact workflow, creates with a retained UUID idempotency key, and loads live authoring context.",
-        "It writes project/*.dc.html and a v3 project/canvas.json, uses absence guards only for confirmed new paths, and preserves host runtime files.",
-        "It verifies bytes and then the browser canvas; it never treats render_executed false as successful visual verification or applies the standalone Pages rule."
+        "It chooses the artifact workflow, creates with a retained UUID idempotency key, and loads live authoring context, including the default or named design system.",
+        "It writes project/*.dc.html and a v3 project/canvas.json with a createdOnFiles marker, sends the index with the entry artboard first, uses absence guards only for confirmed new paths, and preserves host runtime files.",
+        "It verifies bytes and then inspects artifacts render images; it never treats preview's render_executed false as visual verification or applies the standalone Pages rule."
+      ]
+    },
+    {
+      "id": 18,
+      "name": "slides-deck-with-design-system-in-claude-code",
+      "prompt": "In Claude Code, make a five-slide Claude Slides deck about our Q3 results using the team's design system and put the logo from the system on the cover. Explain the workflow without contacting the service.",
+      "expected_output": "An Open Claude Design artifact workflow for a Slides deck that installs the design system and references an uploaded or copied logo asset.",
+      "expectations": [
+        "It uses the open-claude-design CLI rather than Claude Code's built-in Artifact tools, creates the deck with --type Slides and a retained idempotency key, and loads authoring-context.",
+        "It finds the system with instances 'Design System', installs it with design-system install, and brings the logo in with assets copy (or upload), referencing the returned /_blob/<id> verbatim.",
+        "It writes project/deck.json (v4, createdOnFiles, full order) with the cover first, then the remaining slides, and reports pending slides until all are sent."
+      ]
+    },
+    {
+      "id": 19,
+      "name": "comment-thread-follow-up",
+      "prompt": "Someone left comments on https://claude.ai/code/artifact/00000000-0000-4000-8000-000000000002 asking for changes. Handle them. Explain the workflow without contacting the service.",
+      "expected_output": "A comment workflow that acts only on threads sent to Claude and replies and resolves after verified changes.",
+      "expectations": [
+        "It reads threads with comments list and acts directly only on activated threads whose author_is_you is true or that the user approves.",
+        "It publishes and verifies the requested change before replying with what changed and resolving that thread.",
+        "It leaves threads not sent to Claude open, never resolves them, and tells the user which ones remain."
+      ]
+    },
+    {
+      "id": 20,
+      "name": "plain-page-with-shared-data",
+      "prompt": "Publish a small team sign-up sheet as a Claude artifact page where each person adds their name. Explain the workflow without contacting the service.",
+      "expected_output": "A plain artifact page that declares the db (and user) capabilities from the current runtime contract and keeps records in the artifact database.",
+      "expectations": [
+        "It loads artifacts contract for db and user before writing the page and keeps sign-ups in the artifact database rather than page source or localStorage.",
+        "It publishes with artifacts publish --capabilities and later edits keep every stored capability.",
+        "It renders the page locally at desktop and phone widths and seeds or edits documents with version-pinned db writes."
       ]
     }
   ]

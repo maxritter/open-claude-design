@@ -92,4 +92,4 @@ A durable preview proves a page renders by direct link, not that Claude Design's
 
 `batch` validates the entire group first and accepts only locally reviewed read-only tools. It uses one connection/catalog and stops at the first tool error. It cannot write, acknowledge comments, mint preview capabilities, or call unknown tools. Reads retry only bounded transient HTTP failures; mutations never automatically retry after an ambiguous outcome.
 
-`capabilities` reports the current MCP catalog and the additional API workflows. In-conversation artifact migration, public/group artifact sharing, and native PDF/PPTX/Google Slides exports have no verified interface under this scoped connection. Do not promise them, substitute speculative endpoints, or start browser automation to imitate them.
+`capabilities` reports the current MCP catalog and the additional API workflows. In-conversation artifact migration and native PDF/PPTX/Google Slides exports have no verified interface under this scoped connection; artifact sharing lives in the artifact backend (`artifacts share`). Do not promise them, substitute speculative endpoints, or start browser automation to imitate them.

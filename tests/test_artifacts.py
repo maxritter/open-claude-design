@@ -23,7 +23,11 @@ from open_claude_design.artifact_api import (
 )
 from open_claude_design.artifact_sync import load, review_directory, save
 from open_claude_design.bridge import build_parser, run_design_command
-from open_claude_design.config import ARTIFACT_OAUTH_CLIENT_ID, ARTIFACT_OAUTH_SCOPES
+from open_claude_design.config import (
+    ARTIFACT_OAUTH_CLIENT_ID,
+    ARTIFACT_OAUTH_SCOPES,
+    ARTIFACT_PROTOCOL_CLIENT_VERSION,
+)
 from open_claude_design.errors import ClaudeDesignProtocolError, ClaudeDesignSafetyError
 
 HTML = b'<html><head><script src="./support.js"></script></head><body><x-dc><div>Hello</div></x-dc></body></html>'
@@ -97,7 +101,7 @@ class Service:
         assert url.hostname == "api.anthropic.com"
         assert request.get_header("Authorization") == "Bearer test-bearer"
         assert request.get_header("X-frame-cp") == "go"
-        assert request.get_header("X-frame-client-version") == "2.1.295"
+        assert request.get_header("X-frame-client-version") == ARTIFACT_PROTOCOL_CLIENT_VERSION
         if url.path == "/api/frame/contract/latest":
             return Response({"version": "0.2.75", "capabilities": ["artifact", "files"]})
         if url.path == "/api/frame/read/a":

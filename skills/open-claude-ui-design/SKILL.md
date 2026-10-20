@@ -58,6 +58,8 @@ Every asynchronous action in a designed flow includes a retryable failure state:
 
 The result is complete when the requested surface works in the real application, follows either the existing system or a documented new direction, contains no invented scope, and has interaction plus visual evidence at the affected states and viewports.
 
+When the task uses an existing canonical Claude Design product model, finish by integrating the accepted refinement into that model through `open-claude-design`'s model-consolidation workflow. Check the integrated screen and its neighboring navigation, then retire authorized temporary previews after verified merge-back. Keep one current model per product instead of leaving the new screen as a competing standalone deliverable. Honor a user's request to keep an exploration separate and preserve unrelated pages and edits.
+
 ## When not to use
 
 - Backend, API, database, infrastructure, or software-architecture design
