@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "open-claude-design"
 version = "1.8.0"
-description = "Design-system-aware UI workflows and Claude Design access for coding agents"
+description = "Claude Design access and UI workflows for coding agents, part of QualityLayer"
 readme = "README.md"
 requires-python = ">=3.12"
 license = { file = "LICENSE.md" }
@@ -22,6 +22,7 @@ classifiers = [
 ]
 
 [project.urls]
+Homepage = "https://qualitylayer.dev"
 Repository = "https://github.com/maxritter/open-claude-design"
 Issues = "https://github.com/maxritter/open-claude-design/issues"
 

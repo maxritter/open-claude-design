@@ -44,13 +44,13 @@ def test_readme_keeps_activation_order_and_local_links_valid() -> None:
 
     ordered_sections = [
         "docs/media/hero-light.webp",
+        "## Design in QualityLayer",
         "## Quick start",
         "## What you can make",
         "## How it works",
         "## What it can do",
         "## Works with every coding agent",
         "## Works with Impeccable",
-        "> [!TIP]",
         "## Reference",
         "## Maintenance",
         "## Open for pull requests",
@@ -82,14 +82,19 @@ def test_readme_keeps_activation_order_and_local_links_valid() -> None:
     assert readme.index("docs/media/examples/slides.webp") < readme.index("## How it works")
 
 
-def test_readme_promotes_the_one_line_installer_above_platforms() -> None:
+def test_readme_promotes_qualitylayer_and_keeps_standalone_setup() -> None:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     command = "curl -fsSL https://github.com/maxritter/open-claude-design/releases/latest/download/install.sh | sh"
 
     assert readme.count(command) == 1
     assert readme.index(command) < readme.index("**macOS · Linux · WSL2**")
-    lead = "**Create Claude Design files from your real codebase, refine them on the canvas, and sync every change back"
-    assert readme.index("docs/media/hero-light.webp") < readme.index(lead) < readme.index(command)
+    lead = "**Open Claude Design is now part of [QualityLayer](https://qualitylayer.dev).**"
+    primary_link = "**[Try QualityLayer](https://qualitylayer.dev)**"
+    assert readme.index("docs/media/hero-light.webp") < readme.index(lead) < readme.index(primary_link)
+    assert readme.index(primary_link) < readme.index("## Design in QualityLayer") < readme.index("## Quick start")
+    assert readme.index("## Quick start") < readme.index(command)
+    assert "QualityLayer's own design workspace works without a Claude subscription" in readme
+    assert "still requires a Claude account with access" in readme
     assert "No Claude Code installation or Anthropic API key required" in readme
     assert "img.shields.io/github/stars/maxritter/open-claude-design" in readme
     assert "api.star-history.com" not in readme

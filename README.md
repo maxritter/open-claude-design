@@ -5,32 +5,48 @@
   <img src="docs/media/hero-light.webp" alt="Open Claude Design: Claude Design, from any coding agent. A coding agent's prompt creates a settings screen on the Claude Design canvas, and the two stay in sync." width="100%">
 </picture>
 
-**Create Claude Design files from your real codebase, refine them on the canvas, and sync every change back. Works with Claude Code, Codex, Cursor, Gemini CLI, and 70+ other coding agents.**
+**Open Claude Design is now part of [QualityLayer](https://qualitylayer.dev).**
 
-```bash
-curl -fsSL https://github.com/maxritter/open-claude-design/releases/latest/download/install.sh | sh
-```
+Create and review designs with your coding agent in QualityLayer, even without a Claude subscription.<br>
+The free, source-available Open Claude Design CLI remains available on its own.
 
-**macOS · Linux · WSL2** · No Claude Code installation or Anthropic API key required
+**[Try QualityLayer](https://qualitylayer.dev)** · [Install Open Claude Design](#quick-start)
 
 [![GitHub stars](https://img.shields.io/github/stars/maxritter/open-claude-design?style=flat&color=D2603A&labelColor=16140F)](https://github.com/maxritter/open-claude-design/stargazers)
 [![Release](https://img.shields.io/github/v/release/maxritter/open-claude-design?style=flat&color=D2603A&labelColor=16140F)](https://github.com/maxritter/open-claude-design/releases)
 [![Downloads](https://img.shields.io/github/downloads/maxritter/open-claude-design/total?style=flat&color=D2603A&labelColor=16140F)](https://github.com/maxritter/open-claude-design/releases)
 [![Source available](https://img.shields.io/badge/license-source--available-57534A.svg?style=flat&labelColor=16140F)](LICENSE.md)
 
-<a href="#quick-start">Install</a> ·
+<a href="#design-in-qualitylayer">QualityLayer</a> ·
+<a href="#quick-start">Standalone setup</a> ·
 <a href="#what-you-can-make">Examples</a> ·
-<a href="#how-it-works">How it works</a> ·
 <a href="#works-with-every-coding-agent">Agents</a> ·
 <a href="#reference">Reference</a>
 
 </div>
 
-Claude Design is Anthropic's visual design workspace. Using it next to a coding agent usually means copying prompts back and forth, and over time the design and the code drift apart.
+## Design in QualityLayer
 
-Open Claude Design connects the two. Mention **Claude Design** in a request to your coding agent. The agent builds the design from your real components, tokens, and copy, and opens it in Claude Design. When you have adjusted it there, the agent brings your changes back into the code.
+[QualityLayer](https://qualitylayer.dev) brings design into the same workspace as your coding agent. Create mockups, diagrams, and clickable pages from your codebase, leave comments, and ask your agent to revise them. You can work on a design on its own or use it to plan a code change.
+
+**QualityLayer's own design workspace works without a Claude subscription.** Use Codex or another supported coding agent with its own account or API key. Your chosen agent's model usage is separate from QualityLayer.
+
+For the full development workflow, QualityLayer adds plan approval before code changes, implementation in tested steps, independent AI review, and team collaboration. [Explore QualityLayer](https://qualitylayer.dev) or read the [artifact guide](https://qualitylayer.dev/docs/artifacts).
+
+> [!NOTE]
+> Connecting to **Anthropic's Claude Design** through Open Claude Design still requires a Claude account with access. QualityLayer's own artifacts work independently of that connection.
 
 ## Quick start
+
+### Use Open Claude Design on its own
+
+Open Claude Design connects your coding agent to Anthropic's visual design workspace. Create Claude Design files from your real components, tokens, and copy, refine them on the canvas, and sync changes back into code. It works with Claude Code, Codex, Cursor, Gemini CLI, and 70+ other coding agents.
+
+```bash
+curl -fsSL https://github.com/maxritter/open-claude-design/releases/latest/download/install.sh | sh
+```
+
+**macOS · Linux · WSL2** · No Claude Code installation or Anthropic API key required
 
 **You need** macOS, Linux, or WSL2 and a Claude account with access to the workspace you want to use. The new artifact connection was tested with Claude Max. Anthropic documents native artifact publishing for Pro, Max, Team, and Enterprise; Free access through this CLI is unverified.
 
@@ -112,9 +128,6 @@ The installer finds installed agents through pinned `skills@1.7.0`. Explicit ins
 
 [Impeccable](https://github.com/pbakaus/impeccable) adds design refinement commands, automated design checks, and edit-time hooks. It is optional.
 
-> [!TIP]
-> **Want the whole path from request to reviewed code?** [QualityLayer](https://qualitylayer.dev), formerly Pilot Shell, is a software factory for Claude Code and Codex. You approve the plan before any code is written. Your agent builds it in small tested steps, and an AI that did not write the code checks the result. When Open Claude Design or Impeccable is installed, QualityLayer uses them to check mockups and sync them to Claude Design.
-
 ## Reference
 
 <details>
@@ -134,7 +147,7 @@ This catalog belongs to standalone Claude Design. Claude artifacts use a separat
 </details>
 
 <details>
-<summary><strong>Claude artifacts — experimental</strong></summary>
+<summary><strong>Claude artifacts (experimental)</strong></summary>
 
 | Area | Commands |
 |---|---|
@@ -225,7 +238,7 @@ Your agent loads these automatically when a request needs them.
 <details>
 <summary><strong>How remote changes stay safe</strong></summary>
 
-Access is read-only by default, and changes need your explicit request. File writes, copies, deletes, previews, and authoring plans run only through guarded `push`, `delete`, `planned-call`, and `preview` helpers. Each write is scoped to exact paths, checks that nobody changed the file in the meantime, keeps a backup before deletes, reads the result back, and confirms the preview loads.
+Access is read-only by default, and changes need your explicit request. File writes, copies, deletes, previews, and authoring plans run only through guarded `push`, `delete`, `planned-call`, and `preview` helpers. Writes target exact paths and check for concurrent changes. Deletes keep a backup. The CLI reads changes back and confirms the preview loads.
 
 Standalone pages must sit at the project root. A page in a folder still opens by direct link but never appears in Claude Design's Pages menu, so `push`, `planned-call`, and `sync` refuse it unless you pass `--allow-nested-page`. `push` also refuses a design file the Claude Design editor could not edit: an expression inside `{{ }}`, a capitalized component tag, or an element left without its closing tag. Running JavaScript, layout, and interaction remain a separate visual review (`render_executed: false`).
 
@@ -269,7 +282,7 @@ Use the forms to [report a bug](https://github.com/maxritter/open-claude-design/
 
 Open Claude Design is free and source-available. Personal and internal commercial use are allowed; redistribution, rebranding, competing publication, and hosted resale are restricted. See [LICENSE.md](LICENSE.md).
 
-Open Claude Design is an independent project. It is not affiliated with, sponsored by, or endorsed by Anthropic, and its spark mark is its own.
+Open Claude Design is part of QualityLayer. It is not affiliated with, sponsored by, or endorsed by Anthropic, and its spark mark is its own.
 
 <div align="center">
 

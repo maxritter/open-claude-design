@@ -8,15 +8,19 @@ web
 
 ## Users
 
-Developers who already work in a coding agent and want to use Claude Design without moving their implementation workflow into a different agent. They work across existing codebases where components, tokens, product behavior, assets, and interaction states already matter.
+Developers who already work in a coding agent and want to design from their real codebase. QualityLayer offers its own design workspace without requiring a Claude subscription. Developers who want Anthropic's Claude Design can use the standalone Open Claude Design connection with an eligible Claude account.
 
 ## Product Purpose
 
-Open Claude Design connects a developer's preferred coding agent with Claude Design. The agent can create design elements from the real codebase, synchronize changes in either direction, and verify the rendered result, while the developer continues to use Claude Design's visual interface for inspection, comparison, and hands-on tweaking.
+Open Claude Design is part of QualityLayer's design offering and remains available as a free, source-available standalone CLI. It connects a developer's preferred coding agent with Claude Design. The agent creates designs from the real codebase, synchronizes changes in either direction, and verifies the rendered result. The developer uses Claude Design's visual interface for inspection, comparison, and hands-on tweaking.
 
-Success means the codebase and Claude Design remain aligned without blind overwrites, design work preserves real product context, and the user does not need to learn or invoke design skills manually.
+Success means the codebase and Claude Design remain aligned without blind overwrites. Designs preserve real product context, and the user does not need to learn or invoke design skills manually.
 
 ## Positioning
+
+The public README points readers to QualityLayer first. Its own artifacts support mockups, diagrams, clickable pages, comments, and agent-driven revisions without a Claude subscription. QualityLayer also offers planning, implementation, verification, independent review, and team collaboration. The user's chosen coding agent still needs its own account or API access.
+
+Keep that workspace distinct from the Claude Design connection: this CLI still requires a Claude account with access to the relevant workspace. Do not imply that QualityLayer grants free access to Anthropic's service or that the CLI is bundled by its installer.
 
 Open Claude Design combines three things in one workflow that neighboring design-prompt packages do not necessarily provide together:
 
@@ -33,7 +37,7 @@ The coding agent remains the implementation environment. Claude Design remains t
 - Authentication: `login` connects standalone Design; `login --backend artifact` connects the subscription frame backend in a separate secure store. No Claude Code installation or API key is required. Native artifact login uses Anthropic's subscription client and requests profile, inference, and session scopes; file operations make no model calls. Max access is verified; other account and organization combinations need their own verification.
 - Installation: one GitHub-hosted bootstrap installs the persistent CLI and the same portable skills for detected agents.
 - Distribution: GitHub repository and GitHub Releases; no npm or PyPI publication for Open Claude Design.
-- Companion tools: Impeccable is optional. QualityLayer (qualitylayer.dev, formerly Pilot Shell) uses Open Claude Design and Impeccable when they are installed but does not install them.
+- QualityLayer integration: QualityLayer's own artifact workspace works independently of Claude Design. When Open Claude Design is installed, users can ask QualityLayer to publish an artifact to Claude Design and retain its link. This connection is optional and keeps its Claude account requirements. Impeccable is an optional companion for design refinement and checks.
 
 ## Capabilities and Constraints
 
@@ -49,12 +53,12 @@ The coding agent remains the implementation environment. Claude Design remains t
 - Cover everything Anthropic exposes to agents over standalone MCP; do not claim that web-canvas gestures unavailable over MCP are remotely automated.
 - Install the same five implicit Agent Skills for every supported coding agent through one compatibility mechanism.
 - Diagnose standalone-to-artifact migration and preserve files, chats, comments, and project metadata through an opt-in local archive. Migration eligibility remains Anthropic's decision; artifact workflows are experimental and verified through the native frame service, independent of remote migration.
-- Stay the default artifact transport for every agent, Claude Code included, by covering the full action set of Claude Code's own Artifact tool and adding local rendering and code synchronization.
+- Cover Claude Code's full Artifact tool action set for every agent, including Claude Code itself. Add local rendering and code synchronization.
 - Remain free and source-available while restricting redistribution, rebranding, competing publication, and hosted resale.
 
 ## Brand Commitments
 
-- Product name: Open Claude Design. Use the full name in every public surface.
+- Product name: Open Claude Design, part of QualityLayer. Keep the standalone name and CLI command; use QualityLayer as the main invitation on the README.
 - Public surface: the GitHub README and Releases; no separate website.
 - Voice: concise, concrete, confident, and outcome-led. Avoid installer internals, safety plumbing, manual skill invocation, and unexplained framework language in the main README.
 - Public examples stay generic. Do not reference private or personal projects.
