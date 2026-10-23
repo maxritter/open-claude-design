@@ -88,8 +88,8 @@ def test_readme_promotes_qualitylayer_and_keeps_standalone_setup() -> None:
 
     assert readme.count(command) == 1
     assert readme.index(command) < readme.index("**macOS · Linux · WSL2**")
-    lead = "**Open Claude Design is now part of [QualityLayer](https://qualitylayer.dev).**"
-    primary_link = "**[Try QualityLayer](https://qualitylayer.dev)**"
+    lead = "**Open Claude Design is now part of [QualityLayer](https://github.com/maxritter/qualitylayer).**"
+    primary_link = "**[Try QualityLayer](https://github.com/maxritter/qualitylayer)**"
     assert readme.index("docs/media/hero-light.webp") < readme.index(lead) < readme.index(primary_link)
     assert readme.index(primary_link) < readme.index("## Design in QualityLayer") < readme.index("## Quick start")
     assert readme.index("## Quick start") < readme.index(command)

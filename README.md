@@ -5,12 +5,12 @@
   <img src="docs/media/hero-light.webp" alt="Open Claude Design: Claude Design, from any coding agent. A coding agent's prompt creates a settings screen on the Claude Design canvas, and the two stay in sync." width="100%">
 </picture>
 
-**Open Claude Design is now part of [QualityLayer](https://qualitylayer.dev).**
+**Open Claude Design is now part of [QualityLayer](https://github.com/maxritter/qualitylayer).**
 
 Create and review designs with your coding agent in QualityLayer, even without a Claude subscription.<br>
 The free, source-available Open Claude Design CLI remains available on its own.
 
-**[Try QualityLayer](https://qualitylayer.dev)** · [Install Open Claude Design](#quick-start)
+**[Try QualityLayer](https://github.com/maxritter/qualitylayer)** · [Install Open Claude Design](#quick-start)
 
 [![GitHub stars](https://img.shields.io/github/stars/maxritter/open-claude-design?style=flat&color=D2603A&labelColor=16140F)](https://github.com/maxritter/open-claude-design/stargazers)
 [![Release](https://img.shields.io/github/v/release/maxritter/open-claude-design?style=flat&color=D2603A&labelColor=16140F)](https://github.com/maxritter/open-claude-design/releases)
@@ -27,11 +27,11 @@ The free, source-available Open Claude Design CLI remains available on its own.
 
 ## Design in QualityLayer
 
-[QualityLayer](https://qualitylayer.dev) brings design into the same workspace as your coding agent. Create mockups, diagrams, and clickable pages from your codebase, leave comments, and ask your agent to revise them. You can work on a design on its own or use it to plan a code change.
+[QualityLayer](https://github.com/maxritter/qualitylayer) brings design into the same workspace as your coding agent. Create mockups, diagrams, and clickable pages from your codebase, leave comments, and ask your agent to revise them. You can work on a design on its own or use it to plan a code change.
 
 **QualityLayer's own design workspace works without a Claude subscription.** Use Codex or another supported coding agent with its own account or API key. Your chosen agent's model usage is separate from QualityLayer.
 
-For the full development workflow, QualityLayer adds plan approval before code changes, implementation in tested steps, independent AI review, and team collaboration. [Explore QualityLayer](https://qualitylayer.dev) or read the [artifact guide](https://qualitylayer.dev/docs/artifacts).
+For the full development workflow, QualityLayer adds plan approval before code changes, implementation in tested steps, independent AI review, and team collaboration. [Explore QualityLayer on GitHub](https://github.com/maxritter/qualitylayer) or read the [artifact guide](https://qualitylayer.dev/docs/artifacts).
 
 > [!NOTE]
 > Connecting to **Anthropic's Claude Design** through Open Claude Design still requires a Claude account with access. QualityLayer's own artifacts work independently of that connection.
