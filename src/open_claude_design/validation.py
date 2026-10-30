@@ -137,6 +137,16 @@ class DesignHTML(HTMLParser):
 UPLOADED_ASSET = re.compile(r"/_blob/[A-Za-z0-9_-]+")
 
 
+def _project_path(path: str, raw: str) -> str:
+    """Join a decoded reference path to its artboard's directory; refuse anything outside the project."""
+    if "\\" in raw or "\x00" in raw:
+        raise ValueError("An asset reference has an unsafe path.")
+    joined = posixpath.normpath(posixpath.join(posixpath.dirname(path), raw))
+    if raw.startswith("/") or joined in {".", ".."} or joined.startswith("../"):
+        raise ValueError("An asset reference escapes the project.")
+    return joined
+
+
 def project_reference(path: str, reference: str) -> str | None:
     """Resolve an asset reference within its project; never follow external URLs.
 
@@ -146,17 +156,18 @@ def project_reference(path: str, reference: str) -> str | None:
     parsed = urlsplit(reference)
     if parsed.scheme or parsed.netloc or not parsed.path or reference.startswith("#"):
         return None
+    # Find holes in the whole reference: a hole's literal may itself hold "?" or "#", which urlsplit
+    # would cut in half. A hole before any query or fragment binds the path; only its literal prefix
+    # can be checked. A hole after them leaves the path literal, so the path is checked as usual.
+    hole = TEMPLATE_HOLE.search(reference)
+    if hole and not re.search(r"[?#]", reference[: hole.start()]):
+        if prefix := unquote(reference[: hole.start()]):
+            _project_path(path, prefix)
+        return None
     raw = unquote(parsed.path)
-    if "\\" in raw or "\x00" in raw:
-        raise ValueError("An asset reference has an unsafe path.")
     if UPLOADED_ASSET.fullmatch(raw):
         return None
-    joined = posixpath.normpath(posixpath.join(posixpath.dirname(path), raw))
-    if raw.startswith("/") or joined in {".", ".."} or joined.startswith("../"):
-        raise ValueError("An asset reference escapes the project.")
-    if TEMPLATE_HOLE.search(raw):
-        return None
-    return joined
+    return _project_path(path, raw)
 
 
 def validate_html(path: str, data: bytes, available: set[str] | None = None) -> dict[str, object]:

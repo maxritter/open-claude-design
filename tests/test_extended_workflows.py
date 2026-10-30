@@ -263,6 +263,9 @@ def test_editor_contract_accepts_lookups_literals_and_what_claude_design_writes(
         '<img src="{{ thumb }}" alt="">',
         '<img src="{{palImg}}" alt="">',
         '<img src="captures/{{ shot.file }}" alt="">',
+        '<img src="{{ \'https://example.com/image.png?size=small\' }}" alt="">',
+        '<img src="{{ \'still.png#frame\' }}" alt="">',
+        '<img src="captures/{{ shot.file }}?v=2" alt="">',
     ],
 )
 def test_uploaded_assets_and_bound_sources_are_not_project_files(body: str) -> None:
@@ -275,6 +278,13 @@ def test_uploaded_assets_and_bound_sources_are_not_project_files(body: str) -> N
     assert result["dependencies"] == ["project/support.js"]
 
 
+def test_a_bound_source_on_a_root_artboard_is_not_an_escape() -> None:
+    result = validate_html(
+        "page.dc.html", VALID_DC.replace("<div>Design</div>", '<img src="{{ thumb }}" alt="">').encode(), {"support.js"}
+    )
+    assert result["valid"], result["issues"]
+
+
 @pytest.mark.parametrize(
     ("body", "issue"),
     [
@@ -283,6 +293,8 @@ def test_uploaded_assets_and_bound_sources_are_not_project_files(body: str) -> N
         ('<img src="/etc/passwd" alt="">', "escapes the project"),
         ('<img src="../../{{ thumb }}" alt="">', "escapes the project"),
         ('<img src="missing.png" alt="">', "Missing project resource: project/missing.png"),
+        ('<img src="missing.png?v={{ version }}" alt="">', "Missing project resource: project/missing.png"),
+        ('<img src="../../{{ \'a?b\' }}" alt="">', "escapes the project"),
     ],
 )
 def test_blob_and_template_exemptions_keep_escape_and_missing_file_checks(body: str, issue: str) -> None:
