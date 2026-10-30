@@ -255,6 +255,44 @@ def test_editor_contract_accepts_lookups_literals_and_what_claude_design_writes(
     assert not validate_html("page.dc.html", doubled.encode())["valid"]
 
 
+@pytest.mark.parametrize(
+    "body",
+    [
+        '<img src="/_blob/0123abcdef4567" alt="">',
+        '<link rel="stylesheet" href="/_blob/9f8e7d6c5b4a">',
+        '<img src="{{ thumb }}" alt="">',
+        '<img src="{{palImg}}" alt="">',
+        '<img src="captures/{{ shot.file }}" alt="">',
+    ],
+)
+def test_uploaded_assets_and_bound_sources_are_not_project_files(body: str) -> None:
+    # Claude Design's own artboards reference uploads as /_blob/<id> and bind sources in renderVals();
+    # neither is a file under project/, so the resource check must not reject them.
+    result = validate_html(
+        "project/Main.dc.html", VALID_DC.replace("<div>Design</div>", body).encode(), {"project/support.js"}
+    )
+    assert result["valid"], result["issues"]
+    assert result["dependencies"] == ["project/support.js"]
+
+
+@pytest.mark.parametrize(
+    ("body", "issue"),
+    [
+        ('<img src="/_blob/../canvas.json" alt="">', "escapes the project"),
+        ('<img src="/_blob/" alt="">', "escapes the project"),
+        ('<img src="/etc/passwd" alt="">', "escapes the project"),
+        ('<img src="../../{{ thumb }}" alt="">', "escapes the project"),
+        ('<img src="missing.png" alt="">', "Missing project resource: project/missing.png"),
+    ],
+)
+def test_blob_and_template_exemptions_keep_escape_and_missing_file_checks(body: str, issue: str) -> None:
+    result = validate_html(
+        "project/Main.dc.html", VALID_DC.replace("<div>Design</div>", body).encode(), {"project/support.js"}
+    )
+    assert not result["valid"]
+    assert any(issue in found for found in result["issues"]), result["issues"]
+
+
 def test_editor_advice_warns_without_blocking_and_reports_user_edits() -> None:
     body = (
         '<deck-stage width="1280" height="720"><sc-for list="{{ slides }}" as="s"><section></section></sc-for>'

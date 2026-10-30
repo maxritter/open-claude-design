@@ -133,17 +133,29 @@ class DesignHTML(HTMLParser):
         self.handle_endtag(tag)
 
 
+# An uploaded asset as Claude Design references it: served by the artifact host, not a file under project/.
+UPLOADED_ASSET = re.compile(r"/_blob/[A-Za-z0-9_-]+")
+
+
 def project_reference(path: str, reference: str) -> str | None:
-    """Resolve an asset reference within its project; never follow external URLs."""
+    """Resolve an asset reference within its project; never follow external URLs.
+
+    Returns None for references that are not project files: external URLs, uploaded assets
+    (``/_blob/<id>``) and sources bound to a template hole, which renderVals() decides at render.
+    """
     parsed = urlsplit(reference)
     if parsed.scheme or parsed.netloc or not parsed.path or reference.startswith("#"):
         return None
     raw = unquote(parsed.path)
     if "\\" in raw or "\x00" in raw:
         raise ValueError("An asset reference has an unsafe path.")
+    if UPLOADED_ASSET.fullmatch(raw):
+        return None
     joined = posixpath.normpath(posixpath.join(posixpath.dirname(path), raw))
     if raw.startswith("/") or joined in {".", ".."} or joined.startswith("../"):
         raise ValueError("An asset reference escapes the project.")
+    if TEMPLATE_HOLE.search(raw):
+        return None
     return joined
 
 
