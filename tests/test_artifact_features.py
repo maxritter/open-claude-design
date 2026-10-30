@@ -610,3 +610,17 @@ def test_readback_checks_the_exact_published_version_even_after_follow_ups() -> 
     changed = ARTBOARD.replace(b"Hi", b"Hello")
     with pytest.raises(ArtifactOutcomeUnknown):
         client.push(client.snapshot("a"), {"project/Main.dc.html": changed}, {"project/Main.dc.html": sha(ARTBOARD)})
+
+
+def test_an_artboard_with_uploads_and_bound_images_can_be_edited_and_pushed() -> None:
+    # Shape of a Claude Design-written artboard: an uploaded image and an image bound in renderVals().
+    board = ARTBOARD.replace(
+        b"<div>Hi</div>",
+        b'<div>Hi</div><img src="/_blob/0123abcdef4567" alt=""><img src="{{thumb}}" alt="">',
+    )
+    frame = Frame()
+    frame.artifacts["a"]["files"] = {"project/canvas.json": canvas(["Main.dc.html"]), "project/Main.dc.html": board}
+    client = frame.client()
+    changed = board.replace(b"Hi", b"Hello")
+    result = client.push(client.snapshot("a"), {"project/Main.dc.html": changed}, {"project/Main.dc.html": sha(board)})
+    assert result["verified"] and result["written"] == ["project/Main.dc.html"]
