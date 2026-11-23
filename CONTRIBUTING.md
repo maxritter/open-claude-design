@@ -1,15 +1,15 @@
 # Contributing
 
-Open issues before large changes. Keep skills portable, descriptions discriminating, references progressively disclosed, and provider-specific behavior in the installer or provider metadata.
+Open an issue before starting large changes. Keep skills portable, descriptions concise, references progressively disclosed, and agent-specific installation behavior inside the pinned Vercel `skills` CLI.
 
-Install the local commit and push gates once:
+Install the local commit hooks once:
 
 ```bash
 uv sync --all-groups
 uv run pre-commit install --hook-type pre-commit --hook-type pre-push
 ```
 
-Run before submitting a change:
+Run the full check suite before opening a pull request:
 
 ```bash
 uv run pytest -q
@@ -22,10 +22,8 @@ bash scripts/build-release.sh
 bash scripts/security-check.sh
 ```
 
-Exercise the changed CLI, installer, synchronization, or agent workflow through the built artifact when behavior changed. Keep pull requests focused, update affected documentation, and use the repository pull-request template.
+Never commit credentials, capability tokens, private artifact content, or machine-local paths in issues, fixtures, commits, or pull requests.
 
-Never include Claude Design credentials, plan tokens, short-lived preview URLs, private project content, or machine-local paths in an issue, test fixture, commit, or pull request.
+By submitting a contribution, you grant Max Ritter a perpetual, worldwide, irrevocable, royalty-free right to use, modify, distribute, sublicense, and relicense the contribution as part of Open Claude Artifacts. Third-party material keeps its original license and attribution.
 
-By submitting a contribution, you grant Max Ritter a perpetual, worldwide, irrevocable, royalty-free right to use, modify, distribute, sublicense, and relicense the contribution as part of Open Claude Artifacts. Third-party material must retain its original license and attribution.
-
-Use conventional commits (`feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `build:`, `ci:`). Releases are manual: a maintainer bumps the version in `pyproject.toml` and `src/open_claude_artifacts/config.py`, updates `CHANGELOG.md`, and dispatches the `Manual Release` workflow, which rebuilds, re-verifies, attests provenance, and publishes the GitHub Release. The `release` environment must approve publication after all test and security gates pass.
+Use conventional commits (`feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `build:`, `ci:`). Releases run via the `Manual Release` workflow after bumping `pyproject.toml`, `src/open_claude_artifacts/config.py`, `uv.lock` (`uv lock`), and `CHANGELOG.md`.

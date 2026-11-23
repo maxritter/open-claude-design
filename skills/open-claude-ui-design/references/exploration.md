@@ -36,7 +36,7 @@ Before high-fidelity work, acquire all relevant design context rather than rebui
 
 ## Handoff
 
-When the options represent a product decision, stop after presenting and recommending them. Ask the user which option or hybrid to continue with; do not treat the recommendation as approval unless the user explicitly delegated the choice. If the options live in Claude Design, name the exact project, project-relative file, screen/frame or stable option ids, and durable project URL so the user can inspect the same artifacts before deciding.
+When the options represent a product decision, stop after presenting and recommending them. Ask the user which option or hybrid to continue with; do not treat the recommendation as approval unless the user explicitly delegated the choice. If the options live in a Claude Artifact canvas, name the exact artifact, artboard path, stable option ids, and durable artifact URL so the user can inspect the same artifacts before deciding.
 
 The user's selection starts the refinement phase; it is not approval to implement a draft. Record the selected option or hybrid, what they valued, what they rejected, and every constraint revealed by comparison. Keep the exploration artifact and its stable option ids intact as that record. Develop the selected direction in its own deliverable across the complete requested scope: real content, responsive views, primary interactions, and the relevant loading, empty, failure, success, focus, and theme states.
 

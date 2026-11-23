@@ -5,126 +5,167 @@
   <img src="docs/media/hero-light.webp" alt="Open Claude Artifacts: Claude Artifacts, from any coding agent. Design canvases, Slides decks, Design Systems, and pages created, rendered locally, and synced with code." width="100%">
 </picture>
 
-**Open Claude Artifacts is part of [QualityLayer](https://github.com/maxritter/qualitylayer).**
+**Build Design canvases, Slides decks, Design Systems, dashboards, and interactive pages straight from your codebase, check them locally, and keep edits in sync.**<br>
+Part of [QualityLayer](https://github.com/maxritter/qualitylayer).
 
-Create, render, and sync Claude Artifacts from any coding agent — Claude Code, Codex, Cursor, Gemini CLI, OpenCode, and 70+ more.<br>
-For a full local-first design workspace that works without a Claude subscription, use [QualityLayer](https://github.com/maxritter/qualitylayer).
+<a href="https://github.com/maxritter/open-claude-artifacts/releases"><img src="https://img.shields.io/github/v/release/maxritter/open-claude-artifacts?sort=semver&style=for-the-badge&label=latest&color=D2603A&labelColor=26231D" alt="Latest release"></a>
+<a href="https://github.com/maxritter/open-claude-artifacts/releases"><img src="https://img.shields.io/github/downloads/maxritter/open-claude-artifacts/total?style=for-the-badge&color=D2603A&labelColor=26231D" alt="Downloads"></a>
+<a href="https://github.com/maxritter/open-claude-artifacts/stargazers"><img src="https://img.shields.io/github/stars/maxritter/open-claude-artifacts?style=for-the-badge&color=9D6607&labelColor=26231D" alt="GitHub stars"></a>
+<a href="LICENSE.md"><img src="https://img.shields.io/badge/license-source--available-706B60.svg?style=for-the-badge&labelColor=26231D" alt="Source available"></a>
 
-**[Try QualityLayer](https://github.com/maxritter/qualitylayer)** · [Install Open Claude Artifacts](#quick-start)
-
-[![GitHub stars](https://img.shields.io/github/stars/maxritter/open-claude-artifacts?style=flat&color=D2603A&labelColor=16140F)](https://github.com/maxritter/open-claude-artifacts/stargazers)
-[![Release](https://img.shields.io/github/v/release/maxritter/open-claude-artifacts?style=flat&color=D2603A&labelColor=16140F)](https://github.com/maxritter/open-claude-artifacts/releases)
-[![Downloads](https://img.shields.io/github/downloads/maxritter/open-claude-artifacts/total?style=flat&color=D2603A&labelColor=16140F)](https://github.com/maxritter/open-claude-artifacts/releases)
-[![Source available](https://img.shields.io/badge/license-source--available-57534A.svg?style=flat&labelColor=16140F)](LICENSE.md)
-
-<a href="#quick-start">Install</a> ·
-<a href="#what-you-can-make">What you can make</a> ·
-<a href="#what-it-can-do">Capabilities</a> ·
-<a href="#works-with-every-coding-agent">Agents</a> ·
-<a href="#cli-reference">CLI reference</a>
+<p>
+  <a href="#install">Install</a> ·
+  <a href="#examples">Examples</a> ·
+  <a href="#agents">Agents</a> ·
+  <a href="#reference">Reference</a> ·
+  <a href="https://github.com/maxritter/qualitylayer">QualityLayer</a>
+</p>
 
 </div>
 
-## Quick start
+---
 
-Open Claude Artifacts (formerly *Open Claude Design*) connects any coding agent directly to Anthropic's native **Claude Artifacts** platform — **Design** canvases, **Slides** decks, **Design Systems**, **Data** dashboards, **Whiteboards**, **Docs**, **Sheets**, and plain interactive artifact pages — with local headless Chromium rendering and verified two-way code sync.
+## Why Open Claude Artifacts
+
+| You get | How it works |
+| --- | --- |
+| **Every Claude Artifact type** | Create and edit Design canvases, Slides decks, Design Systems, Data dashboards, Whiteboards, Docs, Sheets, and plain pages from one CLI. |
+| **Local preview checks** | Renders artboards, slides, and pages locally in Chrome before pushing, reporting console errors and missing assets. |
+| **Always matches Claude's current format** | Pulls Anthropic's current artifact guide and your default Design System straight from the artifact. |
+| **Conflict-safe two-way sync** | Checks for remote changes before saving so neither code nor design silently overwrites the other. |
+| **Comments, assets, and data** | Upload images and fonts, answer comment threads sent to Claude, query shared databases, and manage sharing or versions. |
+
+---
+
+<h2 id="install">Getting started</h2>
+
+**Prerequisites:** macOS, Linux, or WSL2 and a Claude account with artifact access (Pro, Max, Team, or Enterprise). No Claude Code installation or Anthropic API key is required.
 
 ```bash
 curl -fsSL https://github.com/maxritter/open-claude-artifacts/releases/latest/download/install.sh | sh
 ```
 
-**macOS · Linux · WSL2** · No Claude Code installation or Anthropic API key required.
+The installer installs `open-claude-artifacts`, adds five portable skills to detected agents, and opens a one-time browser login. Existing `open-claude-design` artifact logins continue to work automatically. Over SSH or in containers, run `open-claude-artifacts login --manual`.
 
-**You need** macOS, Linux, or WSL2 and a Claude account with artifact access (Pro, Max, Team, or Enterprise). Existing `open-claude-design` artifact logins are detected automatically.
+1. Ask your coding agent in plain words:
 
-1. **Run the installer above.** It installs `open-claude-artifacts` and adds its five portable Agent Skills to every coding agent it finds.
-2. **Connect once** with `open-claude-artifacts login` (or `open-claude-artifacts login --manual` in SSH/CI/containers).
-3. **Ask your coding agent** for a Design canvas, Slides deck, Design System, or artifact page:
-   > Create a Claude Design canvas for this settings flow using our real components, render it locally to verify, and sync approved edits back into code.
+```text
+Design this settings page in Claude Artifacts using our real components.
+```
 
-## What you can make
+2. Your agent renders the result locally to check layout, then publishes it.
+3. Open the returned `claude.ai` link to review, comment, or edit directly.
+
+<details>
+<summary><b>Uninstalling</b></summary>
+
+```bash
+curl -fsSL https://github.com/maxritter/open-claude-artifacts/releases/latest/download/uninstall.sh | sh
+```
+
+</details>
+
+---
+
+<h2 id="examples">What you can make</h2>
+
+Fictional examples showing what your agent can build, check locally, and revise.
 
 <table>
 <tr>
 <td width="50%" valign="top">
-<img src="docs/media/examples/slides.webp" alt="A pitch deck cover slide for a fictional soil-sensor startup, with a field photo and three key figures">
-<p><strong>Slides and pitch decks</strong><br>
-<em>“Turn our product summary into a 16:9 Claude Slides deck and render every slide locally to check layout.”</em></p>
+<img src="docs/media/examples/slides.webp" alt="A dark 16:9 architecture review slide with three metric cards comparing before and after edge caching latency">
+<p><strong>Slides decks</strong><br>
+<em>"Turn our Q3 latency writeup into a 12-slide deck and check every slide locally."</em></p>
 </td>
 <td width="50%" valign="top">
-<img src="docs/media/examples/app.webp" alt="A trail-running app shown as a desktop dashboard and a matching phone screen">
-<p><strong>Apps for desktop and mobile</strong><br>
-<em>“Design the training dashboard and its phone screen as a Claude Design canvas with our components.”</em></p>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/media/examples/app-dark.webp">
+  <img src="docs/media/examples/app.webp" alt="A desktop and mobile Usage and Limits settings screen laid out side by side on a Design canvas">
+</picture>
+<p><strong>Design canvases</strong><br>
+<em>"Design the Usage and Limits screen for desktop and mobile with our components."</em></p>
 </td>
 </tr>
 <tr>
 <td width="50%" valign="top">
-<img src="docs/media/examples/cv.webp" alt="A one-page CV for a fictional senior product designer, with a portrait, experience, and skills">
-<p><strong>Pages and interactive artifacts</strong><br>
-<em>“Publish an interactive report page with its own shared database and check it in headless Chrome.”</em></p>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/media/examples/dashboard-dark.webp">
+  <img src="docs/media/examples/dashboard.webp" alt="An API reliability and usage dashboard with four KPI cards, a weekly bar chart by plan, and a regional latency table">
+</picture>
+<p><strong>Data dashboards and pages</strong><br>
+<em>"Build an API reliability dashboard artifact backed by its shared database."</em></p>
 </td>
 <td width="50%" valign="top">
-<img src="docs/media/examples/design-system.webp" alt="A design system sheet with colours, type scale, buttons, inputs, and switch states">
-<p><strong>Design systems from your code</strong><br>
-<em>“Extract our tokens and components into a Claude Design System artifact and install it into our deck.”</em></p>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/media/examples/design-system-dark.webp">
+  <img src="docs/media/examples/design-system.webp" alt="A Harbor UI design system sheet showing color tokens, type scale, button and switch states, input states, spacing, and theme tokens">
+</picture>
+<p><strong>Design systems</strong><br>
+<em>"Extract our CSS tokens and component states into a Design System artifact."</em></p>
 </td>
 </tr>
 </table>
 
-## What it can do
+---
 
-- **Every Claude Artifact type in one CLI.** `Design`, `Slides` (v4 & v5 decks), `Design System`, `Data` dashboards, `Whiteboard`, `Docs`, `Sheets`, Migrated Designs, and plain untyped artifact pages.
-- **Headless local rendering — no browser hijacking.** `open-claude-artifacts render` renders **Design artboards**, **Slides decks** (`--slide <id|number>`, 16:9 & 4:3, with `/_blob/` SVG/PNG/WebP MIME sniffing), and **plain pages** locally in headless Chrome, Chromium, Edge, or Playwright Chromium — published or in draft via `--local` before pushing.
-- **Live host guidance on demand.** `authoring-context` fetches Anthropic's current `SKILL.md`, reference docs, and default Design System tokens straight from the artifact type so your agent never uses stale format rules.
-- **Full collaboration plane.** Upload, list, pull, copy, and delete `/_blob/<id>` assets; read, reply to, and resolve comment threads; read and write the shared artifact database (`db`); manage sharing, versions, pinning, renaming, profiles, diagnostics, and deletion.
-- **Guarded, conflict-aware writes.** Every mutation requires `--allow-write` (and `--allow-destructive` for deletes, `--allow-public` for public sharing), pins exact SHA-256 hashes (`--if-match`), and verifies readback byte-for-byte.
-- **Two-way code sync.** `sync review`, `sync apply`, and `sync finish` track revision receipts and detect `both-changed` conflicts instead of silently overwriting either side.
+<h2 id="agents">Works with your agent</h2>
+
+One installer adds the same five skills across 70+ coding agents, including **Claude Code**, **Codex**, **OpenCode**, **Cursor**, **GitHub Copilot**, **Gemini CLI**, **Cline**, **Antigravity**, **Kimi**, **Kiro**, **Pi**, **Trae**, **Qoder**, **Rovo Dev**, **Mistral Vibe**, **Hermes**, **Grok Build**, **OpenClaw**, **Warp**, **Zed**, and **Amp**. (`eve` and `promptscript` install at project scope only.)
+
+### Skills your agent gets
+
+| Skill | For | You say |
+| --- | --- | --- |
+| `open-claude-artifacts` | Creating, editing, rendering, and syncing Claude Artifacts | "Update slide 16 in this deck and verify it locally." |
+| `open-claude-ui-design` | Designing new screens, flows, and interactive prototypes | "Design a billing limits screen in our existing style." |
+| `open-claude-design-system` | Extracting and packaging tokens and component contracts | "Extract our tokens and button states into a Design System." |
+| `open-claude-ui-review` | Visual, accessibility, and interaction review of UI | "Audit this page for contrast, spacing, and mobile issues." |
+| `open-claude-design-quality` | Shared craft and visual quality rules for UI changes | Applied automatically during user-visible UI edits |
+
+---
 
 ## Design in QualityLayer
 
-[QualityLayer](https://github.com/maxritter/qualitylayer) includes its own local-first artifact and design workspace inside the App — working without a Claude subscription using Claude Code, Codex, Cursor, or any supported coding agent, alongside Plan, Implement, and Verify workflows. [Explore QualityLayer on GitHub](https://github.com/maxritter/qualitylayer).
+Need a local-first design workspace without a Claude subscription? [QualityLayer](https://github.com/maxritter/qualitylayer) runs mockups, diagrams, clickable pages, planning, implementation, and independent review right inside its desktop App using your own coding agent. **[Try QualityLayer](https://github.com/maxritter/qualitylayer)**.
 
-## Works with every coding agent
+---
 
-Every supported agent gets the same five portable skills and CLI access through one installer (`skills@1.7.0`, supporting 79 agent identifiers):
+<h2 id="reference">Reference</h2>
 
-| Coding agents | Status |
-|---|:---:|
-| Claude Code · Codex · OpenCode | ✅ Full |
-| Cursor · GitHub Copilot · Cline · Trae · Qoder · Rovo Dev | ✅ Full |
-| Gemini CLI · Antigravity · Kimi · Kiro · Pi | ✅ Full |
-| Mistral Vibe · Hermes · Reasonix · Grok Build · OpenClaw | ✅ Full |
-| Warp · Zed · Amp · other Agent Skills hosts | ✅ Full |
-
-## CLI reference
+<details>
+<summary><b>CLI commands</b></summary>
 
 ```bash
-# Auth & setup
+# Auth and setup
 open-claude-artifacts login [--manual] [--timeout 300]
+open-claude-artifacts logout --yes
 open-claude-artifacts status --json
 open-claude-artifacts doctor [--offline] --json
 open-claude-artifacts install|update|uninstall [--scope global|project] [--yes]
 open-claude-artifacts skills --json
 
-# Discovery & live guidance
+# Discovery and live guides
 open-claude-artifacts list [--scope mine|shared|all] --json
 open-claude-artifacts types --json
 open-claude-artifacts type 'Slides' --json
 open-claude-artifacts instances 'Design System' --json
 open-claude-artifacts inspect '<artifact>' [--version <ver>] --json
-open-claude-artifacts files '<artifact>' [--all] --json
+open-claude-artifacts files '<artifact>' [--version <ver>] [--all] --json
+open-claude-artifacts preview '<artifact>' [--open] --json
 open-claude-artifacts authoring-context '<artifact>' [--design-system <id>|none] --json
 open-claude-artifacts contract [--version latest] [--capability db] --json
 
-# Author, publish, and render locally
+# Create, edit, and render locally
 open-claude-artifacts create 'Deck title' --type Slides --idempotency-key <uuid> --allow-write --json
 open-claude-artifacts pull '<artifact>' project/deck.json --output deck.json --json
 open-claude-artifacts push '<artifact>' --file 'project/deck.css=deck.css' --if-match 'project/deck.css=<sha>' --allow-write --json
 open-claude-artifacts publish 'Report' --page index.html [--capabilities '{"db":{}}'] --allow-write --json
-open-claude-artifacts render '<artifact>' [--slide 1 --slide cover] [--path project/Main.dc.html] [--local 'project/deck.css=deck.css'] --json
+open-claude-artifacts render '<canvas-or-page>' [--path project/Main.dc.html] [--local 'project/Main.dc.html=<draft>'] --json
+open-claude-artifacts render '<deck>' [--slide 1 --slide cover] [--local 'project/deck.css=deck.css'] --json
 open-claude-artifacts design-system install '<canvas-or-deck>' '<system>' --allow-write --json
 
-# Assets, comments, database, sharing, versions, and code sync
+# Assets, comments, shared database, sharing, versions, and code sync
 open-claude-artifacts assets list|upload|pull|copy|delete '<artifact>' ...
 open-claude-artifacts comments list|reply|resolve '<artifact>' ...
 open-claude-artifacts db get|list|query|set|update|str-replace|delete|batch|whoami '<artifact>' ...
@@ -133,6 +174,40 @@ open-claude-artifacts versions|retitle|pin|unpin|delete|diagnostics|profiles '<a
 open-claude-artifacts sync review|apply|finish|status ...
 ```
 
-## License
+</details>
 
-Source-available — see [LICENSE.md](LICENSE.md). Independent project, not affiliated with Anthropic.
+<details>
+<summary><b>Supported artifact types</b></summary>
+
+| Type | Content model | Local headless render |
+| --- | --- | --- |
+| `Design` | `project/canvas.json` (v3) + `.dc.html` artboards | Yes (light and dark, custom widths) |
+| `Slides` | `project/deck.json` (v4/v5) + `project/deck.css` + `project/slides/*.html` | Yes (16:9 and 4:3, by slide or full deck) |
+| `Design System` | `project/design-system.json` (v3) + `project/tokens.json` + component previews | Open in Claude |
+| `Data` (`Dashboard`) | Shared artifact database (`db`) | Open in Claude |
+| `Whiteboard` | Shared artifact database (`db`) | Open in Claude |
+| `Docs` / `Sheets` | Created and read here; body managed via Claude Docs | Open in Claude |
+| Plain artifact page | `index.html` + files + optional runtime capabilities | Yes (light and dark, custom widths) |
+| Migrated Design | Read-only inspection, file pull, and authoring context | Open in Claude |
+
+</details>
+
+<details>
+<summary><b>Security and local files</b></summary>
+
+- OAuth credentials stay in macOS Keychain or a `0600` file under `~/.config/open-claude-artifacts/`.
+- Every remote write requires `--allow-write`; file pushes pin `--if-match` SHA-256 hashes with byte-for-byte readback; database writes to existing documents pin `--if-version`; deletions require `--allow-destructive`; public sharing requires `--allow-public`.
+- Local renders run in an isolated headless Chromium profile restricted to loopback and the artifact CDN allowlist.
+- Scratch context, render PNGs, and sync receipts stay under `.open-claude-artifacts/` and are excluded via `.git/info/exclude`.
+
+See [SECURITY.md](SECURITY.md) and [CONTRIBUTING.md](CONTRIBUTING.md).
+
+</details>
+
+---
+
+<div align="center">
+
+Made by [Max Ritter](https://maxritter.net) · [License](LICENSE.md) · Independent project, not affiliated with Anthropic.
+
+</div>

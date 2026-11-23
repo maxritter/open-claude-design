@@ -1,20 +1,18 @@
 # Security
 
-Please report vulnerabilities privately to `mail@maxritter.net`. Do not open a public issue for credential exposure, path traversal, authorization bypass, or remote-write findings.
+Report vulnerabilities privately to `mail@maxritter.net`. Do not open a public issue for credential exposure, path traversal, authorization bypass, or remote-write bugs.
 
 ## Security properties
 
-- Standalone OAuth credentials are stored in a dedicated macOS Keychain item or a current-user-owned Linux/WSL2 file with mode 0600. Claude Code's existing credential remains a read-only compatibility fallback.
-- Authenticated HTTP requests never follow redirects.
-- MCP responses are size-bounded and bound to the exact JSON-RPC request id; paginated discovery has page, item, and repeated-cursor limits.
-- Remote mutation requires local tool classification, explicit write authorization, current etags, and structured success evidence bound to the requested project and paths. Unknown live tools are treated as possible mutations regardless of their remote annotation.
-- Approval-bound synchronization records a worktree-local revision receipt, revalidates every mapped etag and content hash before mutation, rejects stale batches without partial writes, and consumes the receipt only after verification.
-- Generated sync receipts and snapshots are excluded through Git's local `info/exclude`; Open Claude Artifacts never edits the repository's tracked `.gitignore` for runtime state.
-- Local file operations reject symlink escapes and default to the current Git worktree.
-- Capability-bearing operations use guarded one-process helpers; plan tokens and short-lived preview URLs are redacted from output.
-- Generic remote deletion is disabled. Guarded deletion requires exact path confirmation, current etags, recovery backups, canonical paths, and post-delete absence verification.
-- Install and uninstall select only collision-resistant `open-claude-*` skill names and the Open Claude Artifacts-managed runtime. Final agent-specific lifecycle semantics remain owned by the maintained Agent Skills installer.
-- The one-line bootstrap is delivered over GitHub HTTPS; the installer then verifies pinned uv and Node archives plus the release wheel before installation.
-- CI runs Trivy vulnerability, secret, and workflow-misconfiguration scanning, CodeQL, pull-request dependency review, pinned-action validation, and release artifact provenance. Release Please creates draft releases; publication occurs only after the full build, test, shell, and security gates pass.
+- **Isolated OAuth credentials:** Stored in a dedicated macOS Keychain item (`Open Claude Artifacts-credentials`) or a current-user-owned Linux/WSL2 file under `~/.config/open-claude-artifacts/credentials.json` with mode `0600`. Existing `open-claude-design` artifact credentials are read as a migration fallback.
+- **No redirects on authenticated requests:** Token exchange and artifact API calls reject HTTP redirects so credentials never cross origins.
+- **Bounded network responses:** All JSON, file, asset, and diagnostic responses enforce explicit byte and page limits.
+- **Explicit mutation gates:** Every remote write requires `--allow-write`. File pushes pin current SHA-256 preconditions (`--if-match`) and verify byte-for-byte readback; database updates to existing documents pin `--if-version`. Deletions also require `--allow-destructive` (plus `--confirm` for whole artifacts); public sharing requires `--allow-public`.
+- **Conflict-aware code sync:** `sync review` writes a local SHA-256-sealed receipt and immutable snapshots. `sync apply` revalidates local and remote revisions before writing and aborts with exit code `3` if either side drifted.
+- **Clean repositories:** Context caches, render images, and sync receipts live under `.open-claude-artifacts/` and are ignored via `.git/info/exclude`, never by modifying tracked `.gitignore` files.
+- **Symlink-safe local I/O:** Local reads and writes default to the current Git worktree, traverse directories using `O_NOFOLLOW` pinned file descriptors, and reject external paths without explicit `--allow-external-local-path`.
+- **Redacted capability tokens:** Short-lived frame content URLs and `assetToken` values are stripped from all CLI output. Only durable `https://claude.ai/code/artifact/<id>` URLs are returned or opened.
+- **Isolated local rendering:** Headless Chromium runs with a throwaway profile and `--host-resolver-rules` blocking all network hosts outside `127.0.0.1` and the artifact CDN allowlist.
+- **Verified release supply chain:** CI runs Trivy (vulnerabilities, secrets, misconfigurations), CodeQL, dependency review, pinned GitHub Actions checks, and SLSA build provenance attestations. Publication requires manual approval on the `release` environment.
 
-Reports should include the affected version, platform, reproduction steps, and whether a real credential or remote project was involved. Redact all tokens and private project content.
+Include the affected version, platform, and reproduction steps in your report, and redact all tokens and private artifact content.

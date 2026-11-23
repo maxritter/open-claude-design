@@ -44,13 +44,12 @@ def test_readme_keeps_activation_order_and_local_links_valid() -> None:
 
     ordered_sections = [
         "docs/media/hero-light.webp",
-        "## Quick start",
-        "## What you can make",
-        "## What it can do",
+        "## Why Open Claude Artifacts",
+        '<h2 id="install">Getting started</h2>',
+        '<h2 id="examples">What you can make</h2>',
+        '<h2 id="agents">Works with your agent</h2>',
         "## Design in QualityLayer",
-        "## Works with every coding agent",
-        "## CLI reference",
-        "## License",
+        '<h2 id="reference">Reference</h2>',
     ]
     offsets = [readme.index(section) for section in ordered_sections]
     assert offsets == sorted(offsets)
@@ -61,15 +60,22 @@ def test_readme_keeps_activation_order_and_local_links_valid() -> None:
         for target in re.findall(r"\[[^\]]+\]\(([^)]+)\)", readme)
         if not target.startswith(("http://", "https://", "#"))
     ]
-    local_media = re.findall(r'(?:src|srcset)="([^"]+)"', readme)
+    local_media = [
+        target
+        for target in re.findall(r'(?:src|srcset)="([^"]+)"', readme)
+        if not target.startswith(("http://", "https://"))
+    ]
     assert local_links
     assert {
         "docs/media/hero-light.webp",
         "docs/media/hero-dark.webp",
         "docs/media/examples/slides.webp",
         "docs/media/examples/app.webp",
-        "docs/media/examples/cv.webp",
+        "docs/media/examples/app-dark.webp",
+        "docs/media/examples/dashboard.webp",
+        "docs/media/examples/dashboard-dark.webp",
         "docs/media/examples/design-system.webp",
+        "docs/media/examples/design-system-dark.webp",
     } <= set(local_media)
     assert all((ROOT / target).is_file() for target in [*local_links, *local_media])
 
@@ -79,9 +85,9 @@ def test_readme_promotes_qualitylayer_and_keeps_install_command() -> None:
     command = "curl -fsSL https://github.com/maxritter/open-claude-artifacts/releases/latest/download/install.sh | sh"
 
     assert readme.count(command) == 1
-    assert readme.index(command) < readme.index("**macOS · Linux · WSL2**")
+    assert "macOS, Linux, or WSL2" in readme
     assert "**[Try QualityLayer](https://github.com/maxritter/qualitylayer)**" in readme
-    assert "No Claude Code installation or Anthropic API key required" in readme
+    assert "No Claude Code installation or Anthropic API key is required" in readme
     assert "img.shields.io/github/stars/maxritter/open-claude-artifacts" in readme
     assert "api.star-history.com" not in readme
 

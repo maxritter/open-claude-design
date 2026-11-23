@@ -1,67 +1,41 @@
-# Claude Design design-system package
+# Claude Design System artifact package
 
-Read this reference only when an extracted system must live in Claude Design as a design system that projects can bind. It describes the shape Claude Design indexes, observed on live design-system projects in September 2026. The host owns that shape and may change it: before authoring, inspect an existing design-system project in the user's account and follow what is there when it differs from this file.
+Read this reference when publishing an extracted design system into a native Claude **Design System** artifact (`--type "Design System"`). Always run `open-claude-artifacts authoring-context <artifact> --json` first and follow the live `SKILL.md` and `format.md` whenever Anthropic updates the schema.
 
-Access, authentication, and every remote write go through `open-claude-artifacts`. This reference only decides what the files contain.
+All reads, writes, and asset uploads go through `open-claude-artifacts`.
 
-This package contract applies to standalone Claude Design. For a system migrated to Claude Artifacts, read `open-claude-artifacts`'s `references/migration.md`: the current CLI cannot update the artifact copy or verify its compilation. Do not use standalone project grants, default-setting commands, or compiled-manifest checks as evidence about the migrated copy.
+## Create or locate the Design System artifact
 
-## The destination is a design-system project
+1. Check existing systems with `open-claude-artifacts instances "Design System" --json`.
+2. To create a new one (when authorized):
+   ```bash
+   open-claude-artifacts create "Acme Design System" --type "Design System" \
+     --idempotency-key "<uuid>" --allow-write --json
+   ```
+3. Load the live format guide with `open-claude-artifacts authoring-context <artifact> --json`.
 
-A design system is a Claude Design project whose `get_project` result reports `type: PROJECT_TYPE_DESIGN_SYSTEM`. The type is fixed at creation. Writing a package into a regular project never turns it into a design system, and nothing will be able to bind it.
+## File layout under `project/`
 
-1. Resolve the destination from the id or name the user gives. `list_design_systems` returns the systems offered for binding and can omit design-system projects the user owns, and `list_projects` carries no type. Check a candidate from either list with `get_project`, and stop when the type is anything other than `PROJECT_TYPE_DESIGN_SYSTEM`.
-2. Conclude that no design-system project exists only after checking the matching `list_projects` entries with `get_project`, never from `list_design_systems` alone. When the user requested a new system, `open-claude-design design-systems create` creates and verifies the native type through the API. Never substitute a regular project. `design-systems list` provides the complete typed inventory.
-3. A published design system applies to every project that binds it, and `is_default: true` marks the one new projects receive. Changing it changes other people's future work; name that effect when asking for write approval.
+Keep the source codebase's exact token names and numeric values. Write only under `project/`.
 
-## Authored files
+| Path under `project/` | Purpose |
+| --- | --- |
+| `design-system.json` | Schema v3 index (`"v": 3`, `"layout": "files"`, `"createdOnFiles"`, `"title"`, `"namespace"`, `"libraries"`, `"groups"`, `"assetGroups"`). Write this file **last**. |
+| `tokens.json` | Complete color (light/dark themes), typography, spacing, and radius token definitions. |
+| `README.md` (and optional `*.md`) | Brand principles, token usage guidance, and component rules. |
+| `components/bundle.js`, `bundle.css`, `index.d.ts` | Optional classic script assigning `window.<namespace>`, stylesheet, and type docs. |
+| `components/<Name>/README.md` | Guidelines for one component (first sentence acts as summary). |
+| `components/<Name>/preview.html` | Live preview card starting with `<!-- @dsCard group="Actions" height=88 -->`. |
+| `fonts/<file>` | Self-hosted font files listed in `tokens.json`. |
 
-These are the files the agent writes. Keep the repository's own token names and values; this is a packaging step, not a second extraction.
+Never write generated paths (`project/tokens.css`, `project/manifest.json`, or `project/api/*`). Upload icons, logos, and images via `open-claude-artifacts assets upload` and reference their blob IDs in `assetGroups` inside `design-system.json`.
 
-| Path | Purpose |
-|---|---|
-| `styles.css` | The single entry point. Only `@import` lines, in cascade order: fonts, color, typography, spacing, base, then components. Every card and every consuming design links this one file. |
-| `tokens/*.css` | Custom properties grouped by concern (`colors.css`, `typography.css`, `spacing.css`, `fonts.css`, `base.css`). Themes are selectors that redefine the same properties, such as `[data-theme='dark']`. |
-| `components/components.css` and `components/<group>/<Name>.jsx` | Component classes, and one source file per reusable component when the system ships real components. |
-| `guidelines/*.card.html` and `components/<group>/*.card.html` | Preview cards: small standalone pages that render one facet of the system. |
-| `ui_kits/<name>/index.html` | Optional full-screen compositions that show the system assembled. |
-| `assets/` | Logos, marks, and self-hosted fonts referenced by `tokens/fonts.css`. |
-| `readme.md` | The human-readable system: principles, usage rules, do and don't. |
-| `SKILL.md` | The agent entry point Claude Design loads with the system: name, description, the non-negotiable rules in one paragraph, and a pointer to `readme.md`. |
-| `thumbnail.html` | The small page Claude Design renders as the system's thumbnail. |
+## Publish and install into canvases or decks
 
-## Preview cards
-
-The Design System pane builds its card index from a marker on the first line of each preview file. For manually authored cards, `design-systems register` also registers an existing preview file through the API and verifies its metadata. `design-systems cards` lists these entries; registration does not imply review approval.
-
-```html
-<!-- @dsCard group="Spacing & Shape" viewport="700x210" name="Spacing scale" subtitle="4px base" -->
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><link rel="stylesheet" href="../styles.css">
-```
-
-- `group` is the pane section. Use the source system's own categories; the pane groups by the exact string.
-- `viewport` is `WIDTHxHEIGHT` in CSS pixels, sized to the content so the card neither clips nor floats in empty space.
-- `name` is a short human label, and `subtitle` names the variants shown.
-- Link `styles.css` by relative path and style the card with the system's own tokens. A card that hard-codes a value the system defines as a token documents the wrong thing.
-- One facet per card: a scale, a palette band, one component's variants and states. Show real states, not only the resting one.
-
-## Files Claude Design compiles
-
-Never write, edit, or delete these. Claude Design derives them from the authored files after each change, and a hand-written copy goes stale or is overwritten.
-
-- `_ds_manifest.json`: the compiled index of components, starting points, cards, templates, global CSS paths, tokens with their kind and defining file, themes, and fonts.
-- `_ds_bundle.js`: the compiled component bundle.
-- `_adherence.oxlintrc.json`: the rules Claude Design uses to check designs against the system.
-- `.thumbnail`: the rendered thumbnail.
-
-Read `_ds_manifest.json` after publishing as the acceptance check: every token, card, component, theme, and font the package intended should appear there, each traced to the right file. A token missing from the manifest was not recognized, usually because it is defined outside the files `styles.css` imports. Compilation runs in the Claude Design app, so ask the user to open the design system once when the manifest has not caught up.
-
-## Publishing
-
-1. Build the package in a repository-local scratch directory and render each card locally against the local `styles.css` first.
-2. List the destination and compare structure. Publish incrementally, one component or token group at a time. Never replace a whole design system to land one change, and never delete remote files the user did not name.
-3. Write through `open-claude-design push` with an etag for every path, inside one exact-path plan per batch. Exclude the compiled files from every plan.
-4. Verify each written card through the API gate. Use `design-systems publish` only after explicit organization-visibility approval, then inspect the manifest. Registration and publication are available without browser control; host-side compilation remains distinct and must be reported pending when absent.
-5. Report the durable project URL and which bound projects the change reaches. Changing the organization default is a separate authorized operation: read `design-systems settings`, then use `design-systems default <id> --if-current <reviewed-id> --allow-write`. It changes only the default field, never sharing restrictions.
-
-Text and binary files up to 16 MiB can be pushed and read back through the CLI; batches are bounded at 32 MiB. Use exact-path etags and require byte-for-byte verification. `export` produces a revision-checked ZIP with original assets and a checksum manifest.
+1. Push `tokens.json`, `README.md`, fonts, and component files first with `--if-match` SHA-256 preconditions (`0` for new files).
+2. Push `project/design-system.json` last so the artifact reads the complete file set cleanly.
+3. Install the system into a Design canvas or Slides deck with one command:
+   ```bash
+   open-claude-artifacts design-system install <canvas-or-deck> <design-system> --allow-write --json
+   ```
+   This copies `tokens.json` into `project/ds/<folder>/tokens.json` and records the system in `canvas.json` or `deck.json`.

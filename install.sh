@@ -58,7 +58,7 @@ banner() {
   line "  ${CLAY}${BOLD}< OPEN CLAUDE ARTIFACTS >${RESET}"
   line ""
   line "  ${ACCENT}>${RESET} ${BOLD}Claude Artifacts, from any coding agent${RESET}"
-  line "    ${MUTED}Design canvases, Slides decks, Design Systems, and pages — rendered and synced locally.${RESET}"
+  line "    ${MUTED}Design canvases, Slides decks, Design Systems, and pages, rendered and synced locally.${RESET}"
   line ""
 }
 

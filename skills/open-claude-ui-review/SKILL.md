@@ -36,9 +36,9 @@ Run lanes in the current agent by default. When the session exposes agent tools 
 
 Deduplicate findings and classify them:
 
-1. **Blocker** — standards failure or interaction/accessibility defect that prevents safe use or completion.
-2. **Quality issue** — broken hierarchy, system inconsistency, missing state, misleading content, responsive/theme defect, or unearned template pattern with clear product impact.
-3. **Advisory** — subjective refinement or deterministic detector signal that needs human judgment.
+1. **Blocker:** standards failure or interaction/accessibility defect that prevents safe use or completion.
+2. **Quality issue:** broken hierarchy, system inconsistency, missing state, misleading content, responsive/theme defect, or unearned template pattern with clear product impact.
+3. **Advisory:** subjective refinement or deterministic detector signal that needs human judgment.
 
 Every finding names the affected surface, evidence, user impact, and concrete correction. Do not report a preferred aesthetic as a standards failure.
 
@@ -48,7 +48,7 @@ When edits are authorized, fix blockers first, then in-scope quality issues. Pre
 
 ## Completion
 
-Return a verdict—ready, ready after named decisions, or needs iteration—plus counts by classification, evidence for each unresolved item, authorized fixes applied, and explicit unverified states. A clean source scan without rendered interaction is not a completed UI review.
+Return a verdict (ready, ready after named decisions, or needs iteration), counts by classification, evidence for each unresolved item, authorized fixes applied, and explicit unverified states. A clean source scan without rendered interaction is not a completed UI review.
 
 ## When not to use
 
@@ -56,4 +56,4 @@ Return a verdict—ready, ready after named decisions, or needs iteration—plus
 - Creating a new screen, flow, or visual direction; use `open-claude-ui-design`
 - Extracting tokens or component contracts; use `open-claude-design-system`
 - Logic-only UI changes that preserve the rendered interface
-- Accessing a Claude Design project or preview; use `open-claude-artifacts` for retrieval, then return here for the review
+- Accessing a Claude Artifact or preview; use `open-claude-artifacts` for retrieval, then return here for the review
