@@ -1,4 +1,4 @@
-"""Standalone Claude Design OAuth and credential-store contracts."""
+"""Standalone Claude Artifacts OAuth and credential-store contracts."""
 
 from __future__ import annotations
 
@@ -16,12 +16,12 @@ from urllib.parse import parse_qs, urlparse
 
 import pytest
 
-import open_claude_design.auth as auth
-from open_claude_design.config import (
-    CLAUDE_DESIGN_OAUTH_CLIENT_ID,
-    CLAUDE_DESIGN_OAUTH_MANUAL_REDIRECT_URL,
-    CLAUDE_DESIGN_OAUTH_SCOPES,
-    CLAUDE_DESIGN_OAUTH_USER_AGENT,
+import open_claude_artifacts.auth as auth
+from open_claude_artifacts.config import (
+    OAUTH_CLIENT_ID,
+    OAUTH_MANUAL_REDIRECT_URL,
+    OAUTH_SCOPES,
+    OAUTH_USER_AGENT,
 )
 
 pytestmark = pytest.mark.unit
@@ -48,7 +48,7 @@ def _token_response(*, access: str = "access-value", refresh: str = "refresh-val
         "access_token": access,
         "refresh_token": refresh,
         "expires_in": 3600,
-        "scope": " ".join(CLAUDE_DESIGN_OAUTH_SCOPES),
+        "scope": " ".join(OAUTH_SCOPES),
     }
 
 
@@ -69,12 +69,12 @@ def test_manual_login_uses_pkce_and_persists_without_claude_code(
     def opener(request: urllib.request.Request, *, timeout: int) -> FakeResponse:
         assert timeout == 30
         # platform.claude.com bans urllib's default UA (Cloudflare error 1010).
-        assert request.get_header("User-agent") == CLAUDE_DESIGN_OAUTH_USER_AGENT
+        assert request.get_header("User-agent") == OAUTH_USER_AGENT
         requests.append(json.loads(bytes(request.data or b"").decode("utf-8")))
         return FakeResponse(_token_response())
 
     messages: list[str] = []
-    result = auth.login_design(
+    result = auth.login_artifacts(
         manual=True,
         platform="linux",
         home=tmp_path,
@@ -88,19 +88,17 @@ def test_manual_login_uses_pkce_and_persists_without_claude_code(
         {
             "grant_type": "authorization_code",
             "code": "authorization-code",
-            "redirect_uri": CLAUDE_DESIGN_OAUTH_MANUAL_REDIRECT_URL,
-            "client_id": CLAUDE_DESIGN_OAUTH_CLIENT_ID,
+            "redirect_uri": OAUTH_MANUAL_REDIRECT_URL,
+            "client_id": OAUTH_CLIENT_ID,
             "code_verifier": base64.urlsafe_b64encode(b"a" * 32).decode("ascii").rstrip("="),
             "state": expected_state,
         }
     ]
-    stored = auth.load_standalone_credential(platform="linux", home=tmp_path, now_ms=0)
-    assert stored is not None
-    stored_oauth = stored["designOauth"]
+    stored_oauth = auth.load_artifact_credential(platform="linux", home=tmp_path, now_ms=0)
     assert isinstance(stored_oauth, dict)
     assert stored_oauth["accessToken"] == "access-value"
     assert "access-value" not in "\n".join(messages)
-    credential = tmp_path.joinpath(".config", "open-claude-design", "credentials.json")
+    credential = tmp_path.joinpath(".config", "open-claude-artifacts", "credentials.json")
     assert stat.S_IMODE(credential.stat().st_mode) == 0o600
 
 
@@ -148,7 +146,7 @@ def test_automatic_login_serves_the_localhost_callback_and_persists(
         _get_callback(port, f"code=browser-code&state={state}")
 
     messages: list[str] = []
-    result = auth.login_design(
+    result = auth.login_artifacts(
         timeout_seconds=10,
         platform="linux",
         home=tmp_path,
@@ -161,9 +159,7 @@ def test_automatic_login_serves_the_localhost_callback_and_persists(
     assert requests[0]["grant_type"] == "authorization_code"
     assert requests[0]["code"] == "browser-code"
     assert requests[0]["redirect_uri"].startswith("http://localhost:")
-    stored = auth.load_standalone_credential(platform="linux", home=tmp_path, now_ms=0)
-    assert stored is not None
-    stored_oauth = stored["designOauth"]
+    stored_oauth = auth.load_artifact_credential(platform="linux", home=tmp_path, now_ms=0)
     assert isinstance(stored_oauth, dict)
     assert stored_oauth["accessToken"] == "callback-access"
     assert "callback-access" not in "\n".join(messages)
@@ -182,8 +178,8 @@ def test_automatic_login_rejects_a_callback_with_the_wrong_state(
     def opener(_request: urllib.request.Request, *, timeout: int) -> FakeResponse:
         raise AssertionError(f"no token request may follow a forged state (timeout={timeout})")
 
-    with pytest.raises(auth.DesignAuthError, match="invalid state"):
-        auth.login_design(
+    with pytest.raises(auth.ArtifactAuthError, match="invalid state"):
+        auth.login_artifacts(
             timeout_seconds=10,
             platform="linux",
             home=tmp_path,
@@ -192,7 +188,8 @@ def test_automatic_login_rejects_a_callback_with_the_wrong_state(
             emit=lambda _message: None,
         )
 
-    assert auth.load_standalone_credential(platform="linux", home=tmp_path, now_ms=0) is None
+    with pytest.raises(auth.ArtifactAuthError):
+        auth.load_artifact_credential(platform="linux", home=tmp_path, now_ms=0)
 
 
 def test_automatic_browser_login_detection_is_safe_for_headless_runtimes(tmp_path: Path) -> None:
@@ -232,7 +229,7 @@ def test_automatic_browser_login_detection_is_safe_for_headless_runtimes(tmp_pat
     )
     assert auth.automatic_browser_login_available(
         platform="linux",
-        environment={"CI": "true", "OPEN_CLAUDE_DESIGN_BROWSER_LOGIN": "1"},
+        environment={"CI": "true", "OPEN_CLAUDE_ARTIFACTS_BROWSER_LOGIN": "1"},
         container_marker=container,
     )
 
@@ -244,8 +241,8 @@ def test_automatic_login_does_not_fall_into_manual_input_when_noninteractive(
     monkeypatch.delenv("WSL_DISTRO_NAME", raising=False)
     monkeypatch.setattr(auth.shutil, "which", lambda _name: None)
 
-    with pytest.raises(auth.DesignAuthError, match="No local browser could be opened"):
-        auth.login_design(
+    with pytest.raises(auth.ArtifactAuthError, match="No local browser could be opened"):
+        auth.login_artifacts(
             platform="linux",
             home=tmp_path,
             runner=lambda *_args, **_kwargs: pytest.fail("no browser command should exist"),
@@ -259,8 +256,8 @@ def test_manual_login_reports_noninteractive_terminal_without_traceback(tmp_path
     def raise_eof(_prompt: str) -> str:
         raise EOFError
 
-    with pytest.raises(auth.DesignAuthError, match="interactive terminal"):
-        auth.login_design(
+    with pytest.raises(auth.ArtifactAuthError, match="interactive terminal"):
+        auth.login_artifacts(
             manual=True,
             platform="linux",
             home=tmp_path,
@@ -270,14 +267,14 @@ def test_manual_login_reports_noninteractive_terminal_without_traceback(tmp_path
 
 
 def test_refresh_uses_stored_client_and_rotates_credential(tmp_path: Path) -> None:
-    auth.save_standalone_credential(
+    auth.save_artifact_credential(
         {
-            "designOauth": {
+            "artifactOauth": {
                 "accessToken": "expired-access",
                 "refreshToken": "old-refresh",
                 "expiresAt": 1,
-                "scopes": list(CLAUDE_DESIGN_OAUTH_SCOPES),
-                "clientId": CLAUDE_DESIGN_OAUTH_CLIENT_ID,
+                "scopes": list(OAUTH_SCOPES),
+                "clientId": OAUTH_CLIENT_ID,
             }
         },
         platform="linux",
@@ -287,23 +284,45 @@ def test_refresh_uses_stored_client_and_rotates_credential(tmp_path: Path) -> No
 
     def opener(request: urllib.request.Request, *, timeout: int) -> FakeResponse:
         assert timeout == 30
-        assert request.get_header("User-agent") == CLAUDE_DESIGN_OAUTH_USER_AGENT
+        assert request.get_header("User-agent") == OAUTH_USER_AGENT
         requests.append(json.loads(bytes(request.data or b"").decode("utf-8")))
         return FakeResponse(_token_response(access="new-access", refresh="new-refresh"))
 
-    payload = auth.load_standalone_credential(
+    refreshed_oauth = auth.load_artifact_credential(
         platform="linux",
         home=tmp_path,
         now_ms=1_000,
         token_opener=opener,
     )
 
-    assert payload is not None
-    refreshed_oauth = payload["designOauth"]
     assert isinstance(refreshed_oauth, dict)
     assert refreshed_oauth["accessToken"] == "new-access"
     assert requests[0]["grant_type"] == "refresh_token"
     assert requests[0]["refresh_token"] == "old-refresh"
+
+
+def test_legacy_open_claude_design_artifact_credential_is_read_as_fallback(tmp_path: Path) -> None:
+    legacy = tmp_path / ".config" / "open-claude-design" / "artifact-credentials.json"
+    legacy.parent.mkdir(parents=True)
+    legacy.write_text(
+        json.dumps(
+            {
+                "artifactOauth": {
+                    "accessToken": "legacy-token",
+                    "refreshToken": "legacy-refresh",
+                    "expiresAt": 9_999_999_999_999,
+                    "scopes": list(OAUTH_SCOPES),
+                    "clientId": OAUTH_CLIENT_ID,
+                    "identity": "0" * 32,
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    legacy.chmod(0o600)
+
+    loaded = auth.load_artifact_credential(platform="linux", home=tmp_path, now_ms=0)
+    assert loaded["accessToken"] == "legacy-token"
 
 
 def test_keychain_write_keeps_tokens_out_of_argv() -> None:
@@ -313,8 +332,8 @@ def test_keychain_write_keeps_tokens_out_of_argv() -> None:
         calls.append((command, kwargs))
         return subprocess.CompletedProcess(command, 0, "", "")
 
-    auth.save_standalone_credential(
-        {"designOauth": {"accessToken": "secret-access", "refreshToken": "secret-refresh"}},
+    auth.save_artifact_credential(
+        {"artifactOauth": {"accessToken": "secret-access", "refreshToken": "secret-refresh"}},
         platform="darwin",
         runner=runner,
     )
@@ -340,22 +359,22 @@ def test_authorize_url_is_registered_public_client_with_exact_design_scopes() ->
 
     assert parsed.scheme == "https"
     assert parsed.netloc == "claude.com"
-    assert parameters["client_id"] == [CLAUDE_DESIGN_OAUTH_CLIENT_ID]
-    assert parameters["scope"] == [" ".join(CLAUDE_DESIGN_OAUTH_SCOPES)]
+    assert parameters["client_id"] == [OAUTH_CLIENT_ID]
+    assert parameters["scope"] == [" ".join(OAUTH_SCOPES)]
     assert parameters["code_challenge_method"] == ["S256"]
     assert parameters["redirect_uri"] == ["http://localhost:1234/callback"]
 
 
 def test_delete_standalone_linux_credential_is_exact_and_idempotent(tmp_path: Path) -> None:
-    auth.save_standalone_credential(
-        {"designOauth": {"accessToken": "a"}},
+    auth.save_artifact_credential(
+        {"artifactOauth": {"accessToken": "a"}},
         platform="linux",
         home=tmp_path,
     )
 
-    assert auth.delete_standalone_credential(platform="linux", home=tmp_path) is True
-    assert auth.delete_standalone_credential(platform="linux", home=tmp_path) is False
-    assert tmp_path.joinpath(".config", "open-claude-design").is_dir()
+    assert auth.delete_artifact_credential(platform="linux", home=tmp_path) is True
+    assert auth.delete_artifact_credential(platform="linux", home=tmp_path) is False
+    assert tmp_path.joinpath(".config", "open-claude-artifacts").is_dir()
 
 
 def test_linux_credential_write_rejects_symlinked_parent(tmp_path: Path) -> None:
@@ -363,14 +382,14 @@ def test_linux_credential_write_rejects_symlinked_parent(tmp_path: Path) -> None
     outside.mkdir()
     (tmp_path / ".config").symlink_to(outside, target_is_directory=True)
 
-    with pytest.raises(auth.DesignAuthError, match="symlinked or unsafe"):
-        auth.save_standalone_credential(
-            {"designOauth": {"accessToken": "secret"}},
+    with pytest.raises(auth.ArtifactAuthError, match="symlinked or unsafe"):
+        auth.save_artifact_credential(
+            {"artifactOauth": {"accessToken": "secret"}},
             platform="linux",
             home=tmp_path,
         )
 
-    assert not (outside / "open-claude-design" / "credentials.json").exists()
+    assert not (outside / "open-claude-artifacts" / "credentials.json").exists()
 
 
 def test_wsl_browser_open_uses_quoted_windows_url(monkeypatch: pytest.MonkeyPatch) -> None:

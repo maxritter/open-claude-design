@@ -1,5 +1,5 @@
 name: Bug report
-description: Report reproducible unexpected behavior in Open Claude Design
+description: Report reproducible unexpected behavior in Open Claude Artifacts
 title: "[Bug]: "
 labels:
   - bug
@@ -8,7 +8,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thanks for helping improve Open Claude Design. Do not include credentials, plan tokens, short-lived preview URLs, or private project content.
+        Thanks for helping improve Open Claude Artifacts. Do not include credentials, plan tokens, short-lived preview URLs, or private project content.
 
   - type: dropdown
     id: area
@@ -60,8 +60,8 @@ body:
   - type: input
     id: version
     attributes:
-      label: Open Claude Design version
-      description: Output of `open-claude-design --version`.
+      label: Open Claude Artifacts version
+      description: Output of `open-claude-artifacts --version`.
       placeholder: 1.0.0
     validations:
       required: true

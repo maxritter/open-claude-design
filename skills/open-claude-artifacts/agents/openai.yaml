@@ -1,0 +1,5 @@
+interface:
+  display_name: "Claude Artifacts"
+  short_description: "Create, edit, render, and sync Claude Artifacts (Design, Slides, Design Systems, Data, Whiteboards, Docs, Sheets, pages)"
+policy:
+  allow_implicit_invocation: true

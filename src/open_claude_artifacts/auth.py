@@ -1,4 +1,4 @@
-"""Standalone Claude Design OAuth and credential storage."""
+"""Claude Artifacts OAuth credentials owned by this CLI, isolated from every other login."""
 
 from __future__ import annotations
 
@@ -24,29 +24,28 @@ from pathlib import Path
 from typing import Any, Protocol, cast
 from urllib.parse import parse_qs, urlencode, urlparse
 
-from open_claude_design.config import (
-    ARTIFACT_OAUTH_CLIENT_ID,
-    ARTIFACT_OAUTH_SCOPES,
-    CLAUDE_DESIGN_BROWSER_LOGIN_ENV,
-    CLAUDE_DESIGN_CREDENTIAL_MAX_BYTES,
-    CLAUDE_DESIGN_OAUTH_AUTHORIZE_URL,
-    CLAUDE_DESIGN_OAUTH_CLIENT_ID,
-    CLAUDE_DESIGN_OAUTH_MANUAL_REDIRECT_URL,
-    CLAUDE_DESIGN_OAUTH_REFRESH_MARGIN_SECONDS,
-    CLAUDE_DESIGN_OAUTH_RESPONSE_MAX_BYTES,
-    CLAUDE_DESIGN_OAUTH_SCOPES,
-    CLAUDE_DESIGN_OAUTH_SUCCESS_URL,
-    CLAUDE_DESIGN_OAUTH_TIMEOUT_SECONDS,
-    CLAUDE_DESIGN_OAUTH_TOKEN_URL,
-    CLAUDE_DESIGN_OAUTH_USER_AGENT,
-    CLAUDE_DESIGN_STANDALONE_CREDENTIAL_PARTS,
-    CLAUDE_DESIGN_STANDALONE_KEYCHAIN_ACCOUNT,
-    CLAUDE_DESIGN_STANDALONE_KEYCHAIN_SERVICE,
+from open_claude_artifacts.config import (
+    BROWSER_LOGIN_ENV,
+    CREDENTIAL_MAX_BYTES,
+    CREDENTIAL_PARTS,
+    KEYCHAIN_ACCOUNT,
+    KEYCHAIN_SERVICE,
+    LEGACY_BROWSER_LOGIN_ENV,
+    LEGACY_CREDENTIAL_PARTS,
+    LEGACY_KEYCHAIN_ACCOUNT,
+    LEGACY_KEYCHAIN_SERVICE,
+    OAUTH_AUTHORIZE_URL,
+    OAUTH_CLIENT_ID,
+    OAUTH_MANUAL_REDIRECT_URL,
+    OAUTH_REFRESH_MARGIN_SECONDS,
+    OAUTH_RESPONSE_MAX_BYTES,
+    OAUTH_SCOPES,
+    OAUTH_SUCCESS_URL,
+    OAUTH_TIMEOUT_SECONDS,
+    OAUTH_TOKEN_URL,
+    OAUTH_USER_AGENT,
 )
-
-
-class DesignAuthError(RuntimeError):
-    """Standalone Claude Design authorization failed safely."""
+from open_claude_artifacts.errors import ArtifactAuthError
 
 
 class _Response(Protocol):
@@ -71,19 +70,23 @@ def _base64url(value: bytes) -> str:
     return base64.urlsafe_b64encode(value).decode("ascii").rstrip("=")
 
 
-def _credential_file(home: Path | None = None) -> Path:
-    return (home or Path.home()).joinpath(*CLAUDE_DESIGN_STANDALONE_CREDENTIAL_PARTS)
+def credential_file(home: Path | None = None) -> Path:
+    return (home or Path.home()).joinpath(*CREDENTIAL_PARTS)
+
+
+def legacy_credential_file(home: Path | None = None) -> Path:
+    return (home or Path.home()).joinpath(*LEGACY_CREDENTIAL_PARTS)
 
 
 def _open_secure_parent(path: Path, *, create: bool) -> int | None:
     absolute = Path(os.path.abspath(path))
     if not absolute.is_absolute() or not absolute.name:
-        raise DesignAuthError("Open Claude Design's credential path is invalid.")
+        raise ArtifactAuthError("Open Claude Artifacts' credential path is invalid.")
     directory_flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
     try:
         directory_fd = os.open(absolute.anchor, directory_flags)
     except OSError as error:
-        raise DesignAuthError(f"Credential root is not safely readable: {absolute.anchor}") from error
+        raise ArtifactAuthError(f"Credential root is not safely readable: {absolute.anchor}") from error
     transferred = False
     try:
         for component in absolute.parts[1:-1]:
@@ -99,7 +102,7 @@ def _open_secure_parent(path: Path, *, create: bool) -> int | None:
         transferred = True
         return directory_fd
     except OSError as error:
-        raise DesignAuthError("Refusing a symlinked or unsafe credential directory.") from error
+        raise ArtifactAuthError("Refusing a symlinked or unsafe credential directory.") from error
     finally:
         if not transferred:
             os.close(directory_fd)
@@ -122,21 +125,21 @@ def _read_secure_json_file(path: Path) -> dict[str, object] | None:
     try:
         metadata = os.fstat(credential_fd)
         if not stat.S_ISREG(metadata.st_mode):
-            raise DesignAuthError("Open Claude Design's credential path is not a regular file.")
+            raise ArtifactAuthError("Open Claude Artifacts' credential path is not a regular file.")
         if hasattr(os, "getuid") and metadata.st_uid != os.getuid():
-            raise DesignAuthError("Open Claude Design's credential file is not owned by the current user.")
+            raise ArtifactAuthError("Open Claude Artifacts' credential file is not owned by the current user.")
         if stat.S_IMODE(metadata.st_mode) & 0o077:
-            raise DesignAuthError("Open Claude Design's credential file permissions are too broad; expected 0600.")
-        if metadata.st_size > CLAUDE_DESIGN_CREDENTIAL_MAX_BYTES:
-            raise DesignAuthError("Open Claude Design's credential file is unexpectedly large.")
+            raise ArtifactAuthError("Open Claude Artifacts' credential file permissions are too broad; expected 0600.")
+        if metadata.st_size > CREDENTIAL_MAX_BYTES:
+            raise ArtifactAuthError("Open Claude Artifacts' credential file is unexpectedly large.")
         with os.fdopen(credential_fd, "r", encoding="utf-8", closefd=False) as handle:
             payload = json.load(handle)
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
-        raise DesignAuthError("Open Claude Design's credential file is not valid JSON.") from error
+        raise ArtifactAuthError("Open Claude Artifacts' credential file is not valid JSON.") from error
     finally:
         os.close(credential_fd)
     if not isinstance(payload, dict):
-        raise DesignAuthError("Open Claude Design's credential file must contain a JSON object.")
+        raise ArtifactAuthError("Open Claude Artifacts' credential file must contain a JSON object.")
     return payload
 
 
@@ -174,19 +177,11 @@ def _write_secure_json_file(path: Path, payload: dict[str, object]) -> None:
 def _read_keychain(
     runner: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
     *,
-    service: str = CLAUDE_DESIGN_STANDALONE_KEYCHAIN_SERVICE,
-    account: str = CLAUDE_DESIGN_STANDALONE_KEYCHAIN_ACCOUNT,
+    service: str = KEYCHAIN_SERVICE,
+    account: str = KEYCHAIN_ACCOUNT,
 ) -> dict[str, object] | None:
     result = runner(
-        [
-            "/usr/bin/security",
-            "find-generic-password",
-            "-a",
-            account,
-            "-s",
-            service,
-            "-w",
-        ],
+        ["/usr/bin/security", "find-generic-password", "-a", account, "-s", service, "-w"],
         capture_output=True,
         text=True,
         shell=False,
@@ -198,28 +193,39 @@ def _read_keychain(
     try:
         payload = json.loads(result.stdout)
     except json.JSONDecodeError as error:
-        raise DesignAuthError("Open Claude Design's Keychain credential is not valid JSON.") from error
+        raise ArtifactAuthError("Open Claude Artifacts' Keychain credential is not valid JSON.") from error
     if not isinstance(payload, dict):
-        raise DesignAuthError("Open Claude Design's Keychain credential must contain a JSON object.")
+        raise ArtifactAuthError("Open Claude Artifacts' Keychain credential must contain a JSON object.")
     return payload
 
 
-def _read_standalone_raw(
+def _write_keychain(
+    payload: dict[str, object],
+    runner: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
     *,
-    platform: str,
-    home: Path | None,
-    runner: Callable[..., subprocess.CompletedProcess[str]],
-) -> dict[str, object] | None:
-    if platform == "darwin":
-        return _read_keychain(runner)
-    if platform.startswith("linux"):
-        return _read_secure_json_file(_credential_file(home))
-    return None
+    service: str = KEYCHAIN_SERVICE,
+    account: str = KEYCHAIN_ACCOUNT,
+) -> None:
+    # The value rides on a `security -i` stdin command line so argv never exposes it.
+    serialized = json.dumps(payload, separators=(",", ":"))
+    escaped = serialized.replace("\\", "\\\\").replace('"', '\\"')
+    command = f'add-generic-password -U -a "{account}" -s "{service}" -w "{escaped}"\n'
+    result = runner(
+        ["/usr/bin/security", "-i"],
+        input=command,
+        capture_output=True,
+        text=True,
+        shell=False,
+        timeout=30,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise ArtifactAuthError("Could not save the artifact credential to macOS Keychain.")
 
 
 @contextmanager
 def _refresh_lock(home: Path | None = None, *, path: Path | None = None) -> Iterator[None]:
-    credential_path = Path(os.path.abspath(path or _credential_file(home)))
+    credential_path = Path(os.path.abspath(path or credential_file(home)))
     directory_fd = _open_secure_parent(credential_path, create=True)
     assert directory_fd is not None
     os.fchmod(directory_fd, 0o700)
@@ -238,144 +244,35 @@ def _refresh_lock(home: Path | None = None, *, path: Path | None = None) -> Iter
         os.close(directory_fd)
 
 
-def _write_keychain(
+def save_artifact_credential(
     payload: dict[str, object],
-    runner: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
-    *,
-    service: str = CLAUDE_DESIGN_STANDALONE_KEYCHAIN_SERVICE,
-    account: str = CLAUDE_DESIGN_STANDALONE_KEYCHAIN_ACCOUNT,
-) -> None:
-    # The value must ride on a `security -i` stdin command line: argv would leak it
-    # to `ps`, and security's interactive password prompt truncates at 128 bytes.
-    serialized = json.dumps(payload, separators=(",", ":"))
-    escaped = serialized.replace("\\", "\\\\").replace('"', '\\"')
-    command = f'add-generic-password -U -a "{account}" -s "{service}" -w "{escaped}"\n'
-    result = runner(
-        ["/usr/bin/security", "-i"],
-        input=command,
-        capture_output=True,
-        text=True,
-        shell=False,
-        timeout=30,
-        check=False,
-    )
-    if result.returncode != 0:
-        raise DesignAuthError("Could not save the Design credential to macOS Keychain.")
-
-
-def load_standalone_credential(
     *,
     platform: str = sys.platform,
     home: Path | None = None,
     runner: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
-    now_ms: int | None = None,
-    token_opener: Callable[..., _Response] = _TOKEN_OPENER.open,
+) -> None:
+    if platform == "darwin":
+        _write_keychain(payload, runner, service=KEYCHAIN_SERVICE, account=KEYCHAIN_ACCOUNT)
+    elif platform.startswith("linux"):
+        _write_secure_json_file(credential_file(home), payload)
+    else:
+        raise ArtifactAuthError("Open Claude Artifacts login supports macOS, Linux, and WSL2.")
+
+
+def _read_raw(
+    platform: str, home: Path | None, runner: Callable[..., subprocess.CompletedProcess[str]]
 ) -> dict[str, object] | None:
-    """Load and refresh Open Claude Design's own credential when available."""
-    payload = _read_standalone_raw(platform=platform, home=home, runner=runner)
-    if payload is None:
-        return None
-    current = int(time.time() * 1000) if now_ms is None else now_ms
-
-    def needs_refresh(candidate: dict[str, object]) -> bool:
-        candidate_oauth = candidate.get("designOauth")
-        if not isinstance(candidate_oauth, dict):
-            raise DesignAuthError("Open Claude Design's credential has no designOauth object.")
-        expiry = candidate_oauth.get("expiresAt")
-        return not (
-            isinstance(expiry, int | float)
-            and int(expiry) > current + CLAUDE_DESIGN_OAUTH_REFRESH_MARGIN_SECONDS * 1000
-        )
-
-    if not needs_refresh(payload):
-        return payload
-    with _refresh_lock(home):
-        latest = _read_standalone_raw(platform=platform, home=home, runner=runner)
-        if latest is None:
-            return None
-        if not needs_refresh(latest):
-            return latest
-        oauth = latest.get("designOauth")
-        assert isinstance(oauth, dict)
-        refresh_token = oauth.get("refreshToken")
-        client_id = oauth.get("clientId")
-        scopes = oauth.get("scopes")
-        if not isinstance(refresh_token, str) or not refresh_token:
-            return latest
-        if not isinstance(client_id, str) or not client_id:
-            client_id = CLAUDE_DESIGN_OAUTH_CLIENT_ID
-        requested_scopes = [scope for scope in scopes if isinstance(scope, str)] if isinstance(scopes, list) else []
-        refreshed = _request_token(
-            {
-                "grant_type": "refresh_token",
-                "refresh_token": refresh_token,
-                "client_id": client_id,
-                "scope": " ".join(requested_scopes or CLAUDE_DESIGN_OAUTH_SCOPES),
-            },
-            opener=token_opener,
-        )
-        refreshed_payload = _credential_payload(
-            refreshed,
-            client_id=client_id,
-            fallback_refresh_token=refresh_token,
-            now_ms=current,
-        )
-        save_standalone_credential(refreshed_payload, platform=platform, home=home, runner=runner)
-        return refreshed_payload
-
-
-def save_standalone_credential(
-    payload: dict[str, object],
-    *,
-    platform: str = sys.platform,
-    home: Path | None = None,
-    runner: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
-) -> None:
     if platform == "darwin":
-        _write_keychain(payload, runner)
-        return
+        primary = _read_keychain(runner, service=KEYCHAIN_SERVICE, account=KEYCHAIN_ACCOUNT)
+        if primary is not None:
+            return primary
+        return _read_keychain(runner, service=LEGACY_KEYCHAIN_SERVICE, account=LEGACY_KEYCHAIN_ACCOUNT)
     if platform.startswith("linux"):
-        _write_secure_json_file(_credential_file(home), payload)
-        return
-    raise DesignAuthError("Open Claude Design login supports macOS, Linux, and WSL2.")
-
-
-def delete_standalone_credential(
-    *,
-    platform: str = sys.platform,
-    home: Path | None = None,
-    runner: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
-) -> bool:
-    if platform == "darwin":
-        result = runner(
-            [
-                "/usr/bin/security",
-                "delete-generic-password",
-                "-a",
-                CLAUDE_DESIGN_STANDALONE_KEYCHAIN_ACCOUNT,
-                "-s",
-                CLAUDE_DESIGN_STANDALONE_KEYCHAIN_SERVICE,
-            ],
-            capture_output=True,
-            text=True,
-            shell=False,
-            timeout=10,
-            check=False,
-        )
-        return result.returncode == 0
-    if platform.startswith("linux"):
-        path = Path(os.path.abspath(_credential_file(home)))
-        directory_fd = _open_secure_parent(path, create=False)
-        if directory_fd is None:
-            return False
-        try:
-            os.unlink(path.name, dir_fd=directory_fd)
-        except FileNotFoundError:
-            return False
-        finally:
-            os.close(directory_fd)
-        return True
-    raise DesignAuthError("Open Claude Design logout supports macOS, Linux, and WSL2.")
+        primary = _read_secure_json_file(credential_file(home))
+        if primary is not None:
+            return primary
+        return _read_secure_json_file(legacy_credential_file(home))
+    return None
 
 
 def _request_token(
@@ -384,42 +281,41 @@ def _request_token(
     opener: Callable[..., _Response] = _TOKEN_OPENER.open,
 ) -> dict[str, object]:
     request = urllib.request.Request(
-        CLAUDE_DESIGN_OAUTH_TOKEN_URL,
+        OAUTH_TOKEN_URL,
         data=json.dumps(fields).encode("utf-8"),
         headers={
             "Accept": "application/json",
             "Content-Type": "application/json",
             # Cloudflare on platform.claude.com rejects urllib's default UA (error 1010).
-            "User-Agent": CLAUDE_DESIGN_OAUTH_USER_AGENT,
+            "User-Agent": OAUTH_USER_AGENT,
         },
         method="POST",
     )
     try:
         with opener(request, timeout=30) as response:
-            body = response.read(CLAUDE_DESIGN_OAUTH_RESPONSE_MAX_BYTES + 1)
+            body = response.read(OAUTH_RESPONSE_MAX_BYTES + 1)
     except urllib.error.HTTPError as error:
-        raise DesignAuthError(f"Claude authorization was rejected (HTTP {error.code}).") from error
+        raise ArtifactAuthError(f"Claude authorization was rejected (HTTP {error.code}).") from error
     except urllib.error.URLError as error:
-        raise DesignAuthError("Could not reach the Claude authorization service.") from error
-    if len(body) > CLAUDE_DESIGN_OAUTH_RESPONSE_MAX_BYTES:
-        raise DesignAuthError("Claude authorization returned an oversized response.")
+        raise ArtifactAuthError("Could not reach the Claude authorization service.") from error
+    if len(body) > OAUTH_RESPONSE_MAX_BYTES:
+        raise ArtifactAuthError("Claude authorization returned an oversized response.")
     try:
         payload = json.loads(body.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as error:
-        raise DesignAuthError("Claude authorization returned unreadable JSON.") from error
+        raise ArtifactAuthError("Claude authorization returned unreadable JSON.") from error
     if not isinstance(payload, dict):
-        raise DesignAuthError("Claude authorization returned a non-object response.")
+        raise ArtifactAuthError("Claude authorization returned a non-object response.")
     return payload
 
 
 def _credential_payload(
     token: dict[str, object],
     *,
-    client_id: str,
+    client_id: str = OAUTH_CLIENT_ID,
     fallback_refresh_token: str | None = None,
     now_ms: int | None = None,
-    required_scopes: tuple[str, ...] = CLAUDE_DESIGN_OAUTH_SCOPES,
-    record_key: str = "designOauth",
+    required_scopes: tuple[str, ...] = OAUTH_SCOPES,
     identity: str | None = None,
 ) -> dict[str, object]:
     access_token = token.get("access_token")
@@ -428,48 +324,141 @@ def _credential_payload(
     raw_scope = token.get("scope")
     scopes = raw_scope.split() if isinstance(raw_scope, str) else []
     if not isinstance(access_token, str) or not access_token:
-        raise DesignAuthError("Claude authorization returned no access token.")
+        raise ArtifactAuthError("Claude authorization returned no access token.")
     if not isinstance(refresh_token, str) or not refresh_token:
-        raise DesignAuthError("Claude authorization returned no refresh token.")
+        raise ArtifactAuthError("Claude authorization returned no refresh token.")
     if not isinstance(expires_in, int | float) or expires_in <= 0:
-        raise DesignAuthError("Claude authorization returned no valid expiry.")
+        raise ArtifactAuthError("Claude authorization returned no valid expiry.")
     missing = [scope for scope in required_scopes if scope not in scopes]
     if missing:
-        raise DesignAuthError("Claude authorization did not grant the required Design scopes: " + ", ".join(missing))
+        raise ArtifactAuthError(
+            "Claude authorization did not grant the required artifact scopes: " + ", ".join(missing)
+        )
     current = int(time.time() * 1000) if now_ms is None else now_ms
     return {
-        record_key: {
+        "artifactOauth": {
             "accessToken": access_token,
             "refreshToken": refresh_token,
             "expiresAt": current + int(float(expires_in) * 1000),
-            "scopes": scopes if record_key == "artifactOauth" else list(required_scopes),
+            "scopes": scopes,
             "clientId": client_id,
-            **({"identity": identity or secrets.token_hex(16)} if record_key == "artifactOauth" else {}),
+            "identity": identity or secrets.token_hex(16),
         }
     }
 
 
-def _authorize_url(
+def load_artifact_credential(
     *,
-    redirect_uri: str,
-    challenge: str,
-    state: str,
-    client_id: str = CLAUDE_DESIGN_OAUTH_CLIENT_ID,
-    scopes: tuple[str, ...] = CLAUDE_DESIGN_OAUTH_SCOPES,
-) -> str:
+    platform: str = sys.platform,
+    home: Path | None = None,
+    runner: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
+    now_ms: int | None = None,
+    token_opener: Callable[..., _Response] = _TOKEN_OPENER.open,
+) -> dict[str, Any]:
+    current = int(time.time() * 1000) if now_ms is None else now_ms
+
+    def record(payload: dict[str, object] | None) -> dict[str, Any]:
+        value = payload.get("artifactOauth") if payload else None
+        if not isinstance(value, dict) or not isinstance(value.get("accessToken"), str) or not value["accessToken"]:
+            raise ArtifactAuthError("Connect Claude Artifacts with `open-claude-artifacts login`.")
+        if value.get("clientId") != OAUTH_CLIENT_ID:
+            raise ArtifactAuthError(
+                "Artifact credential belongs to another OAuth client; run `open-claude-artifacts login`."
+            )
+        scopes = value.get("scopes")
+        if not isinstance(scopes, list) or any(scope not in scopes for scope in OAUTH_SCOPES):
+            raise ArtifactAuthError("Artifact credentials lack the required scopes; run `open-claude-artifacts login`.")
+        expiry = value.get("expiresAt")
+        if not isinstance(expiry, int) or isinstance(expiry, bool):
+            raise ArtifactAuthError("Artifact credentials have no valid expiry; run `open-claude-artifacts login`.")
+        return value
+
+    value = record(_read_raw(platform, home, runner))
+    if value["expiresAt"] > current + OAUTH_REFRESH_MARGIN_SECONDS * 1000:
+        return value
+    with _refresh_lock(home=home, path=credential_file(home)):
+        value = record(_read_raw(platform, home, runner))
+        if value["expiresAt"] > current + OAUTH_REFRESH_MARGIN_SECONDS * 1000:
+            return value
+        refresh = value.get("refreshToken")
+        if not isinstance(refresh, str) or not refresh:
+            raise ArtifactAuthError("Artifact login expired; reconnect with `open-claude-artifacts login`.")
+        token = _request_token(
+            {
+                "grant_type": "refresh_token",
+                "refresh_token": refresh,
+                "client_id": OAUTH_CLIENT_ID,
+                "scope": " ".join(OAUTH_SCOPES),
+            },
+            opener=token_opener,
+        )
+        payload = _credential_payload(
+            token,
+            client_id=OAUTH_CLIENT_ID,
+            fallback_refresh_token=refresh,
+            now_ms=current,
+            required_scopes=OAUTH_SCOPES,
+            identity=value.get("identity"),
+        )
+        save_artifact_credential(payload, platform=platform, home=home, runner=runner)
+        return record(payload)
+
+
+def delete_artifact_credential(
+    *,
+    platform: str = sys.platform,
+    home: Path | None = None,
+    runner: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
+) -> bool:
+    if platform == "darwin":
+        removed = False
+        for service, account in (
+            (KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT),
+            (LEGACY_KEYCHAIN_SERVICE, LEGACY_KEYCHAIN_ACCOUNT),
+        ):
+            result = runner(
+                ["/usr/bin/security", "delete-generic-password", "-a", account, "-s", service],
+                capture_output=True,
+                text=True,
+                shell=False,
+                timeout=10,
+                check=False,
+            )
+            if result.returncode == 0:
+                removed = True
+        return removed
+    if platform.startswith("linux"):
+        removed = False
+        for target in (credential_file(home), legacy_credential_file(home)):
+            path = Path(os.path.abspath(target))
+            parent = _open_secure_parent(path, create=False)
+            if parent is None:
+                continue
+            try:
+                os.unlink(path.name, dir_fd=parent)
+                removed = True
+            except FileNotFoundError:
+                pass
+            finally:
+                os.close(parent)
+        return removed
+    raise ArtifactAuthError("Open Claude Artifacts logout supports macOS, Linux, and WSL2.")
+
+
+def _authorize_url(*, redirect_uri: str, challenge: str, state: str) -> str:
     query = urlencode(
         {
             "code": "true",
-            "client_id": client_id,
+            "client_id": OAUTH_CLIENT_ID,
             "response_type": "code",
             "redirect_uri": redirect_uri,
-            "scope": " ".join(scopes),
+            "scope": " ".join(OAUTH_SCOPES),
             "code_challenge": challenge,
             "code_challenge_method": "S256",
             "state": state,
         }
     )
-    return f"{CLAUDE_DESIGN_OAUTH_AUTHORIZE_URL}?{query}"
+    return f"{OAUTH_AUTHORIZE_URL}?{query}"
 
 
 class _CallbackServer(HTTPServer):
@@ -497,7 +486,7 @@ class _CallbackHandler(BaseHTTPRequestHandler):
             server.error_message = description or error
             self.send_response(200)
             self.end_headers()
-            self.wfile.write(b"Claude Design authorization was canceled. You can close this window.")
+            self.wfile.write(b"Claude Artifacts authorization was canceled. You can close this window.")
             return
         code = parameters.get("code", [""])[0]
         if not code:
@@ -506,7 +495,7 @@ class _CallbackHandler(BaseHTTPRequestHandler):
             return
         server.authorization_code = code
         self.send_response(302)
-        self.send_header("Location", CLAUDE_DESIGN_OAUTH_SUCCESS_URL)
+        self.send_header("Location", OAUTH_SUCCESS_URL)
         self.end_headers()
 
     def log_message(self, format: str, *_args: object) -> None:
@@ -550,7 +539,7 @@ def automatic_browser_login_available(
     container_marker: Path = Path("/.dockerenv"),
 ) -> bool:
     """Return whether automatic localhost OAuth is appropriate for this runtime."""
-    override = environment.get(CLAUDE_DESIGN_BROWSER_LOGIN_ENV, "").lower()
+    override = (environment.get(BROWSER_LOGIN_ENV) or environment.get(LEGACY_BROWSER_LOGIN_ENV) or "").lower()
     if override in {"1", "true", "yes"}:
         return True
     if override in {"0", "false", "no"}:
@@ -570,11 +559,10 @@ def automatic_browser_login_available(
     return False
 
 
-def login_design(
+def login_artifacts(
     *,
-    backend: str = "standalone",
     manual: bool = False,
-    timeout_seconds: int = CLAUDE_DESIGN_OAUTH_TIMEOUT_SECONDS,
+    timeout_seconds: int = OAUTH_TIMEOUT_SECONDS,
     platform: str = sys.platform,
     home: Path | None = None,
     runner: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
@@ -583,63 +571,46 @@ def login_design(
     emit: Callable[[str], None] = print,
     allow_manual_fallback: bool = True,
 ) -> dict[str, object]:
-    """Authorize a Claude.ai account without requiring Claude Code."""
+    """Authorize a Claude.ai account for Claude Artifacts."""
     if platform != "darwin" and not platform.startswith("linux"):
-        raise DesignAuthError("Open Claude Design login supports macOS, Linux, and WSL2.")
-    if backend not in {"standalone", "artifact"}:
-        raise DesignAuthError("Choose standalone or artifact authentication.")
-    client_id = ARTIFACT_OAUTH_CLIENT_ID if backend == "artifact" else CLAUDE_DESIGN_OAUTH_CLIENT_ID
-    scopes = ARTIFACT_OAUTH_SCOPES if backend == "artifact" else CLAUDE_DESIGN_OAUTH_SCOPES
-    record_key = "artifactOauth" if backend == "artifact" else "designOauth"
+        raise ArtifactAuthError("Open Claude Artifacts login supports macOS, Linux, and WSL2.")
     verifier = _base64url(secrets.token_bytes(32))
     challenge = _base64url(hashlib.sha256(verifier.encode("ascii")).digest())
     state = _base64url(secrets.token_bytes(32))
     server: _CallbackServer | None = None
     try:
         if manual:
-            redirect_uri = CLAUDE_DESIGN_OAUTH_MANUAL_REDIRECT_URL
-            authorize_url = _authorize_url(
-                redirect_uri=redirect_uri, challenge=challenge, state=state, client_id=client_id, scopes=scopes
-            )
-            emit("Open this URL in a browser to authorize Claude Design:")
+            redirect_uri = OAUTH_MANUAL_REDIRECT_URL
+            authorize_url = _authorize_url(redirect_uri=redirect_uri, challenge=challenge, state=state)
+            emit("Open this URL in a browser to authorize Claude Artifacts:")
             emit(authorize_url)
             try:
                 pasted = input_reader("Paste the code#state value: ").strip()
             except (EOFError, KeyboardInterrupt) as error:
-                raise DesignAuthError(
-                    "Manual Claude Design login needs an interactive terminal. Run "
-                    "open-claude-design login --manual there and paste the returned code into that terminal, "
-                    "not into a coding-agent chat."
+                raise ArtifactAuthError(
+                    "Manual login needs an interactive terminal. Run `open-claude-artifacts login --manual` there "
+                    "and paste the returned code into that terminal, not into a coding-agent chat."
                 ) from error
             code, separator, returned_state = pasted.partition("#")
             if not separator or not code or returned_state != state:
-                raise DesignAuthError("The pasted authorization code or state is invalid.")
+                raise ArtifactAuthError("The pasted authorization code or state is invalid.")
         else:
             server = _CallbackServer(("127.0.0.1", 0), _CallbackHandler)
             server.expected_state = state
             redirect_uri = f"http://localhost:{server.server_port}/callback"
-            automatic_url = _authorize_url(
-                redirect_uri=redirect_uri, challenge=challenge, state=state, client_id=client_id, scopes=scopes
-            )
-            manual_url = _authorize_url(
-                redirect_uri=CLAUDE_DESIGN_OAUTH_MANUAL_REDIRECT_URL,
-                challenge=challenge,
-                state=state,
-                client_id=client_id,
-                scopes=scopes,
-            )
-            emit("Opening Claude Design authorization in your browser...")
+            automatic_url = _authorize_url(redirect_uri=redirect_uri, challenge=challenge, state=state)
+            manual_url = _authorize_url(redirect_uri=OAUTH_MANUAL_REDIRECT_URL, challenge=challenge, state=state)
+            emit("Opening Claude Artifacts authorization in your browser...")
             if not _open_browser(automatic_url, platform=platform, runner=runner):
                 server.server_close()
                 server = None
                 if not allow_manual_fallback:
-                    raise DesignAuthError(
-                        "No local browser could be opened. Run open-claude-design login --manual in an "
+                    raise ArtifactAuthError(
+                        "No local browser could be opened. Run `open-claude-artifacts login --manual` in an "
                         "interactive terminal; open its URL on your host browser and paste the returned code "
                         "back into that terminal."
                     )
-                return login_design(
-                    backend=backend,
+                return login_artifacts(
                     manual=True,
                     timeout_seconds=timeout_seconds,
                     platform=platform,
@@ -657,32 +628,27 @@ def login_design(
                 server.timeout = min(1.0, max(0.05, deadline - time.monotonic()))
                 server.handle_request()
             if server.error_message:
-                raise DesignAuthError(f"Claude Design authorization failed: {server.error_message}")
+                raise ArtifactAuthError(f"Claude Artifacts authorization failed: {server.error_message}")
             if server.authorization_code is None:
-                raise DesignAuthError("Claude Design authorization timed out. Retry with --manual if needed.")
+                raise ArtifactAuthError("Claude Artifacts authorization timed out. Retry with --manual if needed.")
             code = server.authorization_code
         token = _request_token(
             {
                 "grant_type": "authorization_code",
                 "code": code,
                 "redirect_uri": redirect_uri,
-                "client_id": client_id,
+                "client_id": OAUTH_CLIENT_ID,
                 "code_verifier": verifier,
                 "state": state,
             },
             opener=token_opener,
         )
-        payload = _credential_payload(token, client_id=client_id, required_scopes=scopes, record_key=record_key)
-        if backend == "artifact":
-            from open_claude_design.artifact_auth import save_artifact_credential
-
-            save_artifact_credential(payload, platform=platform, home=home, runner=runner)
-        else:
-            save_standalone_credential(payload, platform=platform, home=home, runner=runner)
-        oauth = payload[record_key]
+        payload = _credential_payload(token, client_id=OAUTH_CLIENT_ID, required_scopes=OAUTH_SCOPES)
+        save_artifact_credential(payload, platform=platform, home=home, runner=runner)
+        oauth = payload["artifactOauth"]
         assert isinstance(oauth, dict)
-        emit("Claude artifacts are connected." if backend == "artifact" else "Claude Design is connected.")
-        return {"authenticated": True, "backend": backend, "expiresAt": oauth["expiresAt"], "scopes": oauth["scopes"]}
+        emit("Claude Artifacts are connected.")
+        return {"authenticated": True, "expiresAt": oauth["expiresAt"], "scopes": oauth["scopes"]}
     finally:
         if server is not None:
             server.server_close()

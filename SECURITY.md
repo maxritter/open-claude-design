@@ -9,11 +9,11 @@ Please report vulnerabilities privately to `mail@maxritter.net`. Do not open a p
 - MCP responses are size-bounded and bound to the exact JSON-RPC request id; paginated discovery has page, item, and repeated-cursor limits.
 - Remote mutation requires local tool classification, explicit write authorization, current etags, and structured success evidence bound to the requested project and paths. Unknown live tools are treated as possible mutations regardless of their remote annotation.
 - Approval-bound synchronization records a worktree-local revision receipt, revalidates every mapped etag and content hash before mutation, rejects stale batches without partial writes, and consumes the receipt only after verification.
-- Generated sync receipts and snapshots are excluded through Git's local `info/exclude`; Open Claude Design never edits the repository's tracked `.gitignore` for runtime state.
+- Generated sync receipts and snapshots are excluded through Git's local `info/exclude`; Open Claude Artifacts never edits the repository's tracked `.gitignore` for runtime state.
 - Local file operations reject symlink escapes and default to the current Git worktree.
 - Capability-bearing operations use guarded one-process helpers; plan tokens and short-lived preview URLs are redacted from output.
 - Generic remote deletion is disabled. Guarded deletion requires exact path confirmation, current etags, recovery backups, canonical paths, and post-delete absence verification.
-- Install and uninstall select only collision-resistant `open-claude-*` skill names and the Open Claude Design-managed runtime. Final agent-specific lifecycle semantics remain owned by the maintained Agent Skills installer.
+- Install and uninstall select only collision-resistant `open-claude-*` skill names and the Open Claude Artifacts-managed runtime. Final agent-specific lifecycle semantics remain owned by the maintained Agent Skills installer.
 - The one-line bootstrap is delivered over GitHub HTTPS; the installer then verifies pinned uv and Node archives plus the release wheel before installation.
 - CI runs Trivy vulnerability, secret, and workflow-misconfiguration scanning, CodeQL, pull-request dependency review, pinned-action validation, and release artifact provenance. Release Please creates draft releases; publication occurs only after the full build, test, shell, and security gates pass.
 

@@ -1,16 +1,16 @@
 #!/bin/sh
 set -eu
 
-REPOSITORY="maxritter/open-claude-design"
+REPOSITORY="maxritter/open-claude-artifacts"
 CHECKSUM_NAME="SHA256SUMS"
-ARCHIVE_NAME="open-claude-design.tar.gz"
+ARCHIVE_NAME="open-claude-artifacts.tar.gz"
 REQUESTED_VERSION="${VERSION:-}"
-INSTALL_SOURCE="${OPEN_CLAUDE_DESIGN_PACKAGE:-${OPEN_CLAUDE_DESIGN_ARCHIVE:-}}"
+INSTALL_SOURCE="${OPEN_CLAUDE_ARTIFACTS_PACKAGE:-${OPEN_CLAUDE_ARTIFACTS_ARCHIVE:-}}"
 SKILLS_NODE_VERSION="22.20.0"
-SKILLS_NODE_ROOT="$HOME/.local/share/open-claude-design/node"
+SKILLS_NODE_ROOT="$HOME/.local/share/open-claude-artifacts/node"
 UV_VERSION="0.12.7"
-UV_ROOT="$HOME/.local/share/open-claude-design/uv"
-PACKAGE_ROOT="$HOME/.local/share/open-claude-design/packages"
+UV_ROOT="$HOME/.local/share/open-claude-artifacts/uv"
+PACKAGE_ROOT="$HOME/.local/share/open-claude-artifacts/packages"
 RULE="────────────────────────────────────────────────────────────"
 
 # The CLI is installed into uv's isolated tools directory. Ignore ambient
@@ -55,21 +55,10 @@ banner() {
   fi
 
   line ""
-  if [ "$terminal_columns" -ge 92 ]; then
-    printf '%b' "${CLAY}${BOLD}"
-    # shellcheck disable=SC2016
-    printf '%s\n' \
-      '  ___  ___ ___ _  _    ___ _      _  _   _ ___  ___   ___  ___ ___ ___ ___ _  _ ' \
-      ' / _ \| _ \ __| \| |  / __| |    /_\| | | |   \| __| |   \| __/ __|_ _/ __| \| |' \
-      '| (_) |  _/ _|| .` | | (__| |__ / _ \ |_| | |) | _|  | |) | _|\__ \| | (_ | .` |' \
-      ' \___/|_| |___|_|\_|  \___|____/_/ \_\___/|___/|___| |___/|___|___/___\___|_|\_|'
-    printf '%b' "$RESET"
-  else
-    line "  ${CLAY}${BOLD}< OPEN CLAUDE DESIGN >${RESET}"
-  fi
+  line "  ${CLAY}${BOLD}< OPEN CLAUDE ARTIFACTS >${RESET}"
   line ""
-  line "  ${ACCENT}>${RESET} ${BOLD}Claude Design, from any coding agent${RESET}"
-  line "    ${MUTED}Design from your real codebase. Changes sync back both ways.${RESET}"
+  line "  ${ACCENT}>${RESET} ${BOLD}Claude Artifacts, from any coding agent${RESET}"
+  line "    ${MUTED}Design canvases, Slides decks, Design Systems, and pages — rendered and synced locally.${RESET}"
   line ""
 }
 
@@ -87,7 +76,7 @@ success() {
 }
 
 fail() {
-  line "${ACCENT}Open Claude Design:${RESET} $*" >&2
+  line "${ACCENT}Open Claude Artifacts:${RESET} $*" >&2
   exit 1
 }
 
@@ -111,18 +100,18 @@ usage() {
   cat << 'EOF'
 Usage: install.sh [--agents=<ids> | --all-agents] [--scope=project|global] [--yes] [--dry-run]
 
-Installs the Open Claude Design CLI with uv, then its skills for your coding
-agents. Agent options are passed to `open-claude-design install`; without
+Installs the Open Claude Artifacts CLI with uv, then its skills for your coding
+agents. Agent options are passed to `open-claude-artifacts install`; without
 --agents, installed agents are detected automatically.
 
 Environment:
   VERSION=<x.y.z>                    install that release instead of the latest
-  OPEN_CLAUDE_DESIGN_PACKAGE=<path>  install a local wheel or source archive
-  OPEN_CLAUDE_DESIGN_SKIP_LOGIN=1    skip the Claude Design browser login
+  OPEN_CLAUDE_ARTIFACTS_PACKAGE=<path>  install a local wheel or source archive
+  OPEN_CLAUDE_ARTIFACTS_SKIP_LOGIN=1    skip the Claude Design browser login
 EOF
 }
 
-# Answer help before any step runs. Forwarding it to `open-claude-design
+# Answer help before any step runs. Forwarding it to `open-claude-artifacts
 # install` would print that command's help, exit 0, and install nothing.
 for argument; do
   case "$argument" in
@@ -201,7 +190,7 @@ if ! uv_is_compatible; then
     fail "uv archive is incomplete"
   fi
   case "$UV_ROOT" in
-    "$HOME/.local/share/open-claude-design/uv") ;;
+    "$HOME/.local/share/open-claude-artifacts/uv") ;;
     *) fail "refusing unexpected managed uv destination" ;;
   esac
   rm -rf "$UV_ROOT"
@@ -258,7 +247,7 @@ if ! node_is_compatible; then
     fail "Node.js archive is incomplete"
   fi
   case "$SKILLS_NODE_ROOT" in
-    "$HOME/.local/share/open-claude-design/node") ;;
+    "$HOME/.local/share/open-claude-artifacts/node") ;;
     *) fail "refusing unexpected managed Node.js destination" ;;
   esac
   mkdir -p "$(dirname "$SKILLS_NODE_ROOT")"
@@ -276,11 +265,11 @@ step 3 "Installing the CLI"
 if [ "$INSTALL_SOURCE" != "" ]; then
   PACKAGE_NAME="$(basename "$INSTALL_SOURCE")"
   case "$PACKAGE_NAME" in
-    open_claude_design-*-py3-none-any.whl | open-claude-design*.tar.gz) ;;
-    *) fail "local package must be an Open Claude Design wheel or source archive" ;;
+    open_claude_artifacts-*-py3-none-any.whl | open-claude-design*.tar.gz) ;;
+    *) fail "local package must be an Open Claude Artifacts wheel or source archive" ;;
   esac
   case "$PACKAGE_ROOT" in
-    "$HOME/.local/share/open-claude-design/packages") ;;
+    "$HOME/.local/share/open-claude-artifacts/packages") ;;
     *) fail "refusing unexpected local package cache" ;;
   esac
   mkdir -p "$PACKAGE_ROOT"
@@ -309,10 +298,10 @@ if [ "$INSTALL_SOURCE" != "" ]; then
 else
   if [ "$REQUESTED_VERSION" != "" ]; then
     RELEASE_BASE="https://github.com/$REPOSITORY/releases/download/v$REQUESTED_VERSION"
-    info "Downloading Open Claude Design v$REQUESTED_VERSION"
+    info "Downloading Open Claude Artifacts v$REQUESTED_VERSION"
   else
     RELEASE_BASE="https://github.com/$REPOSITORY/releases/latest/download"
-    info "Downloading the latest Open Claude Design release"
+    info "Downloading the latest Open Claude Artifacts release"
   fi
   curl -fsSL "$RELEASE_BASE/$CHECKSUM_NAME" -o "$STAGING_DIR/$CHECKSUM_NAME"
   curl -fsSL "$RELEASE_BASE/$ARCHIVE_NAME" -o "$STAGING_DIR/$ARCHIVE_NAME"
@@ -321,7 +310,7 @@ else
   ACTUAL="$(sha256_file "$STAGING_DIR/$ARCHIVE_NAME")"
   [ "$ACTUAL" = "$EXPECTED" ] || fail "release archive checksum mismatch"
   # Keep the canonical URL in uv's receipt. Unlike the staging file, this URL
-  # survives installation and lets `uv tool upgrade open-claude-design`
+  # survives installation and lets `uv tool upgrade open-claude-artifacts`
   # re-resolve the current release later.
   TOOL_REQUIREMENT="$RELEASE_BASE/$ARCHIVE_NAME"
 fi
@@ -337,12 +326,12 @@ case "$UV_TOOL_BIN" in
 esac
 PATH="$UV_TOOL_BIN:$PATH"
 export PATH
-command -v open-claude-design > /dev/null 2>&1 || fail "installed CLI is not on PATH; add $UV_TOOL_BIN"
-success "CLI $(open-claude-design --version) installed"
+command -v open-claude-artifacts > /dev/null 2>&1 || fail "installed CLI is not on PATH; add $UV_TOOL_BIN"
+success "CLI $(open-claude-artifacts --version) installed"
 case ":$ORIGINAL_PATH:" in
   *":$UV_TOOL_BIN:"*) ;;
   *)
-    info "New terminals need $UV_TOOL_BIN on PATH before open-claude-design resolves"
+    info "New terminals need $UV_TOOL_BIN on PATH before open-claude-artifacts resolves"
     info "Add to your shell profile: export PATH=\"$UV_TOOL_BIN:\$PATH\""
     ;;
 esac
@@ -359,7 +348,7 @@ done
 if [ "$has_yes" -eq 0 ]; then
   set -- "$@" --yes
 fi
-if ! open-claude-design install "$@" --json < /dev/null > "$STAGING_DIR/agent-install.json"; then
+if ! open-claude-artifacts install "$@" --json < /dev/null > "$STAGING_DIR/agent-install.json"; then
   cat "$STAGING_DIR/agent-install.json" >&2
   fail "coding-agent integration failed; remove the partial install with uninstall.sh"
 fi
@@ -373,42 +362,37 @@ if [ "$dry_run" -eq 1 ]; then
 else
   success "Automatic design workflows installed and verified"
 fi
-if grep -q '"bypass_detected": true' "$STAGING_DIR/agent-install.json" 2> /dev/null; then
-  info "An agent registers Claude Design as its own MCP server; that entry fails with HTTP 403 and bypasses this CLI"
-  info "Run: open-claude-design doctor --json to see which file to remove it from"
-fi
-
-step 5 "Connecting Claude Design"
-if open-claude-design status --json > /dev/null 2>&1; then
-  success "Claude Design is already connected"
-elif [ "${OPEN_CLAUDE_DESIGN_SKIP_LOGIN:-0}" = "1" ] || [ "${CI:-}" = "true" ]; then
+step 5 "Connecting Claude Artifacts"
+if open-claude-artifacts status --json > /dev/null 2>&1; then
+  success "Claude Artifacts are already connected"
+elif [ "${OPEN_CLAUDE_ARTIFACTS_SKIP_LOGIN:-0}" = "1" ] || [ "${CI:-}" = "true" ]; then
   info "Login skipped for this non-interactive install"
-  info "Run: open-claude-design login --manual from an interactive terminal"
+  info "Run: open-claude-artifacts login --manual from an interactive terminal"
 elif { : < /dev/tty; } 2> /dev/null; then
-  if open-claude-design login < /dev/tty && open-claude-design status --json > /dev/null 2>&1; then
-    success "Claude Design connected"
+  if open-claude-artifacts login < /dev/tty && open-claude-artifacts status --json > /dev/null 2>&1; then
+    success "Claude Artifacts connected"
   else
     info "The CLI and agent workflows are installed"
-    info "Finish later with: open-claude-design login (use --manual when headless)"
-    info "Claude Design currently requires Pro, Max, Team, or Enterprise access"
+    info "Finish later with: open-claude-artifacts login (use --manual when headless)"
+    info "Claude Artifacts currently requires Pro, Max, Team, or Enterprise access"
   fi
-elif open-claude-design login < /dev/null && open-claude-design status --json > /dev/null 2>&1; then
-  success "Claude Design connected"
+elif open-claude-artifacts login < /dev/null && open-claude-artifacts status --json > /dev/null 2>&1; then
+  success "Claude Artifacts connected"
 else
   info "The CLI and agent workflows are installed"
-  info "Finish later with: open-claude-design login --manual from an interactive terminal"
-  info "Claude Design currently requires Pro, Max, Team, or Enterprise access"
+  info "Finish later with: open-claude-artifacts login --manual from an interactive terminal"
+  info "Claude Artifacts currently requires Pro, Max, Team, or Enterprise access"
 fi
 
 line "${MUTED}${RULE}${RESET}"
 line ""
-line "  ${GREEN}${BOLD}✓ Open Claude Design is ready${RESET}"
-line "    ${MUTED}Create, inspect, and sync without leaving your coding agent.${RESET}"
+line "  ${GREEN}${BOLD}✓ Open Claude Artifacts is ready${RESET}"
+line "    ${MUTED}Create, render, and sync Claude Artifacts without leaving your coding agent.${RESET}"
 line ""
 line "  ${BOLD}Try it${RESET}"
-line "    Ask your agent: ${CLAY}Create a settings screen and open it in Claude Design.${RESET}"
+line "    Ask your agent: ${CLAY}Create a settings screen as a Claude Design artifact.${RESET}"
 line ""
-line "  ${ACCENT}${BOLD}★ Star Open Claude Design${RESET}"
+line "  ${ACCENT}${BOLD}★ Star Open Claude Artifacts${RESET}"
 line "    https://github.com/$REPOSITORY"
 line ""
 line "  ${CLAY}${BOLD}↗ Go further with QualityLayer${RESET}"

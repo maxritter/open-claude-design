@@ -1,4 +1,4 @@
-"""Validate the portable skill manifests shipped by Open Claude Design."""
+"""Validate the portable skill manifests shipped by Open Claude Artifacts."""
 
 from __future__ import annotations
 

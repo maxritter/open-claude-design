@@ -133,18 +133,38 @@ class DesignHTML(HTMLParser):
         self.handle_endtag(tag)
 
 
-def project_reference(path: str, reference: str) -> str | None:
-    """Resolve an asset reference within its project; never follow external URLs."""
-    parsed = urlsplit(reference)
-    if parsed.scheme or parsed.netloc or not parsed.path or reference.startswith("#"):
-        return None
-    raw = unquote(parsed.path)
+# An uploaded asset as Claude Artifacts references it: served by the artifact host, not a file under project/.
+UPLOADED_ASSET = re.compile(r"/_blob/[A-Za-z0-9_-]+")
+
+
+def _project_path(path: str, raw: str) -> str:
+    """Join a decoded reference path to its artboard's directory; refuse anything outside the project."""
     if "\\" in raw or "\x00" in raw:
         raise ValueError("An asset reference has an unsafe path.")
     joined = posixpath.normpath(posixpath.join(posixpath.dirname(path), raw))
     if raw.startswith("/") or joined in {".", ".."} or joined.startswith("../"):
         raise ValueError("An asset reference escapes the project.")
     return joined
+
+
+def project_reference(path: str, reference: str) -> str | None:
+    """Resolve an asset reference within its project; never follow external URLs.
+
+    Returns None for references that are not project files: external URLs, uploaded assets
+    (``/_blob/<id>``), and sources bound to a template hole decided by ``renderVals()``.
+    """
+    parsed = urlsplit(reference)
+    if parsed.scheme or parsed.netloc or not parsed.path or reference.startswith("#"):
+        return None
+    hole = TEMPLATE_HOLE.search(reference)
+    if hole and not re.search(r"[?#]", reference[: hole.start()]):
+        if prefix := unquote(reference[: hole.start()]):
+            _project_path(path, prefix)
+        return None
+    raw = unquote(parsed.path)
+    if UPLOADED_ASSET.fullmatch(raw):
+        return None
+    return _project_path(path, raw)
 
 
 def validate_html(path: str, data: bytes, available: set[str] | None = None) -> dict[str, object]:
@@ -163,7 +183,7 @@ def validate_html(path: str, data: bytes, available: set[str] | None = None) -> 
     issues = list(parser.issues)
     syntax = "not-applicable"
     if parser.logic_scripts:
-        from open_claude_design.installer import InstallError, resolve_skills_runtime
+        from open_claude_artifacts.installer import InstallError, resolve_skills_runtime
 
         try:
             node = resolve_skills_runtime().node

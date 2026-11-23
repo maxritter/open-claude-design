@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from open_claude_design.config import (
+from open_claude_artifacts.config import (
     SKILL_NAMES,
     SKILLS_CLI_NODE_VERSION,
     SKILLS_CLI_PACKAGE,
@@ -44,23 +44,17 @@ def test_readme_keeps_activation_order_and_local_links_valid() -> None:
 
     ordered_sections = [
         "docs/media/hero-light.webp",
-        "## Design in QualityLayer",
         "## Quick start",
         "## What you can make",
-        "## How it works",
         "## What it can do",
+        "## Design in QualityLayer",
         "## Works with every coding agent",
-        "## Works with Impeccable",
-        "## Reference",
-        "## Maintenance",
-        "## Open for pull requests",
+        "## CLI reference",
         "## License",
     ]
     offsets = [readme.index(section) for section in ordered_sections]
     assert offsets == sorted(offsets)
-    assert "How it feels" not in readme
-    assert "THIRD_PARTY_NOTICES" not in readme
-    assert "not affiliated with, sponsored by, or endorsed by Anthropic" in readme
+    assert "not affiliated with Anthropic" in readme
 
     local_links = [
         target
@@ -78,25 +72,17 @@ def test_readme_keeps_activation_order_and_local_links_valid() -> None:
         "docs/media/examples/design-system.webp",
     } <= set(local_media)
     assert all((ROOT / target).is_file() for target in [*local_links, *local_media])
-    assert readme.index("## Quick start") < readme.index("docs/media/examples/slides.webp")
-    assert readme.index("docs/media/examples/slides.webp") < readme.index("## How it works")
 
 
-def test_readme_promotes_qualitylayer_and_keeps_standalone_setup() -> None:
+def test_readme_promotes_qualitylayer_and_keeps_install_command() -> None:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
-    command = "curl -fsSL https://github.com/maxritter/open-claude-design/releases/latest/download/install.sh | sh"
+    command = "curl -fsSL https://github.com/maxritter/open-claude-artifacts/releases/latest/download/install.sh | sh"
 
     assert readme.count(command) == 1
     assert readme.index(command) < readme.index("**macOS · Linux · WSL2**")
-    lead = "**Open Claude Design is now part of [QualityLayer](https://github.com/maxritter/qualitylayer).**"
-    primary_link = "**[Try QualityLayer](https://github.com/maxritter/qualitylayer)**"
-    assert readme.index("docs/media/hero-light.webp") < readme.index(lead) < readme.index(primary_link)
-    assert readme.index(primary_link) < readme.index("## Design in QualityLayer") < readme.index("## Quick start")
-    assert readme.index("## Quick start") < readme.index(command)
-    assert "QualityLayer's own design workspace works without a Claude subscription" in readme
-    assert "still requires a Claude account with access" in readme
+    assert "**[Try QualityLayer](https://github.com/maxritter/qualitylayer)**" in readme
     assert "No Claude Code installation or Anthropic API key required" in readme
-    assert "img.shields.io/github/stars/maxritter/open-claude-design" in readme
+    assert "img.shields.io/github/stars/maxritter/open-claude-artifacts" in readme
     assert "api.star-history.com" not in readme
 
 
@@ -129,14 +115,13 @@ def test_install_and_uninstall_are_posix_release_assets() -> None:
     assert "dist/uninstall.sh" in release
 
 
-def test_installer_has_a_responsive_wordmark_and_completion_guide() -> None:
+def test_installer_has_a_wordmark_and_completion_guide() -> None:
     install = (ROOT / "install.sh").read_text(encoding="utf-8")
 
-    assert "OPEN CLAUDE DESIGN" in install
-    assert "Claude Design, from any coding agent" in install
-    assert "terminal_columns" in install
-    assert "Open Claude Design is ready" in install
-    assert "Star Open Claude Design" in install
+    assert "OPEN CLAUDE ARTIFACTS" in install
+    assert "Claude Artifacts, from any coding agent" in install
+    assert "Open Claude Artifacts is ready" in install
+    assert "Star Open Claude Artifacts" in install
     assert "Go further with QualityLayer" in install
     assert "https://qualitylayer.dev" in install
 
@@ -145,22 +130,20 @@ def test_product_context_records_the_confirmed_public_constraints() -> None:
     product = (ROOT / "PRODUCT.md").read_text(encoding="utf-8")
 
     assert "<!-- impeccable:product-schema 1 -->" in product
-    assert "no separate website" in product
     assert "macOS, Linux, or WSL2" in product
-    assert "Product name: Open Claude Design" in product
+    assert "Open Claude Artifacts" in product
 
 
 def test_vscode_launch_builds_and_installs_the_local_release() -> None:
     tasks = json.loads((ROOT / ".vscode" / "tasks.json").read_text(encoding="utf-8"))
     launch = json.loads((ROOT / ".vscode" / "launch.json").read_text(encoding="utf-8"))
 
-    build_task = next(task for task in tasks["tasks"] if task["label"] == "Open Claude Design: Build release")
+    build_task = next(task for task in tasks["tasks"] if task["label"] == "Open Claude Artifacts: Build release")
     assert build_task["command"] == "bash"
     assert build_task["args"] == ["scripts/build-release.sh"]
 
-    configuration = next(
-        item for item in launch["configurations"] if item["name"] == "Open Claude Design: Build and run local installer"
-    )
+    expected_name = "Open Claude Artifacts: Build and run local installer"
+    configuration = next(item for item in launch["configurations"] if item["name"] == expected_name)
     assert configuration["preLaunchTask"] == build_task["label"]
     assert configuration["type"] == "debugpy"
     assert configuration["program"] == "${workspaceFolder}/scripts/run_local_installer.py"
@@ -171,7 +154,7 @@ def test_manual_release_is_gated_and_reproducible() -> None:
     project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     bootstrap = (ROOT / ".github" / "workflows" / "release-bootstrap.yml").read_text(encoding="utf-8")
     security = (ROOT / ".github" / "workflows" / "security.yml").read_text(encoding="utf-8")
-    package_config = (ROOT / "src" / "open_claude_design" / "config.py").read_text(encoding="utf-8")
+    package_config = (ROOT / "src" / "open_claude_artifacts" / "config.py").read_text(encoding="utf-8")
     lockfile = (ROOT / "uv.lock").read_text(encoding="utf-8")
     precommit = (ROOT / ".pre-commit-config.yaml").read_text(encoding="utf-8")
     build_release = (ROOT / "scripts" / "build-release.sh").read_text(encoding="utf-8")
@@ -179,7 +162,7 @@ def test_manual_release_is_gated_and_reproducible() -> None:
     version = project["project"]["version"]
     assert f'VERSION: Final = "{version}"' in package_config
     assert re.search(
-        rf'\[\[package\]\]\nname = "open-claude-design"\nversion = "{version}"',
+        rf'\[\[package\]\]\nname = "open-claude-artifacts"\nversion = "{version}"',
         lockfile,
     )
     assert not (ROOT / "release-please-config.json").exists()
@@ -203,20 +186,14 @@ def test_manual_release_is_gated_and_reproducible() -> None:
         assert all(re.fullmatch(r"[0-9a-f]{40}", ref) for ref in refs)
 
 
-def test_skill_documents_the_root_page_rule_and_its_opt_out_and_check() -> None:
-    skill = (ROOT / "skills" / "open-claude-design" / "SKILL.md").read_text(encoding="utf-8")
-    workflows = (ROOT / "skills" / "open-claude-design" / "references" / "tool-workflows.md").read_text(
-        encoding="utf-8"
-    )
+def test_skill_documents_artifacts_and_headless_rendering() -> None:
+    skill = (ROOT / "skills" / "open-claude-artifacts" / "SKILL.md").read_text(encoding="utf-8")
+    workflows = (ROOT / "skills" / "open-claude-artifacts" / "references" / "artifacts.md").read_text(encoding="utf-8")
 
-    for document in (skill, workflows):
-        assert "Pages live at the project root" in document
-        assert "--allow-nested-page" in document
-        assert "project pages" in document
-        assert "page_listed" in document
-    assert "Pages menu" in skill
-    # The earlier guidance told agents nested pages were as good as root pages.
-    assert "do not move or flatten a design" not in workflows
+    assert "open-claude-artifacts" in skill
+    assert "render" in workflows
+    assert "--slide" in workflows
+    assert "project/deck.json" in workflows
 
 
 def test_wheel_force_include_matches_runtime_skill_files_without_benchmarks() -> None:
@@ -225,7 +202,7 @@ def test_wheel_force_include_matches_runtime_skill_files_without_benchmarks() ->
     actual = {source: target for source, target in force_include.items() if source.startswith("skills/")}
     expected = {
         path.relative_to(ROOT).as_posix(): (
-            "open_claude_design/data/skills/" + path.relative_to(ROOT / "skills").as_posix()
+            "open_claude_artifacts/data/skills/" + path.relative_to(ROOT / "skills").as_posix()
         )
         for path in sorted((ROOT / "skills").rglob("*"))
         if path.is_file() and "tests" not in path.relative_to(ROOT / "skills").parts

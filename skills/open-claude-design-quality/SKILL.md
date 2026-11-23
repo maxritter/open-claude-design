@@ -58,4 +58,4 @@ These are review prompts, not blanket bans. Keep a pattern when it comes from th
 
 ## Impeccable integration
 
-When Impeccable is installed, Open Claude Design remains the owner of the overall design task. Use Impeccable for its named refinements, supporting agents, hook evidence, and deterministic detector; do not start a second competing redesign workflow or rerun a detector whose current hook findings are already available.
+When Impeccable is installed, Open Claude Artifacts remains the owner of the overall design task. Use Impeccable for its named refinements, supporting agents, hook evidence, and deterministic detector; do not start a second competing redesign workflow or rerun a detector whose current hook findings are already available.

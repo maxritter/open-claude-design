@@ -14,21 +14,23 @@ from urllib.parse import urlsplit
 
 import pytest
 
-from open_claude_design import artifact_auth, auth
-from open_claude_design.artifact_api import (
+from open_claude_artifacts import auth
+from open_claude_artifacts import auth as artifact_auth
+from open_claude_artifacts.api import (
     ArtifactClient,
     ArtifactConflict,
     ArtifactOutcomeUnknown,
     file_path,
 )
-from open_claude_design.artifact_sync import load, review_directory, save
-from open_claude_design.bridge import build_parser, run_design_command
-from open_claude_design.config import (
-    ARTIFACT_OAUTH_CLIENT_ID,
-    ARTIFACT_OAUTH_SCOPES,
+from open_claude_artifacts.cli import build_parser
+from open_claude_artifacts.commands import run_artifact_command
+from open_claude_artifacts.config import (
     ARTIFACT_PROTOCOL_CLIENT_VERSION,
+    OAUTH_CLIENT_ID,
+    OAUTH_SCOPES,
 )
-from open_claude_design.errors import ClaudeDesignProtocolError, ClaudeDesignSafetyError
+from open_claude_artifacts.errors import ArtifactProtocolError, ArtifactSafetyError
+from open_claude_artifacts.sync import load, review_directory, save
 
 HTML = b'<html><head><script src="./support.js"></script></head><body><x-dc><div>Hello</div></x-dc></body></html>'
 INDEX = json.dumps(
@@ -149,8 +151,8 @@ class Service:
 
 
 def command(service: Service, root: Path, *values: str) -> int:
-    args = build_parser().parse_args(["artifacts", *values, "--json"])
-    return run_design_command(args, artifact_client_factory=service.client, workspace_root=root)
+    args = build_parser().parse_args([*values, "--json"])
+    return run_artifact_command(args, client_factory=service.client, workspace_root=root)
 
 
 def test_control_and_content_credentials_are_separate_and_source_is_verified() -> None:
@@ -161,14 +163,14 @@ def test_control_and_content_credentials_are_separate_and_source_is_verified() -
     assert "test-capability" not in json.dumps(snapshot.public())
     assert client.read_file(snapshot, "project/Main.dc.html") == HTML
     service.failure = "corrupt"
-    with pytest.raises(ClaudeDesignProtocolError, match="hash"):
+    with pytest.raises(ArtifactProtocolError, match="hash"):
         client.read_file(snapshot, "project/Main.dc.html")
 
 
 def test_incomplete_inventory_is_never_used_as_absence() -> None:
     service = Service()
     service.narrowed = True
-    with pytest.raises(ClaudeDesignProtocolError, match="inventory"):
+    with pytest.raises(ArtifactProtocolError, match="inventory"):
         service.client().snapshot("a")
 
 
@@ -229,7 +231,7 @@ def test_unreviewed_artifact_writes_are_refused_before_submission(failure: str) 
     if failure == "runtime_file":
         files = {"index.html": b"overwrite"}
     matches = {path: digest(service.files[path]) for path in files}
-    with pytest.raises(ClaudeDesignSafetyError):
+    with pytest.raises(ArtifactSafetyError):
         client.push(snapshot, files, matches)
     assert not service.writes
 
@@ -255,16 +257,9 @@ def test_cli_auth_is_not_used_for_offline_status_and_listing_redacts_capabilitie
     assert not service.calls
     assert command(service, tmp_path, "list") == 0
     assert "do-not-print" not in capsys.readouterr().out
-    for name in ("status", "capabilities"):
-        args = build_parser().parse_args([name, "--backend", "artifact", "--json"])
-        assert (
-            run_design_command(
-                args,
-                artifact_client_factory=service.client,
-                client_factory=lambda: pytest.fail("standalone transport used"),
-            )
-            == 0
-        )
+    status = service.client().status()
+    assert status["authenticated"] is True
+    assert "render" in status["supported_workflows"]
 
 
 def prepare(service: Service, root: Path, capsys: pytest.CaptureFixture[str], *, direction: str = "to-design") -> str:
@@ -294,7 +289,7 @@ def test_sync_roundtrip_establishes_baseline_consumes_approval_and_removes_snaps
     review_id = prepare(service, tmp_path, capsys)
     assert command(service, tmp_path, "sync", "apply", review_id, "--allow-write") == 0
     capsys.readouterr()
-    with pytest.raises(ClaudeDesignSafetyError, match="consumed"):
+    with pytest.raises(ArtifactSafetyError, match="consumed"):
         command(service, tmp_path, "sync", "apply", review_id, "--allow-write")
     assert command(service, tmp_path, "sync", "finish", review_id) == 0
     capsys.readouterr()
@@ -331,7 +326,7 @@ def test_sync_cannot_apply_changed_sources_account_or_receipt(
     if changed in {"local", "remote"}:
         assert command(service, tmp_path, "sync", "apply", review_id, "--allow-write") == 3
     else:
-        with pytest.raises((ClaudeDesignSafetyError, ValueError)):
+        with pytest.raises((ArtifactSafetyError, ValueError)):
             command(service, tmp_path, "sync", "apply", review_id, "--allow-write")
     assert not service.writes
 
@@ -346,7 +341,7 @@ def test_unknown_apply_is_consumed_and_does_not_advance_baseline(
     service.failure = "timeout"
     assert command(service, tmp_path, "sync", "apply", review_id, "--allow-write") == 2
     assert load(tmp_path, review_id)["state"] == "unknown"
-    with pytest.raises(ClaudeDesignSafetyError, match="consumed"):
+    with pytest.raises(ArtifactSafetyError, match="consumed"):
         command(service, tmp_path, "sync", "apply", review_id, "--allow-write")
     assert len(service.writes) == 1
 
@@ -362,7 +357,7 @@ def test_to_code_handoff_retains_remote_snapshot_until_local_implementation_fini
     receipt = load(tmp_path, review_id)
     assert (tmp_path / receipt["pairs"][0]["remote_snapshot"]).read_bytes() == HTML
     assert not (tmp_path / "Main.dc.html").exists()
-    with pytest.raises(ClaudeDesignSafetyError, match="Implement"):
+    with pytest.raises(ArtifactSafetyError, match="Implement"):
         command(service, tmp_path, "sync", "finish", review_id)
     (tmp_path / "Main.dc.html").write_bytes(HTML.replace(b"Hello", b"Implemented"))
     assert command(service, tmp_path, "sync", "finish", review_id) == 0
@@ -374,23 +369,21 @@ def token() -> dict[str, object]:
         "access_token": "test-access",
         "refresh_token": "test-refresh",
         "expires_in": 3600,
-        "scope": " ".join(ARTIFACT_OAUTH_SCOPES),
+        "scope": " ".join(OAUTH_SCOPES),
     }
 
 
-def test_artifact_credential_store_and_refresh_do_not_read_standalone_or_other_harnesses(tmp_path: Path) -> None:
+def test_artifact_credential_store_and_refresh_isolate_credentials(tmp_path: Path) -> None:
     payload = auth._credential_payload(
         token(),
-        client_id=ARTIFACT_OAUTH_CLIENT_ID,
-        required_scopes=ARTIFACT_OAUTH_SCOPES,
-        record_key="artifactOauth",
+        client_id=OAUTH_CLIENT_ID,
+        required_scopes=OAUTH_SCOPES,
         now_ms=0,
     )
     artifact_auth.save_artifact_credential(payload, platform="linux", home=tmp_path)
     path = artifact_auth.credential_file(tmp_path)
     assert path.stat().st_mode & 0o777 == 0o600
     original = artifact_auth.load_artifact_credential(platform="linux", home=tmp_path, now_ms=0)
-    assert auth.load_standalone_credential(platform="linux", home=tmp_path, now_ms=0) is None
     requests = []
 
     def opener(request: Any, **kwargs: Any) -> Response:
@@ -401,9 +394,9 @@ def test_artifact_credential_store_and_refresh_do_not_read_standalone_or_other_h
         platform="linux", home=tmp_path, now_ms=3_600_000, token_opener=opener
     )
     assert refreshed["identity"] == original["identity"]
-    assert requests[0]["scope"] == " ".join(ARTIFACT_OAUTH_SCOPES)
+    assert requests[0]["scope"] == " ".join(OAUTH_SCOPES)
     assert artifact_auth.delete_artifact_credential(platform="linux", home=tmp_path)
-    with pytest.raises(auth.DesignAuthError, match="backend artifact"):
+    with pytest.raises(auth.ArtifactAuthError, match="open-claude-artifacts login"):
         artifact_auth.load_artifact_credential(platform="linux", home=tmp_path)
 
 
@@ -432,7 +425,7 @@ def test_both_changed_requires_an_explicit_reconciled_review(
     (tmp_path / "Main.dc.html").write_bytes(HTML.replace(b"Hello", b"Reconciled local"))
     second = prepare(service, tmp_path, capsys)
     assert load(tmp_path, second)["classification"] == "both-changed"
-    with pytest.raises(ClaudeDesignSafetyError, match="Both sides"):
+    with pytest.raises(ArtifactSafetyError, match="Both sides"):
         command(service, tmp_path, "sync", "apply", second, "--allow-write")
     assert not service.writes
     assert command(service, tmp_path, "sync", "apply", second, "--allow-write", "--reconciled") == 0
@@ -445,10 +438,10 @@ def test_local_symlink_cannot_be_read_or_overwritten_by_artifact_commands(tmp_pa
     target.write_bytes(HTML)
     link = tmp_path / "linked.dc.html"
     link.symlink_to(target)
-    with pytest.raises(ClaudeDesignSafetyError, match="symlink"):
+    with pytest.raises(ArtifactSafetyError, match="symlink"):
         command(service, tmp_path, "pull", "a", "project/Main.dc.html", "--output", str(link), "--force")
     assert target.read_bytes() == HTML and not service.calls
-    with pytest.raises(ClaudeDesignSafetyError, match="symlink"):
+    with pytest.raises(ArtifactSafetyError, match="symlink"):
         command(
             service,
             tmp_path,
@@ -466,21 +459,19 @@ def test_local_symlink_cannot_be_read_or_overwritten_by_artifact_commands(tmp_pa
 def test_artifact_keychain_never_uses_the_standalone_service_or_secret_argv() -> None:
     import subprocess
 
-    from open_claude_design.config import ARTIFACT_KEYCHAIN_ACCOUNT, ARTIFACT_KEYCHAIN_SERVICE
+    from open_claude_artifacts.config import KEYCHAIN_ACCOUNT, KEYCHAIN_SERVICE
 
     calls = []
-    payload = auth._credential_payload(
-        token(), client_id=ARTIFACT_OAUTH_CLIENT_ID, required_scopes=ARTIFACT_OAUTH_SCOPES, record_key="artifactOauth"
-    )
+    payload = auth._credential_payload(token(), client_id=OAUTH_CLIENT_ID, required_scopes=OAUTH_SCOPES)
 
     def runner(command: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
         calls.append((command, kwargs))
         if "-w" in command:
-            assert ARTIFACT_KEYCHAIN_SERVICE in command and ARTIFACT_KEYCHAIN_ACCOUNT in command
+            assert KEYCHAIN_SERVICE in command and KEYCHAIN_ACCOUNT in command
             return subprocess.CompletedProcess(command, 0, json.dumps(payload), "")
         assert command == ["/usr/bin/security", "-i"]
         assert "test-access" not in json.dumps(command)
-        assert ARTIFACT_KEYCHAIN_SERVICE in kwargs["input"]
+        assert KEYCHAIN_SERVICE in kwargs["input"]
         return subprocess.CompletedProcess(command, 0, "", "")
 
     artifact_auth.save_artifact_credential(payload, platform="darwin", runner=runner)

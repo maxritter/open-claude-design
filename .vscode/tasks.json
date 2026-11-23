@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "Open Claude Design: Build release",
+      "label": "Open Claude Artifacts: Build release",
       "type": "process",
       "command": "bash",
       "args": ["scripts/build-release.sh"],

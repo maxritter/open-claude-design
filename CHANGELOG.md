@@ -1,6 +1,27 @@
 # Changelog
 
-All notable changes to Open Claude Design are documented here. Releases follow semantic versioning and are generated from conventional commits.
+All notable changes to Open Claude Artifacts (formerly Open Claude Design) are documented here. Releases follow semantic versioning and are generated from conventional commits.
+
+## [2.0.0](https://github.com/maxritter/open-claude-artifacts/compare/v1.8.0...v2.0.0) (2026-11-23)
+
+### Breaking Changes
+
+- Renamed package, CLI, and primary skill from `open-claude-design` to `open-claude-artifacts`.
+- Removed legacy standalone Claude Design (`claude.ai/design/p/`) MCP/REST transport, standalone commands, and migration helpers. All artifact commands now live directly at the top level (`open-claude-artifacts list`, `inspect`, `pull`, `push`, `render`, `sync`, `assets`, `comments`, `db`, `share`, etc.).
+- Existing `open-claude-design` artifact credentials in macOS Keychain or `~/.config/open-claude-design/artifact-credentials.json` continue to work automatically via seamless read fallback.
+
+### Added
+
+- **Headless local Slides rendering (`render --slide`)**: render Slides decks (16:9 `1920x1080` and 4:3 `1440x1080`) locally in headless Chrome, Chromium, Edge, or Playwright Chromium — by slide id, 1-based number, `--path`, or full deck, with `--local` draft overrides and automatic `/_blob/` MIME sniffing for SVG/PNG/WebP/fonts.
+- Support for all seven live Claude Artifact types: `Design`, `Slides` (v4 & v5 decks), `Design System`, `Data` (with `Dashboard` alias), `Whiteboard`, `Docs`, and `Sheets`.
+- Automatic Playwright Chromium binary discovery in `find_browser()` alongside system Chrome/Chromium/Edge and `OPEN_CLAUDE_ARTIFACTS_BROWSER`.
+
+### Fixed
+
+- Plain (untyped) artifact pages that return HTTP 404 for `_files.json` now build their verified inventory from `boot["files"]`, stripping the injected runtime block on HTML and reporting HTTP status codes on content fetch failures (fixes #21, thanks @dfaivre-pcs).
+- Migrated Design and unlisted artifact types that return HTTP 404 on `/types/<slug>` now inspect, list files, pull, and download authoring context gracefully instead of failing.
+- Slides decks using schema version 5 (`"v": 5` with `lists` and `format`) now pass local validation and push cleanly.
+- Artboard HTML validation now accepts `/_blob/<id>` uploaded assets and `{{template_hole}}` bound sources while preserving path-escape and literal missing-file guards (incorporates #20, thanks @GManzato).
 
 ## [1.8.0](https://github.com/maxritter/open-claude-design/compare/v1.7.0...v1.8.0) (2026-10-20)
 

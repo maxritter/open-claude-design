@@ -2,9 +2,9 @@
 
 Read this reference only when an extracted system must live in Claude Design as a design system that projects can bind. It describes the shape Claude Design indexes, observed on live design-system projects in September 2026. The host owns that shape and may change it: before authoring, inspect an existing design-system project in the user's account and follow what is there when it differs from this file.
 
-Access, authentication, and every remote write go through `open-claude-design`. This reference only decides what the files contain.
+Access, authentication, and every remote write go through `open-claude-artifacts`. This reference only decides what the files contain.
 
-This package contract applies to standalone Claude Design. For a system migrated to Claude Artifacts, read `open-claude-design`'s `references/migration.md`: the current CLI cannot update the artifact copy or verify its compilation. Do not use standalone project grants, default-setting commands, or compiled-manifest checks as evidence about the migrated copy.
+This package contract applies to standalone Claude Design. For a system migrated to Claude Artifacts, read `open-claude-artifacts`'s `references/migration.md`: the current CLI cannot update the artifact copy or verify its compilation. Do not use standalone project grants, default-setting commands, or compiled-manifest checks as evidence about the migrated copy.
 
 ## The destination is a design-system project
 

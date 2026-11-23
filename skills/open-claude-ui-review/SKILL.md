@@ -56,4 +56,4 @@ Return a verdict—ready, ready after named decisions, or needs iteration—plus
 - Creating a new screen, flow, or visual direction; use `open-claude-ui-design`
 - Extracting tokens or component contracts; use `open-claude-design-system`
 - Logic-only UI changes that preserve the rendered interface
-- Accessing a Claude Design project or preview; use `open-claude-design` for retrieval, then return here for the review
+- Accessing a Claude Design project or preview; use `open-claude-artifacts` for retrieval, then return here for the review

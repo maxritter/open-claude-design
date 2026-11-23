@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
-from open_claude_design.config import (
+from open_claude_artifacts.config import (
     MAX_AGENT_VERIFY_WORKERS,
     PACKAGE_NAME,
     PROJECT_ONLY_AGENT_IDS,
@@ -25,7 +25,6 @@ from open_claude_design.config import (
     SUPPORTED_PLATFORM_LABELS,
     VERSION,
 )
-from open_claude_design.connectors import native_connector_report
 
 Scope = Literal["project", "global"]
 Action = Literal["install", "update", "uninstall"]
@@ -55,7 +54,7 @@ def _data_root() -> Path:
     repository = Path(__file__).parents[2]
     if (repository / "skills").is_dir():
         return repository
-    raise InstallError("Open Claude Design package data is missing.")
+    raise InstallError("Open Claude Artifacts package data is missing.")
 
 
 def _runtime_files(skill: str) -> dict[str, Path]:
@@ -131,7 +130,7 @@ def _runtime_from(node: Path, npx: Path, source: str) -> SkillsRuntime | None:
 
 
 def resolve_skills_runtime(home: Path | None = None) -> SkillsRuntime:
-    """Resolve a compatible system or Open Claude Design-managed Node runtime."""
+    """Resolve a compatible system or Open Claude Artifacts-managed Node runtime."""
     system_node = shutil.which("node")
     system_npx = shutil.which("npx")
     if system_node and system_npx:
@@ -280,19 +279,6 @@ def _skills_command(
     return command
 
 
-def _warn_on_native_connector(
-    payload: dict[str, object],
-    *,
-    home: Path | None,
-    project_root: Path,
-) -> dict[str, object]:
-    """Attach a native-connector conflict to an installer payload only when one exists."""
-    report = native_connector_report(home=home, project_root=project_root)
-    if report["bypass_detected"]:
-        payload["native_connectors"] = report
-    return payload
-
-
 def run_skills_action(
     action: Action,
     agents: tuple[str, ...],
@@ -321,7 +307,7 @@ def run_skills_action(
     if action in {"install", "update"}:
         current, current_agents, current_errors = _verified_install_state(runtime, root, agents, scope)
         if not current_errors and all(current.values()):
-            unchanged_payload: dict[str, object] = {
+            return {
                 "action": action,
                 "scope": scope,
                 "agents": list(agents) or ["auto-detect"],
@@ -334,9 +320,8 @@ def run_skills_action(
                 "verified": True,
                 "agent_state": current_agents,
             }
-            return _warn_on_native_connector(unchanged_payload, home=home, project_root=root)
 
-    with tempfile.TemporaryDirectory(prefix="open-claude-design-skills-") as temporary:
+    with tempfile.TemporaryDirectory(prefix="open-claude-artifacts-skills-") as temporary:
         source = _export_runtime_skills(Path(temporary)) if action in {"install", "update"} else None
         command = _skills_command(runtime, action, source, agents, scope, yes=yes)
         try:
@@ -377,7 +362,6 @@ def run_skills_action(
     if action in {"install", "update"}:
         payload["verified"] = True
         payload["agent_state"] = verified_agents
-        return _warn_on_native_connector(payload, home=home, project_root=root)
     return payload
 
 
@@ -389,7 +373,7 @@ def doctor(
     home: Path | None = None,
     check_auth: bool = False,
 ) -> dict[str, object]:
-    """Return cross-agent installer and Claude Design bridge readiness."""
+    """Return cross-agent installer, browser renderer, and Claude Artifacts readiness."""
     root = (project_root or Path.cwd()).resolve()
     try:
         runtime = resolve_skills_runtime(home)
@@ -418,29 +402,32 @@ def doctor(
             "error": str(error),
         }
 
-    bridge_status: dict[str, object] = {
+    from open_claude_artifacts.render import find_browser
+
+    browser = find_browser()
+    artifacts_status: dict[str, object] = {
         "platform_supported": sys_platform_supported(),
         "platforms": list(SUPPORTED_PLATFORM_LABELS),
+        "renderer_browser": browser,
         "authentication": "not checked",
     }
-    if check_auth and bridge_status["platform_supported"]:
+    if check_auth and artifacts_status["platform_supported"]:
         try:
-            from open_claude_design.bridge import ClaudeDesignClient
+            from open_claude_artifacts.api import ArtifactClient
 
-            bridge_status.update(ClaudeDesignClient().status())
-            bridge_status["authentication"] = "verified"
+            artifacts_status.update(ArtifactClient().status())
+            artifacts_status["authentication"] = "verified"
         except Exception as error:
-            bridge_status["authentication"] = "failed"
-            bridge_status["authenticated"] = False
-            bridge_status["error"] = str(error)
+            artifacts_status["authentication"] = "failed"
+            artifacts_status["authenticated"] = False
+            artifacts_status["error"] = str(error)
 
     return {
         "package_version": VERSION,
         "scope": scope,
         "agents": list(agents) or ["auto-detect"],
         "agent_skills": installer_status,
-        "claude_design_bridge": bridge_status,
-        "native_connectors": native_connector_report(home=home, project_root=root),
+        "artifacts": artifacts_status,
         "project_only_agents": sorted(PROJECT_ONLY_AGENT_IDS) if agents == ("*",) and scope == "global" else [],
     }
 

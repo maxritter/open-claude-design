@@ -1,8 +1,8 @@
-# Open Claude Design Free-Use Source License 1.0
+# Open Claude Artifacts Free-Use Source License 1.0
 
 Copyright (c) 2026 Max Ritter. All rights reserved.
 
-This license applies to Open Claude Design.
+This license applies to Open Claude Artifacts.
 
 ## Permission
 
@@ -21,7 +21,7 @@ You may not:
 2. rebrand, rename, or present the software or a substantial part of it as your own product;
 3. use the software or a substantial part of it to offer a competing product, hosted service, managed service, or marketplace package;
 4. remove or obscure copyright, license, attribution, or trademark notices; or
-5. use the Open Claude Design name or branding in a way that implies endorsement by the licensor or Anthropic.
+5. use the Open Claude Artifacts name or branding in a way that implies endorsement by the licensor or Anthropic.
 
 Private contractors may access the software solely to perform work for a licensee, provided they are bound by confidentiality and use restrictions at least as protective as these terms and delete their copies when the work ends.
 

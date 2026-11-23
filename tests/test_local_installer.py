@@ -42,10 +42,10 @@ def _pipe_environment(tmp_path: Path) -> dict[str, str]:
     home = tmp_path / "home"
     fake_bin = tmp_path / "bin"
     fake_bin.mkdir(exist_ok=True)
-    fake_cli = tmp_path / "open-claude-design"
-    fake_wheel = tmp_path / "open_claude_design-1.0.0-py3-none-any.whl"
+    fake_cli = tmp_path / "open-claude-artifacts"
+    fake_wheel = tmp_path / "open_claude_artifacts-1.0.0-py3-none-any.whl"
     fake_wheel.touch()
-    fake_archive = tmp_path / "open-claude-design.tar.gz"
+    fake_archive = tmp_path / "open-claude-artifacts.tar.gz"
     fake_archive.write_bytes(b"synthetic release archive")
     fake_manifest = tmp_path / "SHA256SUMS"
     fake_manifest.write_text(
@@ -76,8 +76,8 @@ elif [ "${1:-}" = "tool" ] && [ "${2:-}" = "install" ]; then
     env | grep '^UV_' | sort
   } >> "$UV_TRACE"
   mkdir -p "$HOME/.local/bin"
-  cp "$FAKE_OPEN_CLAUDE_DESIGN" "$HOME/.local/bin/open-claude-design"
-  chmod 0755 "$HOME/.local/bin/open-claude-design"
+  cp "$FAKE_OPEN_CLAUDE_DESIGN" "$HOME/.local/bin/open-claude-artifacts"
+  chmod 0755 "$HOME/.local/bin/open-claude-artifacts"
 fi
 """,
     )
@@ -102,8 +102,8 @@ while [ "$#" -gt 0 ]; do
 done
 case "$url" in
   */SHA256SUMS) cp "$FAKE_RELEASE_MANIFEST" "$output" ;;
-  */open-claude-design.tar.gz) cp "$FAKE_RELEASE_ARCHIVE" "$output" ;;
-  */open_claude_design-*-py3-none-any.whl) cp "$FAKE_RELEASE_WHEEL" "$output" ;;
+  */open-claude-artifacts.tar.gz) cp "$FAKE_RELEASE_ARCHIVE" "$output" ;;
+  */open_claude_artifacts-*-py3-none-any.whl) cp "$FAKE_RELEASE_WHEEL" "$output" ;;
   *) exit 22 ;;
 esac
 """,
@@ -118,8 +118,8 @@ esac
             "FAKE_RELEASE_WHEEL": str(fake_wheel),
             "HOME": str(home),
             "NO_COLOR": "1",
-            "OPEN_CLAUDE_DESIGN_PACKAGE": str(fake_wheel),
-            "OPEN_CLAUDE_DESIGN_SKIP_LOGIN": "1",
+            "OPEN_CLAUDE_ARTIFACTS_PACKAGE": str(fake_wheel),
+            "OPEN_CLAUDE_ARTIFACTS_SKIP_LOGIN": "1",
             "PATH": f"{fake_bin}:/usr/bin:/bin",
             "UV_CONFIG_FILE": str(tmp_path / "untrusted-uv.toml"),
             "UV_DEFAULT_INDEX": "https://packages.invalid/simple",
@@ -148,11 +148,11 @@ def test_find_release_wheel_requires_exactly_one_built_wheel(tmp_path: Path) -> 
     with pytest.raises(RuntimeError, match="exactly one local release wheel"):
         find_release_wheel(dist)
 
-    expected = dist / "open_claude_design-1.0.0-py3-none-any.whl"
+    expected = dist / "open_claude_artifacts-1.0.0-py3-none-any.whl"
     expected.touch()
     assert find_release_wheel(dist) == expected
 
-    (dist / "open_claude_design-0.2.0-py3-none-any.whl").touch()
+    (dist / "open_claude_artifacts-0.2.0-py3-none-any.whl").touch()
     with pytest.raises(RuntimeError, match="exactly one local release wheel"):
         find_release_wheel(dist)
 
@@ -163,7 +163,7 @@ def test_local_installer_uses_built_asset_without_node_debug_injection(
 ) -> None:
     dist = tmp_path / "dist"
     dist.mkdir()
-    wheel = dist / "open_claude_design-1.0.0-py3-none-any.whl"
+    wheel = dist / "open_claude_artifacts-1.0.0-py3-none-any.whl"
     wheel.touch()
     installer = dist / "install.sh"
     installer.touch()
@@ -178,7 +178,7 @@ def test_local_installer_uses_built_asset_without_node_debug_injection(
     assert run.call_args.kwargs["cwd"] == tmp_path
     assert run.call_args.kwargs["input"] == ""
     assert run.call_args.kwargs["text"] is True
-    assert environment["OPEN_CLAUDE_DESIGN_PACKAGE"] == str(wheel)
+    assert environment["OPEN_CLAUDE_ARTIFACTS_PACKAGE"] == str(wheel)
     assert "NODE_OPTIONS" not in environment
     assert "VSCODE_INSPECTOR_OPTIONS" not in environment
     assert environment["PATH"] == os.environ["PATH"]
@@ -190,8 +190,8 @@ def test_advertised_pipe_mode_reaches_install_and_uninstall_completion(tmp_path:
 
     install = _run_script("install.sh", environment)
     assert install.returncode == 0, install.stderr
-    assert "[5/5] Connecting Claude Design" in install.stdout
-    assert "Open Claude Design is ready" in install.stdout
+    assert "[5/5] Connecting Claude Artifacts" in install.stdout
+    assert "Open Claude Artifacts is ready" in install.stdout
     trace = Path(environment["UV_TRACE"]).read_text(encoding="utf-8")
     assert "--no-config --default-index https://pypi.org/simple --no-sources" in trace
     assert "UV_NO_CONFIG=1" in trace
@@ -202,12 +202,12 @@ def test_advertised_pipe_mode_reaches_install_and_uninstall_completion(tmp_path:
     uninstall = _run_script("uninstall.sh", environment, "--yes")
     assert uninstall.returncode == 0, uninstall.stderr
     assert "[3/3] Removing owned runtime data" in uninstall.stdout
-    assert "Open Claude Design was removed" in uninstall.stdout
+    assert "Open Claude Artifacts was removed" in uninstall.stdout
 
 
 def test_public_install_records_stable_latest_archive_for_uv_upgrade(tmp_path: Path) -> None:
     environment = _pipe_environment(tmp_path)
-    del environment["OPEN_CLAUDE_DESIGN_PACKAGE"]
+    del environment["OPEN_CLAUDE_ARTIFACTS_PACKAGE"]
 
     install = _run_script("install.sh", environment)
 
@@ -215,7 +215,7 @@ def test_public_install_records_stable_latest_archive_for_uv_upgrade(tmp_path: P
     trace = Path(environment["UV_TRACE"]).read_text(encoding="utf-8")
     install_args = next(line for line in trace.splitlines() if line.startswith("args="))
     assert (
-        "https://github.com/maxritter/open-claude-design/releases/latest/download/open-claude-design.tar.gz"
+        "https://github.com/maxritter/open-claude-artifacts/releases/latest/download/open-claude-artifacts.tar.gz"
         in install_args
     )
     assert ".whl" not in install_args
@@ -237,8 +237,8 @@ def test_local_package_install_persists_its_uv_requirement_source(tmp_path: Path
     assert install.returncode == 0, install.stderr + install.stdout
     package = (
         Path(environment["HOME"])
-        / ".local/share/open-claude-design/packages"
-        / Path(environment["OPEN_CLAUDE_DESIGN_PACKAGE"]).name
+        / ".local/share/open-claude-artifacts/packages"
+        / Path(environment["OPEN_CLAUDE_ARTIFACTS_PACKAGE"]).name
     )
     assert package.is_file()
     trace = Path(environment["UV_TRACE"]).read_text(encoding="utf-8")
@@ -254,7 +254,7 @@ def test_published_local_package_switches_to_the_upgradeable_latest_source(tmp_p
     trace = Path(environment["UV_TRACE"]).read_text(encoding="utf-8")
     install_args = next(line for line in trace.splitlines() if line.startswith("args="))
     assert (
-        "https://github.com/maxritter/open-claude-design/releases/latest/download/open-claude-design.tar.gz"
+        "https://github.com/maxritter/open-claude-artifacts/releases/latest/download/open-claude-artifacts.tar.gz"
         in install_args
     )
     assert "enabling uv upgrades" in install.stdout
@@ -268,7 +268,7 @@ def test_install_survives_forced_color_from_a_parent_process(tmp_path: Path) -> 
 
     install = _run_script("install.sh", environment)
     assert install.returncode == 0, install.stderr + install.stdout
-    assert "Open Claude Design is ready" in install.stdout
+    assert "Open Claude Artifacts is ready" in install.stdout
 
 
 def test_install_warns_when_login_shell_path_misses_the_tool_bin(tmp_path: Path) -> None:
@@ -308,7 +308,7 @@ def test_install_refuses_success_when_agent_install_returns_no_result(tmp_path: 
         "#!/bin/sh\n"
         'case "${1:-}" in\n'
         "  --version) printf '1.0.0\\n' ;;\n"
-        "  install) printf 'usage: open-claude-design install [-h]\\n' ;;\n"
+        "  install) printf 'usage: open-claude-artifacts install [-h]\\n' ;;\n"
         "  *) exit 0 ;;\n"
         "esac\n",
     )
@@ -318,7 +318,7 @@ def test_install_refuses_success_when_agent_install_returns_no_result(tmp_path: 
     assert install.returncode == 1
     assert "returned no install result" in install.stderr
     assert "installed and verified" not in install.stdout
-    assert "Open Claude Design is ready" not in install.stdout
+    assert "Open Claude Artifacts is ready" not in install.stdout
 
 
 def test_uninstall_scope_project_routes_scope_to_cli_without_npx_fallback(tmp_path: Path) -> None:
@@ -326,7 +326,7 @@ def test_uninstall_scope_project_routes_scope_to_cli_without_npx_fallback(tmp_pa
     cli_trace = tmp_path / "cli-trace.txt"
     npx_trace = tmp_path / "npx-trace.txt"
     fake_bin = tmp_path / "bin"
-    _write_executable(fake_bin / "open-claude-design", _fake_cli_script(cli_trace))
+    _write_executable(fake_bin / "open-claude-artifacts", _fake_cli_script(cli_trace))
     _write_executable(fake_bin / "npx", f'#!/bin/sh\nprintf \'%s\\n\' "$*" >> "{npx_trace}"\nexit 0\n')
 
     uninstall = _run_script("uninstall.sh", environment, "--scope", "project", "--yes")
@@ -375,11 +375,11 @@ def test_release_manifest_archive_checksum_requires_the_exact_asset_name(tmp_pat
 
     manifest = tmp_path / "SHA256SUMS"
     manifest.write_text(
-        "0" * 64 + "  nested/open-claude-design.tar.gz\n" + "1" * 64 + "  open-claude-design.tar.gz\n",
+        "0" * 64 + "  nested/open-claude-artifacts.tar.gz\n" + "1" * 64 + "  open-claude-artifacts.tar.gz\n",
         encoding="utf-8",
     )
     result = subprocess.run(
-        ["awk", "-v", "name=open-claude-design.tar.gz", program, str(manifest)],
+        ["awk", "-v", "name=open-claude-artifacts.tar.gz", program, str(manifest)],
         capture_output=True,
         text=True,
         check=True,

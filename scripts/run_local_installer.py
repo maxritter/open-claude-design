@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def find_release_wheel(dist: Path) -> Path:
     """Return the single wheel produced by the release build."""
-    wheels = sorted(dist.glob("open_claude_design-*-py3-none-any.whl"))
+    wheels = sorted(dist.glob("open_claude_artifacts-*-py3-none-any.whl"))
     if len(wheels) != 1:
         raise RuntimeError(f"expected exactly one local release wheel in {dist}, found {len(wheels)}")
     return wheels[0]
@@ -29,7 +29,7 @@ def run_local_installer(root: Path, arguments: Sequence[str] = ()) -> None:
     environment = os.environ.copy()
     environment.pop("NODE_OPTIONS", None)
     environment.pop("VSCODE_INSPECTOR_OPTIONS", None)
-    environment["OPEN_CLAUDE_DESIGN_PACKAGE"] = str(find_release_wheel(dist))
+    environment["OPEN_CLAUDE_ARTIFACTS_PACKAGE"] = str(find_release_wheel(dist))
     subprocess.run(
         ["sh", "-s", "--", *arguments],
         cwd=root,

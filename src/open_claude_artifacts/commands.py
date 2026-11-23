@@ -11,10 +11,11 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from open_claude_design import bridge
-from open_claude_design.artifact_api import (
+from open_claude_artifacts import workspace
+from open_claude_artifacts.api import (
     ArtifactClient,
     ArtifactConflict,
+    ArtifactHTTPError,
     ArtifactOutcomeUnknown,
     ArtifactSnapshot,
     artifact_id,
@@ -22,8 +23,7 @@ from open_claude_design.artifact_api import (
     file_path,
     now_rfc3339,
 )
-from open_claude_design.artifact_store import ArtifactAssets, ArtifactComments, ArtifactDatabase
-from open_claude_design.config import (
+from open_claude_artifacts.config import (
     ARTIFACT_API_PREFIX,
     ARTIFACT_CONTEXT_PARTS,
     ARTIFACT_DB_LEVELS,
@@ -31,13 +31,14 @@ from open_claude_design.config import (
     ARTIFACT_KINDS_WITH_DESIGN_SYSTEMS,
     ARTIFACT_MAX_ASSET_BYTES,
     ARTIFACT_MAX_FILE_BYTES,
+    ARTIFACT_MAX_STDIN_BYTES,
     ARTIFACT_RENDER_THEMES,
     ARTIFACT_SHARE_ACCESS,
     ARTIFACT_SHARE_MODES,
     ARTIFACT_STORE_KINDS,
-    CLAUDE_DESIGN_MAX_STDIN_BYTES,
 )
-from open_claude_design.errors import ClaudeDesignProtocolError, ClaudeDesignSafetyError
+from open_claude_artifacts.errors import ArtifactProtocolError, ArtifactSafetyError
+from open_claude_artifacts.store import ArtifactAssets, ArtifactComments, ArtifactDatabase
 
 WRITE_COMMANDS = {
     "create",
@@ -67,12 +68,40 @@ def _local_flags(command: argparse.ArgumentParser) -> None:
     command.add_argument("--allow-external-local-path", dest="external_local_paths", action="append", default=[])
 
 
-def add_parsers(subparsers: Any) -> None:
-    parser = subparsers.add_parser(
-        "artifacts", help="Native Claude artifact workflows (Design, Slides, systems, pages)."
-    )
-    commands = parser.add_subparsers(dest="artifact_command", required=True)
+ARTIFACT_COMMANDS = frozenset(
+    {
+        "list",
+        "types",
+        "type",
+        "instances",
+        "create",
+        "inspect",
+        "files",
+        "preview",
+        "versions",
+        "contract",
+        "authoring-context",
+        "pull",
+        "push",
+        "publish",
+        "render",
+        "retitle",
+        "pin",
+        "unpin",
+        "delete",
+        "share",
+        "diagnostics",
+        "profiles",
+        "design-system",
+        "assets",
+        "comments",
+        "db",
+        "sync",
+    }
+)
 
+
+def add_artifact_parsers(commands: Any) -> None:
     listing = commands.add_parser("list", help="List artifacts: yours, shared with you, or both.")
     listing.add_argument("--scope", choices=("mine", "shared", "all"), default="mine")
     _json_flag(listing)
@@ -149,9 +178,18 @@ def add_parsers(subparsers: Any) -> None:
     _local_flags(publish)
     _json_flag(publish)
 
-    render = commands.add_parser("render", help="Render artboards or a page locally in headless Chrome.")
+    render = commands.add_parser(
+        "render", help="Render Design artboards, Slides decks, or plain pages locally in headless Chromium."
+    )
     render.add_argument("artifact_id")
-    render.add_argument("--path", dest="paths", action="append", default=[], help="Artboard or page path to render.")
+    render.add_argument("--path", dest="paths", action="append", default=[], help="Artboard, slide, or page path.")
+    render.add_argument(
+        "--slide",
+        dest="slides",
+        action="append",
+        default=[],
+        help="Slides only: slide id or 1-based slide number to render (repeatable).",
+    )
     render.add_argument("--local", dest="overrides", action="append", default=[], help="REMOTE_PATH=LOCAL_PATH draft")
     render.add_argument("--width", dest="widths", action="append", type=int, default=[])
     render.add_argument("--theme", dest="themes", action="append", choices=ARTIFACT_RENDER_THEMES, default=[])
@@ -287,7 +325,7 @@ def add_parsers(subparsers: Any) -> None:
         _json_flag(step)
 
     sync = commands.add_parser("sync", help="Review and apply artifact/code synchronization by retained revision.")
-    steps = sync.add_subparsers(dest="artifact_sync_command", required=True)
+    steps = sync.add_subparsers(dest="sync_command", required=True)
     review = steps.add_parser("review")
     review.add_argument("artifact_id")
     review.add_argument("--direction", choices=("to-design", "to-code"), required=True)
@@ -318,18 +356,18 @@ def assignments(values: list[str], *, write: bool = True) -> dict[str, str]:
 
 def _json_value(raw: str, root: Path, external: list[str]) -> Any:
     if raw == "-":
-        text = sys.stdin.read(CLAUDE_DESIGN_MAX_STDIN_BYTES + 1)
+        text = sys.stdin.read(ARTIFACT_MAX_STDIN_BYTES + 1)
     elif raw.startswith("@"):
-        text = bridge._read_local_file(
+        text = workspace.read_local_file(
             raw[1:],
             workspace_root=root,
             authorized_external_paths=external,
-            maximum_bytes=CLAUDE_DESIGN_MAX_STDIN_BYTES,
+            maximum_bytes=ARTIFACT_MAX_STDIN_BYTES,
         )[1].decode("utf-8")
     else:
         text = raw
-    if len(text.encode("utf-8")) > CLAUDE_DESIGN_MAX_STDIN_BYTES:
-        raise ClaudeDesignSafetyError("JSON input exceeds the local safety limit.")
+    if len(text.encode("utf-8")) > ARTIFACT_MAX_STDIN_BYTES:
+        raise ArtifactSafetyError("JSON input exceeds the local safety limit.")
     try:
         return json.loads(text)
     except (ValueError, RecursionError) as error:
@@ -338,7 +376,7 @@ def _json_value(raw: str, root: Path, external: list[str]) -> Any:
 
 def _read_locals(sources: dict[str, str], root: Path, external: list[str], maximum: int) -> dict[str, bytes]:
     return {
-        path: bridge._read_local_file(
+        path: workspace.read_local_file(
             source, workspace_root=root, authorized_external_paths=external, maximum_bytes=maximum
         )[1]
         for path, source in sources.items()
@@ -347,14 +385,14 @@ def _read_locals(sources: dict[str, str], root: Path, external: list[str], maxim
 
 def _save(root: Path, directory: Path, name: str, data: bytes) -> str:
     path = directory / name
-    bridge._atomic_write_local(path, data, force=path.exists(), workspace_root=root, authorized_external_paths=[])
+    workspace.atomic_write_local(path, data, force=path.exists(), workspace_root=root, authorized_external_paths=[])
     return path.relative_to(root).as_posix()
 
 
-CLI_GUIDE = """# Open Claude Design: how to apply this type's guide
+CLI_GUIDE = """# Open Claude Artifacts: how to apply this type's guide
 
 The files beside this one are the live guide that Anthropic serves for this artifact's type. They describe
-calls to Claude Code's Artifact tool. Use these `open-claude-design artifacts` commands for the same work:
+calls to Claude Code's Artifact tool. Use these `open-claude-artifacts` commands for the same work:
 
 | The guide says | Run |
 |---|---|
@@ -381,10 +419,10 @@ def contract_context(
     """Save the runtime contract prompt and the typings of each capability a plain page uses."""
     roster = client.contract(version)
     contract = roster["version"]
-    bridge._ensure_sync_state_ignored(root)
+    workspace.ensure_state_ignored(root)
     prompt = client.request("GET", f"{ARTIFACT_API_PREFIX}contract/{contract}/prompt")
     if not isinstance(prompt, str):
-        raise ClaudeDesignProtocolError("Artifact runtime contract prompt is unavailable.")
+        raise ArtifactProtocolError("Artifact runtime contract prompt is unavailable.")
     paths = {"runtime-contract.md": _save(root, directory, "runtime-contract.md", prompt.encode())}
     wanted = capabilities or [name for name in roster["capabilities"] if isinstance(name, str)]
     unknown = sorted(set(wanted) - set(roster["capabilities"]) - {"flags"})
@@ -393,7 +431,7 @@ def contract_context(
     for capability in sorted(set(wanted) - {"flags"}):
         try:
             definition = client.request("GET", f"{ARTIFACT_API_PREFIX}contract/{contract}/{capability}.d.ts")
-        except ClaudeDesignProtocolError:
+        except ArtifactProtocolError:
             continue
         if isinstance(definition, str):
             name = f"capabilities/{capability}.d.ts"
@@ -405,30 +443,40 @@ def authoring_context(
     client: ArtifactClient, value: str, root: Path, *, design_system: str | None = None
 ) -> dict[str, Any]:
     snapshot = client.snapshot(value)
-    kind = client.type_kind(snapshot.type_id)
+    kind = client.type_kind(snapshot.type_id, type_title=snapshot.type_title)
     directory = root.joinpath(*ARTIFACT_CONTEXT_PARTS, snapshot.id)
-    bridge._ensure_sync_state_ignored(root)
+    workspace.ensure_state_ignored(root)
     paths: dict[str, str] = {}
     if snapshot.type_id is None:
         declared = [name for name in snapshot.capabilities if name != "flags"]
         context = contract_context(client, root, directory, snapshot.contract or "latest", declared or ["artifact"])
-        return {"backend": "artifact", "id": snapshot.id, "kind": None, **context}
+        return {"id": snapshot.id, "kind": None, **context}
     type_id = snapshot.type_id
-    description = client.describe_type(type_id)
-    references = [
-        row["path"]
-        for row in description.get("files") or []
-        if isinstance(row, dict)
-        and isinstance(row.get("path"), str)
-        and (
-            row["path"] == "SKILL.md"
-            or (row["path"].startswith("artifact-type/reference/") and row["path"].endswith(".md"))
-        )
-    ]
-    for remote in references or ["SKILL.md"]:
-        name = remote.removeprefix("artifact-type/reference/")
-        paths[name] = _save(root, directory, name, client.type_file(type_id, remote).encode())
-    paths["open-claude-design.md"] = _save(root, directory, "open-claude-design.md", CLI_GUIDE.encode())
+    try:
+        description = client.describe_type(type_id)
+    except ArtifactHTTPError as error:
+        if error.status != 404:
+            raise
+        # Unlisted/migrated types serve their guide files inside the artifact snapshot itself.
+        for remote in sorted(snapshot.files):
+            if remote == "SKILL.md" or (remote.startswith("artifact-type/reference/") and remote.endswith(".md")):
+                name = remote.removeprefix("artifact-type/reference/")
+                paths[name] = _save(root, directory, name, client.read_file(snapshot, remote))
+    else:
+        references = [
+            row["path"]
+            for row in description.get("files") or []
+            if isinstance(row, dict)
+            and isinstance(row.get("path"), str)
+            and (
+                row["path"] == "SKILL.md"
+                or (row["path"].startswith("artifact-type/reference/") and row["path"].endswith(".md"))
+            )
+        ]
+        for remote in references or ["SKILL.md"]:
+            name = remote.removeprefix("artifact-type/reference/")
+            paths[name] = _save(root, directory, name, client.type_file(type_id, remote).encode())
+    paths["open-claude-artifacts.md"] = _save(root, directory, "open-claude-artifacts.md", CLI_GUIDE.encode())
     systems: dict[str, Any] | None = None
     chosen: dict[str, Any] | None = None
     if kind in ARTIFACT_KINDS_WITH_DESIGN_SYSTEMS:
@@ -454,7 +502,6 @@ def authoring_context(
             root, directory, "design-systems.json", json.dumps({**systems, "chosen": chosen}, indent=2).encode()
         )
     return {
-        "backend": "artifact",
         "id": snapshot.id,
         "type_id": type_id,
         "kind": kind,
@@ -464,7 +511,6 @@ def authoring_context(
         "design_system": chosen,
         "available_design_systems": len(systems["items"]) if systems else None,
         "paths": paths,
-        "experimental": True,
     }
 
 
@@ -479,15 +525,15 @@ def install_design_system(client: ArtifactClient, value: str, system_value: str,
     snapshot = client.snapshot(value)
     kind = client.type_kind(snapshot.type_id)
     if kind not in ARTIFACT_KINDS_WITH_DESIGN_SYSTEMS:
-        raise ClaudeDesignSafetyError("Design systems install into Design canvases and Slides decks.")
+        raise ArtifactSafetyError("Design systems install into Design canvases and Slides decks.")
     index_path = ARTIFACT_FILE_KINDS[kind or ""][0]
     if index_path not in snapshot.files:
-        raise ClaudeDesignSafetyError(f"Write {index_path} and the first content before installing a system.")
+        raise ArtifactSafetyError(f"Write {index_path} and the first content before installing a system.")
     system = client.snapshot(system_value)
     if client.type_kind(system.type_id) != "design-system":
-        raise ClaudeDesignSafetyError("The source must be a Design System artifact.")
+        raise ArtifactSafetyError("The source must be a Design System artifact.")
     if "project/tokens.json" not in system.files:
-        raise ClaudeDesignSafetyError("That design system serves no project/tokens.json; use it without installing.")
+        raise ArtifactSafetyError("That design system serves no project/tokens.json; use it without installing.")
     tokens = client.read_file(system, "project/tokens.json")
     namespace = system.title
     if "project/design-system.json" in system.files:
@@ -497,7 +543,7 @@ def install_design_system(client: ArtifactClient, value: str, system_value: str,
     folder = _folder(folder or namespace)
     index = json.loads(client.read_file(snapshot, index_path))
     if not isinstance(index, dict):
-        raise ClaudeDesignSafetyError(f"{index_path} is not a JSON object.")
+        raise ArtifactSafetyError(f"{index_path} is not a JSON object.")
     record = {
         "title": system.title,
         "namespace": folder,
@@ -517,15 +563,15 @@ def install_design_system(client: ArtifactClient, value: str, system_value: str,
 
 
 def _print(payload: dict[str, Any], args: argparse.Namespace) -> int:
-    bridge._print_design_result(payload, json_mode=args.json)
+    workspace.print_result(payload, json_mode=args.json)
     return 0
 
 
 def _require(args: argparse.Namespace, *, write: bool = True, destructive: bool = False) -> None:
     if write and not getattr(args, "allow_write", False):
-        raise ClaudeDesignSafetyError("Artifact mutation requires --allow-write and the user's explicit request.")
+        raise ArtifactSafetyError("Artifact mutation requires --allow-write and the user's explicit request.")
     if destructive and not getattr(args, "allow_destructive", False):
-        raise ClaudeDesignSafetyError(
+        raise ArtifactSafetyError(
             "This removes data permanently; pass --allow-destructive only with the user's explicit authorization."
         )
 
@@ -544,20 +590,20 @@ def _assets(args: argparse.Namespace, client: ArtifactClient, root: Path) -> dic
     if step == "list":
         return store.list(value, after=args.after, all_pages=args.after is None)
     if step == "pull":
-        target = bridge._resolve_local_path(
+        target = workspace.resolve_local_path(
             args.output, workspace_root=root, authorized_external_paths=args.external_local_paths, require_file=False
         )
         if target.exists() and not args.force:
-            raise ClaudeDesignSafetyError("Asset pull will not overwrite a local file without --force.")
+            raise ArtifactSafetyError("Asset pull will not overwrite a local file without --force.")
         snapshot = client.snapshot(value)
         listed = {row["id"]: row for row in store.list(value)["assets"]}
         row = listed.get(args.asset)
         if row is None:
-            raise ClaudeDesignProtocolError("That asset is not in this artifact's store.")
+            raise ArtifactProtocolError("That asset is not in this artifact's store.")
         data = client.read_blob(snapshot, args.asset, ARTIFACT_MAX_ASSET_BYTES)
         if "sha256" in row and hashlib.sha256(data).hexdigest() != row["sha256"]:
-            raise ClaudeDesignProtocolError("Asset bytes do not match their listed hash.")
-        bridge._atomic_write_local(
+            raise ArtifactProtocolError("Asset bytes do not match their listed hash.")
+        workspace.atomic_write_local(
             target, data, force=args.force, workspace_root=root, authorized_external_paths=args.external_local_paths
         )
         return {"backend": "artifact", "id": value, "asset": args.asset, "output": str(target), "bytes": len(data)}
@@ -569,7 +615,7 @@ def _assets(args: argparse.Namespace, client: ArtifactClient, root: Path) -> dic
         return store.delete(snapshot, args.asset)
     uploads = []
     for local in args.local_paths:
-        path, data = bridge._read_local_file(
+        path, data = workspace.read_local_file(
             local,
             workspace_root=root,
             authorized_external_paths=args.external_local_paths,
@@ -644,11 +690,11 @@ def run_artifact_command(
     workspace_root: Path | None = None,
     client_factory: Callable[[], Any] | None = None,
 ) -> int:
-    command = args.artifact_command
-    root = bridge._design_workspace_root(workspace_root)
+    command = args.command
+    root = workspace.workspace_root(workspace_root)
     factory = client_factory or ArtifactClient
     if command == "sync":
-        from open_claude_design.artifact_sync import run_sync
+        from open_claude_artifacts.sync import run_sync
 
         return run_sync(args, factory, root)
     if command in WRITE_COMMANDS and command != "share":
@@ -719,7 +765,7 @@ def run_artifact_command(
                 args.title, data, capabilities=capabilities, contract=args.contract, favicon=args.favicon
             )
             if args.open_browser:
-                bridge._open_preview_url(payload["url"])
+                workspace.open_durable_url(payload["url"])
         elif command == "versions":
             payload = client.versions(args.artifact_id)
         elif command == "retitle":
@@ -728,7 +774,7 @@ def run_artifact_command(
             payload = client.pin(args.artifact_id, command == "pin")
         elif command == "delete":
             if artifact_id(args.confirm) != artifact_id(args.artifact_id):
-                raise ClaudeDesignSafetyError("--confirm must repeat the exact artifact id being deleted.")
+                raise ArtifactSafetyError("--confirm must repeat the exact artifact id being deleted.")
             payload = client.delete(args.artifact_id)
         elif command == "share":
             value = artifact_id(args.artifact_id)
@@ -737,7 +783,7 @@ def run_artifact_command(
             else:
                 _require(args)
                 if args.mode == "public" and not args.allow_public:
-                    raise ClaudeDesignSafetyError(
+                    raise ArtifactSafetyError(
                         "Public sharing lets anyone with the link open the artifact; pass --allow-public only when "
                         "the user asked for a public link."
                     )
@@ -756,18 +802,19 @@ def run_artifact_command(
         elif command == "db":
             payload = _db(args, client, root)
         elif command == "render":
-            from open_claude_design.artifact_render import render, render_directory
+            from open_claude_artifacts.render import render, render_directory
 
             snapshot = client.snapshot(args.artifact_id)
             overrides = _read_locals(
                 assignments(args.overrides, write=False), root, args.external_local_paths, ARTIFACT_MAX_FILE_BYTES
             )
-            bridge._ensure_sync_state_ignored(root)
+            workspace.ensure_state_ignored(root)
             payload = render(
                 client,
                 snapshot,
                 output_dir=render_directory(root, snapshot.id) / snapshot.version,
                 paths=args.paths,
+                slides=args.slides,
                 overrides=overrides,
                 widths=args.widths,
                 themes=args.themes,
@@ -776,17 +823,17 @@ def run_artifact_command(
             value = artifact_id(args.artifact_id)
             if command == "pull":
                 file_path(args.path)
-                target = bridge._resolve_local_path(
+                target = workspace.resolve_local_path(
                     args.output,
                     workspace_root=root,
                     authorized_external_paths=args.external_local_paths,
                     require_file=False,
                 )
                 if target.exists() and not args.force:
-                    raise ClaudeDesignSafetyError("Artifact pull will not overwrite a local file without --force.")
+                    raise ArtifactSafetyError("Artifact pull will not overwrite a local file without --force.")
                 snapshot = client.snapshot(value, version=args.at_version)
                 data = client.read_file(snapshot, args.path)
-                bridge._atomic_write_local(
+                workspace.atomic_write_local(
                     target,
                     data,
                     force=args.force,
@@ -823,25 +870,25 @@ def run_artifact_command(
                     replace_capabilities=args.replace_capabilities,
                 )
                 if args.open_browser:
-                    bridge._open_preview_url(payload["url"])
+                    workspace.open_durable_url(payload["url"])
             else:
                 snapshot = client.snapshot(value, version=getattr(args, "at_version", None))
                 payload = _snapshot_files(snapshot, getattr(args, "all_files", False))
-                payload["kind"] = client.type_kind(snapshot.type_id)
+                payload["kind"] = client.type_kind(snapshot.type_id, type_title=snapshot.type_title)
                 if command == "preview":
                     kind = payload["kind"]
-                    if kind in ARTIFACT_FILE_KINDS:
+                    if kind is not None and kind in ARTIFACT_FILE_KINDS:
                         payload["verification"] = client.validate_kind(snapshot, kind, {})
                     if args.open_browser:
-                        bridge._open_preview_url(payload["url"])
+                        workspace.open_durable_url(payload["url"])
         return _print(payload, args)
     except ArtifactConflict as error:
-        bridge._print_design_result(
+        workspace.print_result(
             {"backend": "artifact", "state": "stale", "mutated": False, "error": str(error)}, json_mode=args.json
         )
         return 3
     except ArtifactOutcomeUnknown as error:
-        bridge._print_design_result(
+        workspace.print_result(
             {"backend": "artifact", "state": "unknown", "verified": False, "error": str(error)}, json_mode=args.json
         )
         return 2

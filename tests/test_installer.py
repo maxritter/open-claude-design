@@ -9,17 +9,16 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-import open_claude_design.bridge as bridge_module
-import open_claude_design.installer as installer_module
-from open_claude_design.config import (
+import open_claude_artifacts.api as api_module
+import open_claude_artifacts.installer as installer_module
+from open_claude_artifacts.config import (
     CLAUDE_CONFIG_ENV,
-    CLAUDE_DESIGN_ENDPOINT,
     PROJECT_ONLY_AGENT_IDS,
     SKILL_NAMES,
     SKILLS_CLI_VERSION,
     SUPPORTED_AGENT_IDS,
 )
-from open_claude_design.installer import (
+from open_claude_artifacts.installer import (
     InstallError,
     SkillsRuntime,
     _export_runtime_skills,
@@ -63,8 +62,8 @@ def test_runtime_skill_export_contains_all_skills_without_benchmark_payload(tmp_
         assert not (exported / "skills" / skill / "tests").exists()
 
 
-@patch("open_claude_design.installer.resolve_skills_runtime", return_value=_runtime())
-@patch("open_claude_design.installer.subprocess.run")
+@patch("open_claude_artifacts.installer.resolve_skills_runtime", return_value=_runtime())
+@patch("open_claude_artifacts.installer.subprocess.run")
 def test_install_uses_one_pinned_skills_cli_for_every_agent(
     run: MagicMock,
     _resolve: MagicMock,
@@ -111,8 +110,8 @@ def test_install_uses_one_pinned_skills_cli_for_every_agent(
     assert result["verified"] is True
 
 
-@patch("open_claude_design.installer.resolve_skills_runtime", return_value=_runtime())
-@patch("open_claude_design.installer.subprocess.run")
+@patch("open_claude_artifacts.installer.resolve_skills_runtime", return_value=_runtime())
+@patch("open_claude_artifacts.installer.subprocess.run")
 def test_install_rejects_backend_success_when_runtime_skills_are_not_installed(
     run: MagicMock,
     _resolve: MagicMock,
@@ -136,8 +135,8 @@ def test_install_rejects_backend_success_when_runtime_skills_are_not_installed(
         )
 
 
-@patch("open_claude_design.installer.resolve_skills_runtime", return_value=_runtime())
-@patch("open_claude_design.installer.subprocess.run")
+@patch("open_claude_artifacts.installer.resolve_skills_runtime", return_value=_runtime())
+@patch("open_claude_artifacts.installer.subprocess.run")
 def test_install_rejects_success_when_one_requested_agent_remains_unconnected(
     run: MagicMock,
     _resolve: MagicMock,
@@ -167,8 +166,8 @@ def test_install_rejects_success_when_one_requested_agent_remains_unconnected(
         )
 
 
-@patch("open_claude_design.installer.resolve_skills_runtime", return_value=_runtime())
-@patch("open_claude_design.installer.subprocess.run")
+@patch("open_claude_artifacts.installer.resolve_skills_runtime", return_value=_runtime())
+@patch("open_claude_artifacts.installer.subprocess.run")
 def test_install_is_a_noop_when_every_runtime_file_is_already_current(
     run: MagicMock,
     _resolve: MagicMock,
@@ -191,8 +190,8 @@ def test_install_is_a_noop_when_every_runtime_file_is_already_current(
     assert result["unchanged"] is True
 
 
-@patch("open_claude_design.installer.resolve_skills_runtime", return_value=_runtime())
-@patch("open_claude_design.installer.subprocess.run")
+@patch("open_claude_artifacts.installer.resolve_skills_runtime", return_value=_runtime())
+@patch("open_claude_artifacts.installer.subprocess.run")
 def test_uninstall_removes_the_named_skills_from_every_agent_in_scope(
     run: MagicMock,
     _resolve: MagicMock,
@@ -220,8 +219,8 @@ def test_uninstall_removes_the_named_skills_from_every_agent_in_scope(
     assert "--global" not in command
 
 
-@patch("open_claude_design.installer.resolve_skills_runtime", return_value=_runtime())
-@patch("open_claude_design.installer.subprocess.run")
+@patch("open_claude_artifacts.installer.resolve_skills_runtime", return_value=_runtime())
+@patch("open_claude_artifacts.installer.subprocess.run")
 def test_doctor_reads_installed_state_through_the_same_backend(
     run: MagicMock,
     _resolve: MagicMock,
@@ -241,8 +240,8 @@ def test_doctor_reads_installed_state_through_the_same_backend(
     assert str(run.call_args.kwargs["env"]["PATH"]).split(":", 1)[0] == "/runtime/bin"
 
 
-@patch("open_claude_design.installer.resolve_skills_runtime", return_value=_runtime())
-@patch("open_claude_design.installer.subprocess.run")
+@patch("open_claude_artifacts.installer.resolve_skills_runtime", return_value=_runtime())
+@patch("open_claude_artifacts.installer.subprocess.run")
 def test_doctor_all_agents_verifies_every_agent_without_a_literal_wildcard(
     run: MagicMock,
     _resolve: MagicMock,
@@ -262,8 +261,8 @@ def test_doctor_all_agents_verifies_every_agent_without_a_literal_wildcard(
     assert set(result["agent_skills"]["agents"]) == (set(SUPPORTED_AGENT_IDS) - PROJECT_ONLY_AGENT_IDS)
 
 
-@patch("open_claude_design.installer.resolve_skills_runtime", return_value=_runtime())
-@patch("open_claude_design.installer.subprocess.run")
+@patch("open_claude_artifacts.installer.resolve_skills_runtime", return_value=_runtime())
+@patch("open_claude_artifacts.installer.subprocess.run")
 def test_doctor_rejects_a_named_skill_whose_entrypoint_is_missing(
     run: MagicMock,
     _resolve: MagicMock,
@@ -280,14 +279,14 @@ def test_doctor_rejects_a_named_skill_whose_entrypoint_is_missing(
     assert result["agent_skills"]["skills"][payload[0]["name"]] is False
 
 
-@patch("open_claude_design.installer.shutil.which", return_value=None)
-@patch("open_claude_design.installer.subprocess.run")
+@patch("open_claude_artifacts.installer.shutil.which", return_value=None)
+@patch("open_claude_artifacts.installer.subprocess.run")
 def test_managed_node_runtime_is_used_when_system_node_is_missing(
     run: MagicMock,
     _which: MagicMock,
     tmp_path: Path,
 ) -> None:
-    managed_bin = tmp_path / ".local" / "share" / "open-claude-design" / "node" / "bin"
+    managed_bin = tmp_path / ".local" / "share" / "open-claude-artifacts" / "node" / "bin"
     managed_bin.mkdir(parents=True)
     (managed_bin / "node").touch()
     (managed_bin / "npx").touch()
@@ -299,7 +298,7 @@ def test_managed_node_runtime_is_used_when_system_node_is_missing(
     assert runtime.npx == managed_bin / "npx"
 
 
-@patch("open_claude_design.installer.shutil.which", return_value=None)
+@patch("open_claude_artifacts.installer.shutil.which", return_value=None)
 def test_missing_compatible_node_runtime_has_actionable_guidance(
     _which: MagicMock,
     tmp_path: Path,
@@ -308,12 +307,12 @@ def test_missing_compatible_node_runtime_has_actionable_guidance(
         resolve_skills_runtime(tmp_path)
 
 
-@patch("open_claude_design.installer.resolve_skills_runtime", return_value=_runtime())
+@patch("open_claude_artifacts.installer.resolve_skills_runtime", return_value=_runtime())
 def test_dry_run_does_not_export_or_execute(
     _resolve: MagicMock,
     tmp_path: Path,
 ) -> None:
-    with patch("open_claude_design.installer.subprocess.run") as run:
+    with patch("open_claude_artifacts.installer.subprocess.run") as run:
         result = run_skills_action(
             "install",
             ("*",),
@@ -332,8 +331,8 @@ def test_data_root_prefers_the_installed_wheel_layout(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """An installed wheel resolves skills from open_claude_design/data/skills."""
-    package_dir = tmp_path / "open_claude_design"
+    """An installed wheel resolves skills from open_claude_artifacts/data/skills."""
+    package_dir = tmp_path / "open_claude_artifacts"
     skill = SKILL_NAMES[0]
     source = package_dir / "data" / "skills" / skill
     source.mkdir(parents=True)
@@ -360,38 +359,9 @@ def test_data_root_fails_clearly_when_package_data_is_missing(
         installer_module._data_root()
 
 
-def _native_connector_home(tmp_path: Path) -> Path:
-    home = tmp_path / "home"
-    home.mkdir(parents=True, exist_ok=True)
-    (home / ".claude.json").write_text(
-        json.dumps({"mcpServers": {"claude-design": {"type": "http", "url": CLAUDE_DESIGN_ENDPOINT}}}),
-        encoding="utf-8",
-    )
-    return home
-
-
-@patch("open_claude_design.installer.resolve_skills_runtime", return_value=_runtime())
-@patch("open_claude_design.installer.subprocess.run")
-def test_doctor_reports_a_native_connector_that_bypasses_the_bridge(
-    run: MagicMock,
-    _resolve: MagicMock,
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.delenv(CLAUDE_CONFIG_ENV, raising=False)
-    run.return_value = SimpleNamespace(returncode=0, stdout=_installed_payload(tmp_path), stderr="")
-
-    result = doctor(("codex",), "global", project_root=tmp_path, home=_native_connector_home(tmp_path))
-
-    native = result["native_connectors"]
-    assert native["bypass_detected"] is True
-    assert native["connectors"][0]["server"] == "claude-design"
-    assert "claude mcp remove" in native["remediation"]
-
-
-@patch("open_claude_design.installer.resolve_skills_runtime", return_value=_runtime())
-@patch("open_claude_design.installer.subprocess.run")
-def test_doctor_reports_a_clean_host_without_remediation_noise(
+@patch("open_claude_artifacts.installer.resolve_skills_runtime", return_value=_runtime())
+@patch("open_claude_artifacts.installer.subprocess.run")
+def test_doctor_reports_unchecked_auth_offline(
     run: MagicMock,
     _resolve: MagicMock,
     tmp_path: Path,
@@ -404,12 +374,11 @@ def test_doctor_reports_a_clean_host_without_remediation_noise(
 
     result = doctor(("codex",), "global", project_root=tmp_path, home=clean_home)
 
-    assert result["native_connectors"] == {"bypass_detected": False, "connectors": []}
-    assert result["claude_design_bridge"]["authentication"] == "not checked"
+    assert result["artifacts"]["authentication"] == "not checked"
 
 
-@patch("open_claude_design.installer.resolve_skills_runtime", return_value=_runtime())
-@patch("open_claude_design.installer.subprocess.run")
+@patch("open_claude_artifacts.installer.resolve_skills_runtime", return_value=_runtime())
+@patch("open_claude_artifacts.installer.subprocess.run")
 def test_doctor_distinguishes_a_verified_credential_from_an_unchecked_one(
     run: MagicMock,
     _resolve: MagicMock,
@@ -420,21 +389,21 @@ def test_doctor_distinguishes_a_verified_credential_from_an_unchecked_one(
     run.return_value = SimpleNamespace(returncode=0, stdout=_installed_payload(tmp_path), stderr="")
     monkeypatch.setattr(installer_module, "sys_platform_supported", lambda: True)
     monkeypatch.setattr(
-        bridge_module,
-        "ClaudeDesignClient",
-        lambda: SimpleNamespace(status=lambda: {"authenticated": True, "endpoint": CLAUDE_DESIGN_ENDPOINT}),
+        api_module,
+        "ArtifactClient",
+        lambda: SimpleNamespace(status=lambda: {"authenticated": True, "contract_version": "0.2.98"}),
     )
     clean_home = tmp_path / "clean-home"
     clean_home.mkdir()
 
     result = doctor(("codex",), "global", project_root=tmp_path, home=clean_home, check_auth=True)
 
-    assert result["claude_design_bridge"]["authentication"] == "verified"
-    assert result["claude_design_bridge"]["authenticated"] is True
+    assert result["artifacts"]["authentication"] == "verified"
+    assert result["artifacts"]["authenticated"] is True
 
 
-@patch("open_claude_design.installer.resolve_skills_runtime", return_value=_runtime())
-@patch("open_claude_design.installer.subprocess.run")
+@patch("open_claude_artifacts.installer.resolve_skills_runtime", return_value=_runtime())
+@patch("open_claude_artifacts.installer.subprocess.run")
 def test_doctor_marks_a_failed_credential_check_instead_of_leaving_it_unchecked(
     run: MagicMock,
     _resolve: MagicMock,
@@ -446,41 +415,14 @@ def test_doctor_marks_a_failed_credential_check_instead_of_leaving_it_unchecked(
     monkeypatch.setattr(installer_module, "sys_platform_supported", lambda: True)
 
     def refuse() -> object:
-        raise RuntimeError("Claude Design accepted the credential but refused access (HTTP 403).")
+        raise RuntimeError("Artifact service refused access (HTTP 403).")
 
-    monkeypatch.setattr(bridge_module, "ClaudeDesignClient", refuse)
+    monkeypatch.setattr(api_module, "ArtifactClient", refuse)
     clean_home = tmp_path / "clean-home"
     clean_home.mkdir()
 
     result = doctor(("codex",), "global", project_root=tmp_path, home=clean_home, check_auth=True)
 
-    assert result["claude_design_bridge"]["authentication"] == "failed"
-    assert result["claude_design_bridge"]["authenticated"] is False
-    assert "HTTP 403" in result["claude_design_bridge"]["error"]
-
-
-@patch("open_claude_design.installer.resolve_skills_runtime", return_value=_runtime())
-@patch("open_claude_design.installer.subprocess.run")
-def test_install_surfaces_a_native_connector_only_when_one_is_registered(
-    run: MagicMock,
-    _resolve: MagicMock,
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.delenv(CLAUDE_CONFIG_ENV, raising=False)
-    run.return_value = SimpleNamespace(returncode=0, stdout=_installed_payload(tmp_path), stderr="")
-    clean_home = tmp_path / "clean-home"
-    clean_home.mkdir()
-
-    clean = run_skills_action("install", ("codex",), "global", project_root=tmp_path, home=clean_home)
-    conflicted = run_skills_action(
-        "install",
-        ("codex",),
-        "global",
-        project_root=tmp_path,
-        home=_native_connector_home(tmp_path),
-    )
-
-    assert clean["unchanged"] is True
-    assert "native_connectors" not in clean
-    assert conflicted["native_connectors"]["bypass_detected"] is True
+    assert result["artifacts"]["authentication"] == "failed"
+    assert result["artifacts"]["authenticated"] is False
+    assert "HTTP 403" in result["artifacts"]["error"]

@@ -18,11 +18,12 @@ from urllib.parse import parse_qs, urlsplit
 
 import pytest
 
-from open_claude_design.artifact_api import ArtifactClient, ArtifactConflict, ArtifactOutcomeUnknown, artifact_id
-from open_claude_design.artifact_render import render
-from open_claude_design.artifact_store import ArtifactAssets, ArtifactComments, ArtifactDatabase
-from open_claude_design.bridge import build_parser, run_design_command
-from open_claude_design.errors import ClaudeDesignSafetyError
+from open_claude_artifacts.api import ArtifactClient, ArtifactConflict, ArtifactOutcomeUnknown, artifact_id
+from open_claude_artifacts.cli import build_parser
+from open_claude_artifacts.commands import authoring_context, run_artifact_command
+from open_claude_artifacts.errors import ArtifactSafetyError
+from open_claude_artifacts.render import render
+from open_claude_artifacts.store import ArtifactAssets, ArtifactComments, ArtifactDatabase
 
 TYPES = {
     "t-design": "Design",
@@ -331,8 +332,8 @@ class Frame:
 
 
 def cli(frame: Frame, root: Path, *values: str) -> tuple[int, dict[str, Any]]:
-    args = build_parser().parse_args(["artifacts", *values, "--json"])
-    return run_design_command(args, artifact_client_factory=frame.client, workspace_root=root), {}
+    args = build_parser().parse_args([*values, "--json"])
+    return run_artifact_command(args, client_factory=frame.client, workspace_root=root), {}
 
 
 def run_json(frame: Frame, root: Path, capsys: pytest.CaptureFixture[str], *values: str) -> tuple[int, dict[str, Any]]:
@@ -370,7 +371,7 @@ def test_first_canvas_publish_needs_marker_and_may_list_pending_artboards() -> N
     frame = Frame()
     client = frame.client()
     snapshot = client.snapshot("a")
-    with pytest.raises(ClaudeDesignSafetyError, match="createdOnFiles"):
+    with pytest.raises(ArtifactSafetyError, match="createdOnFiles"):
         client.push(
             snapshot,
             {"project/canvas.json": canvas(["Main.dc.html"], created=False), "project/Main.dc.html": ARTBOARD},
@@ -389,7 +390,7 @@ def test_binary_files_follow_each_kind_and_removals_are_pinned() -> None:
     frame = Frame()
     frame.artifacts["a"]["files"] = {"project/canvas.json": canvas(["Main.dc.html"]), "project/Main.dc.html": ARTBOARD}
     client = frame.client()
-    with pytest.raises(ClaudeDesignSafetyError, match="assets upload"):
+    with pytest.raises(ArtifactSafetyError, match="assets upload"):
         client.push(client.snapshot("a"), {"project/logo.png": b"\x89PNG"}, {"project/logo.png": "0"})
     frame.artifacts["a"]["type"] = "t-system"
     frame.artifacts["a"]["files"] = {"project/old.md": b"old"}
@@ -401,20 +402,20 @@ def test_binary_files_follow_each_kind_and_removals_are_pinned() -> None:
     )
     assert result["removed"] == ["project/old.md"] and result["pending_index"] == "project/design-system.json"
     assert frame.artifacts["a"]["files"]["project/fonts/brand.woff2"] == b"\x00wOF2"
-    with pytest.raises(ClaudeDesignSafetyError, match="generated"):
+    with pytest.raises(ArtifactSafetyError, match="generated"):
         client.push(client.snapshot("a"), {"project/tokens.css": b"x"}, {"project/tokens.css": "0"})
 
 
 def test_store_kinds_and_public_artifacts_refuse_file_writes() -> None:
     frame = Frame(type_id="t-dash")
     client = frame.client()
-    with pytest.raises(ClaudeDesignSafetyError, match="database"):
+    with pytest.raises(ArtifactSafetyError, match="database"):
         client.push(client.snapshot("a"), {"project/x.md": b"x"}, {"project/x.md": "0"})
     frame = Frame(type_id=None)
     frame.artifacts["a"]["files"] = {"index.html": b"<html><head></head></html>"}
     frame.artifacts["a"]["public"] = True
     client = frame.client()
-    with pytest.raises(ClaudeDesignSafetyError, match="public"):
+    with pytest.raises(ArtifactSafetyError, match="public"):
         client.push(client.snapshot("a"), {"notes.md": b"x"}, {"notes.md": "0"})
     assert not frame.deploys
 
@@ -427,9 +428,9 @@ def test_plain_pages_publish_capabilities_without_revoking_stored_ones() -> None
     assert created["verified"] and frame.deploys[0]["contract"] == "0.2.87"
     snapshot = client.snapshot("a")
     assert client.read_file(snapshot, "index.html") == page
-    with pytest.raises(ClaudeDesignSafetyError, match="revoke"):
+    with pytest.raises(ArtifactSafetyError, match="revoke"):
         client.push(snapshot, {"index.html": page}, {"index.html": sha(page)}, capabilities={"assets": {}})
-    with pytest.raises(ClaudeDesignSafetyError, match="does not offer"):
+    with pytest.raises(ArtifactSafetyError, match="does not offer"):
         client.push(snapshot, {"index.html": page}, {"index.html": sha(page)}, capabilities={"db": {}, "warp": {}})
 
 
@@ -437,7 +438,7 @@ def test_slides_need_section_ids_and_the_cover_first() -> None:
     frame = Frame(type_id="t-slides")
     client = frame.client()
     deck = json.dumps({"v": 4, "createdOnFiles": MARKER, "order": ["cover", "plan"]}).encode()
-    with pytest.raises(ClaudeDesignSafetyError, match="section"):
+    with pytest.raises(ArtifactSafetyError, match="section"):
         client.push(
             client.snapshot("a"),
             {"project/deck.json": deck, "project/slides/cover.html": b"<div>no</div>"},
@@ -469,8 +470,8 @@ def test_authoring_context_saves_type_guide_cli_map_and_default_system(
     frame = Frame()
     code, result = run_json(frame, tmp_path, capsys, "authoring-context", "a")
     assert code == 0 and result["kind"] == "design" and result["design_system"]["id"] == "s"
-    assert {"SKILL.md", "format.md", "open-claude-design.md", "design-system/README.md"} <= set(result["paths"])
-    assert "assets upload" in (tmp_path / result["paths"]["open-claude-design.md"]).read_text()
+    assert {"SKILL.md", "format.md", "open-claude-artifacts.md", "design-system/README.md"} <= set(result["paths"])
+    assert "assets upload" in (tmp_path / result["paths"]["open-claude-artifacts.md"]).read_text()
     code, result = run_json(frame, tmp_path, capsys, "contract", "--capability", "db")
     assert code == 0 and set(result["paths"]) == {"runtime-contract.md", "db.d.ts"}
 
@@ -487,10 +488,10 @@ def test_assets_round_trip_and_explain_a_missing_capability(tmp_path: Path) -> N
     assert client.read_blob(snapshot, asset, 1024) == b"\x89PNGdata"
     assert store.copy(snapshot, "s", [asset])["assets"][0]["from_id"] == asset
     assert store.delete(snapshot, asset)["deleted"] is True
-    with pytest.raises(ClaudeDesignSafetyError, match="Assets accept"):
+    with pytest.raises(ArtifactSafetyError, match="Assets accept"):
         store.upload(snapshot, "tool.exe", b"x")
     frame.declared = set()
-    with pytest.raises(ClaudeDesignSafetyError, match="capability"):
+    with pytest.raises(ArtifactSafetyError, match="capability"):
         store.list("a")
 
 
@@ -509,9 +510,9 @@ def test_comments_only_answer_threads_sent_to_claude() -> None:
     threads = store.read("a")["threads"]
     assert threads[0]["comments"][0]["author_is_you"] is True and threads[1]["comments"][0]["author_is_you"] is False
     assert store.reply("a", "t1", "Done.")["comment"] == "c9"
-    with pytest.raises(ClaudeDesignSafetyError, match="not sent to Claude"):
+    with pytest.raises(ArtifactSafetyError, match="not sent to Claude"):
         store.reply("a", "t2", "Done.")
-    with pytest.raises(ClaudeDesignSafetyError):
+    with pytest.raises(ArtifactSafetyError):
         store.resolve("a", "t2")
     assert store.resolve("a", "t1")["resolved"] is True
 
@@ -532,7 +533,7 @@ def test_database_pins_versions_and_resolves_me(tmp_path: Path, capsys: pytest.C
         frame, tmp_path, capsys, "db", "update", "a", "notes", "n1", "--data", '{"n":3}', "--allow-write"
     )
     assert code == 3 and result["state"] == "stale"
-    with pytest.raises(ClaudeDesignSafetyError, match="allow-destructive"):
+    with pytest.raises(ArtifactSafetyError, match="allow-destructive"):
         cli(frame, tmp_path, "db", "delete", "a", "notes", "n1", "--if-version", "2", "--allow-write")
 
 
@@ -540,25 +541,25 @@ def test_sharing_is_explicit_about_public_links(tmp_path: Path, capsys: pytest.C
     frame = Frame()
     code, result = run_json(frame, tmp_path, capsys, "share", "a")
     assert code == 0 and result["read_mode"] == "owner"
-    with pytest.raises(ClaudeDesignSafetyError, match="allow-public"):
+    with pytest.raises(ArtifactSafetyError, match="allow-public"):
         cli(frame, tmp_path, "share", "a", "--mode", "public", "--allow-write")
     assert frame.perm["version"] == "7"
     code, result = run_json(
         frame, tmp_path, capsys, "share", "a", "--mode", "public", "--allow-write", "--allow-public"
     )
     assert code == 0 and result["read_mode"] == "public"
-    with pytest.raises(ClaudeDesignSafetyError, match="not available"):
+    with pytest.raises(ArtifactSafetyError, match="not available"):
         cli(frame, tmp_path, "share", "a", "--mode", "org", "--allow-write")
     frame.perm["readModeFrozen"] = True
-    with pytest.raises(ClaudeDesignSafetyError, match="frozen"):
+    with pytest.raises(ArtifactSafetyError, match="frozen"):
         frame.client().share("a", "private")
 
 
 def test_administration_commands_need_exact_authority(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     frame = Frame()
-    with pytest.raises(ClaudeDesignSafetyError, match="allow-destructive"):
+    with pytest.raises(ArtifactSafetyError, match="allow-destructive"):
         cli(frame, tmp_path, "delete", "a", "--confirm", "a", "--allow-write")
-    with pytest.raises(ClaudeDesignSafetyError, match="confirm"):
+    with pytest.raises(ArtifactSafetyError, match="confirm"):
         cli(frame, tmp_path, "delete", "a", "--confirm", "s", "--allow-write", "--allow-destructive")
     code, result = run_json(
         frame, tmp_path, capsys, "delete", "a", "--confirm", "a", "--allow-write", "--allow-destructive"
@@ -581,7 +582,7 @@ def test_render_serves_a_local_copy_in_an_exact_width_frame_with_a_network_allow
         url = urlsplit(command[-1])
         query = parse_qs(url.query)
         assert url.hostname == "127.0.0.1" and query["src"] == ["project/Main.dc.html"] and query["w"] == ["400"]
-        with urllib.request.urlopen(f"http://127.0.0.1:{url.port}/project/Main.dc.html?__ocd_theme=dark") as page:
+        with urllib.request.urlopen(f"http://127.0.0.1:{url.port}/project/Main.dc.html?__oca_theme=dark") as page:
             assert b'dataset.theme="dark"' in page.read()
         Path(command[-2].removeprefix("--screenshot=")).write_bytes(b"png")
         stderr = '[1:2:ERROR:CONSOLE(3)] "Uncaught boom", source: http://127.0.0.1/x (3)'
@@ -610,3 +611,159 @@ def test_readback_checks_the_exact_published_version_even_after_follow_ups() -> 
     changed = ARTBOARD.replace(b"Hi", b"Hello")
     with pytest.raises(ArtifactOutcomeUnknown):
         client.push(client.snapshot("a"), {"project/Main.dc.html": changed}, {"project/Main.dc.html": sha(ARTBOARD)})
+
+
+def test_an_artboard_with_uploads_and_bound_images_can_be_edited_and_pushed() -> None:
+    board = ARTBOARD.replace(
+        b"<div>Hi</div>",
+        b'<div>Hi</div><img src="/_blob/0123abcdef4567" alt=""><img src="{{thumb}}" alt="">',
+    )
+    frame = Frame()
+    frame.artifacts["a"]["files"] = {"project/canvas.json": canvas(["Main.dc.html"]), "project/Main.dc.html": board}
+    client = frame.client()
+    changed = board.replace(b"Hi", b"Hello")
+    result = client.push(client.snapshot("a"), {"project/Main.dc.html": changed}, {"project/Main.dc.html": sha(board)})
+    assert result["verified"] and result["written"] == ["project/Main.dc.html"]
+
+
+def test_plain_untyped_page_falls_back_to_boot_files_when_files_json_is_404() -> None:
+    # Issue #21: plain untyped pages return HTTP 404 for _files.json and list files in boot["files"].
+    frame = Frame()
+    raw_html = b"<!doctype html><html><body><h1>Plain Page</h1></body></html>"
+    served_html = (
+        b"<!doctype html><html><body>"
+        b"<!-- frame-runtime --><script>1</script><!-- /frame-runtime -->"
+        b"<h1>Plain Page</h1></body></html>"
+    )
+    frame.artifacts["p"] = {
+        "type": None,
+        "version": "p1",
+        "history": ["p1"],
+        "public": False,
+        "caps": {},
+        "files": {"index.html": served_html},
+    }
+    original_open = frame.open
+
+    def open_without_manifest(request: urllib.request.Request, *, timeout: int = 30) -> Any:
+        url = request.full_url
+        if "/_f/" in url and url.split("?")[0].endswith("/_files.json") and "://p." in url:
+            raise urllib.error.HTTPError(url, 404, "Not Found", Message(), io.BytesIO(b"not found"))
+        if url.endswith("/api/frame/p?via=model_read&bk=probe"):
+            resp = original_open(request, timeout=timeout)
+            body = json.loads(resp.body)
+            body["files"] = [{"path": "index.html", "contentType": "text/html"}]
+            return Response(body)
+        return original_open(request, timeout=timeout)
+
+    frame.open = open_without_manifest  # type: ignore[method-assign]
+    client = frame.client()
+    snap = client.snapshot("p")
+    assert snap.type_id is None
+    assert snap.files["index.html"].sha256 == sha(raw_html)
+    assert snap.files["index.html"].size == len(raw_html)
+    assert client.read_file(snap, "index.html") == raw_html
+
+
+def test_migrated_design_404_on_describe_type_inspects_cleanly(tmp_path: Path) -> None:
+    frame = Frame()
+    mig_type = "d72b990a-8f8a-4a2f-bfb6-004a47b7428a"
+    frame.artifacts["m"] = {
+        "type": mig_type,
+        "version": "m1",
+        "history": ["m1"],
+        "public": False,
+        "caps": {},
+        "files": {"SKILL.md": b"# Migrated guide\n", "project/Slides.dc.html": ARTBOARD},
+    }
+    original_open = frame.open
+
+    def open_migrated(request: urllib.request.Request, *, timeout: int = 30) -> Any:
+        url = request.full_url
+        if f"/api/frame/types/{mig_type}" in url:
+            raise urllib.error.HTTPError(url, 404, "Not Found", Message(), io.BytesIO(b"not found"))
+        if url.endswith("/api/frame/m?via=model_read&bk=probe"):
+            resp = original_open(request, timeout=timeout)
+            body = json.loads(resp.body)
+            body["typeTitle"] = "Migrated Design"
+            return Response(body)
+        return original_open(request, timeout=timeout)
+
+    frame.open = open_migrated  # type: ignore[method-assign]
+    client = frame.client()
+    snap = client.snapshot("m")
+    assert client.type_kind(snap.type_id, type_title=snap.type_title) == "migrated-design"
+    ctx = authoring_context(client, "m", tmp_path)
+    assert ctx["kind"] == "migrated-design"
+    assert "SKILL.md" in ctx["paths"]
+
+
+def test_slides_v5_push_and_headless_local_rendering(tmp_path: Path) -> None:
+    frame = Frame()
+    deck_json = json.dumps(
+        {
+            "v": 5,
+            "createdOnFiles": {"v": 1, "at": "2026-11-23T00:00:00Z"},
+            "lists": "css",
+            "format": {"v": 1, "shared": ["project/deck.css"]},
+            "title": "Demo Deck",
+            "order": ["cover", "agenda"],
+            "cover": "cover",
+            "faces": {"geist": {"family": "Geist", "href": "https://fonts.googleapis.com/css2?family=Geist"}},
+            "designSystems": [],
+        }
+    ).encode()
+    svg_blob_id = "a" * 32
+    slide_cover = f'<section id="cover"><h1>Hello</h1><img src="/_blob/{svg_blob_id}"></section>'.encode()
+    slide_agenda = b'<section id="agenda"><h2>Agenda</h2></section>'
+    deck_css = b"section { background: #0a0a0a; color: #ededed; }"
+    frame.artifacts["d"] = {
+        "type": "t-slides",
+        "version": "d1",
+        "history": ["d1"],
+        "public": False,
+        "caps": {},
+        "files": {
+            "project/deck.json": deck_json,
+            "project/deck.css": deck_css,
+            "project/slides/cover.html": slide_cover,
+            "project/slides/agenda.html": slide_agenda,
+        },
+    }
+    frame.assets[svg_blob_id] = {"bytes": b'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"></svg>'}
+    client = frame.client()
+
+    # Schema v5 push succeeds
+    updated = b'<section id="cover"><h1>Updated</h1><img src="/_blob/' + svg_blob_id.encode() + b'"></section>'
+    pushed = client.push(
+        client.snapshot("d"),
+        {"project/slides/cover.html": updated},
+        {"project/slides/cover.html": sha(slide_cover)},
+    )
+    assert pushed["verified"]
+
+    # Headless local Slides rendering serves slide HTML + CSS + SVG MIME type on /_blob/
+    commands: list[list[str]] = []
+
+    def runner(command: list[str], **_kwargs: Any) -> subprocess.CompletedProcess[str]:
+        commands.append(command)
+        url = urlsplit(command[-1])
+        assert url.path == "/__oca_slide"
+        with urllib.request.urlopen(command[-1]) as page:
+            html_out = page.read()
+            assert b"project/deck.css" in html_out
+            assert b"Updated" in html_out
+        with urllib.request.urlopen(f"http://127.0.0.1:{url.port}/_blob/{svg_blob_id}") as asset:
+            assert asset.headers.get("Content-Type") == "image/svg+xml"
+        Path(command[-2].removeprefix("--screenshot=")).write_bytes(b"png")
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    rendered = render(
+        client, client.snapshot("d"), output_dir=tmp_path, slides=["1"], runner=runner, browser="/bin/true"
+    )
+    assert rendered["ok"] is True
+    assert rendered["kind"] == "slides"
+    assert len(rendered["shots"]) == 1
+    assert rendered["shots"][0]["slide"] == 1
+    assert rendered["shots"][0]["slide_id"] == "cover"
+    assert rendered["shots"][0]["width"] == 1920 and rendered["shots"][0]["height"] == 1080

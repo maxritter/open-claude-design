@@ -9,7 +9,7 @@ import secrets
 import uuid
 from typing import Any
 
-from open_claude_design.artifact_api import (
+from open_claude_artifacts.api import (
     ArtifactClient,
     ArtifactConflict,
     ArtifactHTTPError,
@@ -19,7 +19,7 @@ from open_claude_design.artifact_api import (
     artifact_id,
     artifact_url,
 )
-from open_claude_design.config import (
+from open_claude_artifacts.config import (
     ARTIFACT_API_PREFIX,
     ARTIFACT_ASSET_CONTENT_TYPES,
     ARTIFACT_ASSET_LIST_LIMIT,
@@ -36,7 +36,7 @@ from open_claude_design.config import (
     ARTIFACT_MAX_COMMENT_BYTES,
     ARTIFACT_MAX_SVG_ASSET_BYTES,
 )
-from open_claude_design.errors import ClaudeDesignProtocolError, ClaudeDesignSafetyError
+from open_claude_artifacts.errors import ArtifactProtocolError, ArtifactSafetyError
 
 ASSET_ID = re.compile(r"[0-9a-f]{32}")
 THREAD_ID = re.compile(r"[0-9a-z]{1,128}")
@@ -50,21 +50,21 @@ DEFINITE_REFUSALS = frozenset({400, 404, 409, 412, 413, 422, 429})
 
 def _require_writer(snapshot: ArtifactSnapshot) -> None:
     if snapshot.role not in {"owner", "writer"}:
-        raise ClaudeDesignSafetyError("This change needs edit access to the artifact.")
+        raise ArtifactSafetyError("This change needs edit access to the artifact.")
 
 
 def asset_content_type(name: str) -> str:
     suffix = name.rsplit(".", 1)[-1].lower() if "." in name else ""
     mime = ARTIFACT_ASSET_CONTENT_TYPES.get(suffix)
     if mime is None:
-        raise ClaudeDesignSafetyError("Assets accept " + ", ".join(sorted(ARTIFACT_ASSET_CONTENT_TYPES)) + " files.")
+        raise ArtifactSafetyError("Assets accept " + ", ".join(sorted(ARTIFACT_ASSET_CONTENT_TYPES)) + " files.")
     return mime
 
 
 def _asset_row(row: dict[str, Any]) -> dict[str, Any]:
     asset = row.get("opaque_id")
     if not isinstance(asset, str) or ASSET_ID.fullmatch(asset) is None:
-        raise ClaudeDesignProtocolError("Asset store returned an invalid asset id.")
+        raise ArtifactProtocolError("Asset store returned an invalid asset id.")
     return {
         "id": asset,
         "url": f"/_blob/{asset}",
@@ -84,7 +84,7 @@ class ArtifactAssets:
         mime = asset_content_type(name)
         limit = ARTIFACT_MAX_SVG_ASSET_BYTES if mime == "image/svg+xml" else ARTIFACT_MAX_ASSET_BYTES
         if not data or len(data) > limit:
-            raise ClaudeDesignSafetyError(f"Assets must be 1 byte to {limit >> 20} MiB for this file type.")
+            raise ArtifactSafetyError(f"Assets must be 1 byte to {limit >> 20} MiB for this file type.")
         self.client.require_write_window()
         result = self.client.request(
             "POST",
@@ -97,7 +97,7 @@ class ArtifactAssets:
             raise ArtifactOutcomeUnknown("Asset upload returned no evidence; list assets before retrying.")
         try:
             row = _asset_row(result)
-        except ClaudeDesignProtocolError as error:
+        except ArtifactProtocolError as error:
             raise ArtifactOutcomeUnknown("Asset upload reply was unreadable; list assets before retrying.") from error
         digest = hashlib.sha256(data).hexdigest()
         if row["content_type"] != mime or (mime != "image/svg+xml" and row["bytes"] != len(data)):
@@ -128,7 +128,7 @@ class ArtifactAssets:
                 "POST", f"{ARTIFACT_API_PREFIX}blob/{value}/agent-list", payload, mutation=False
             )
             if not isinstance(result, dict) or not isinstance(result.get("assets"), list):
-                raise ClaudeDesignProtocolError("Asset listing is incomplete.")
+                raise ArtifactProtocolError("Asset listing is incomplete.")
             assets.extend(_asset_row(row) for row in result["assets"] if isinstance(row, dict))
             reported = result.get("usage")
             usage = reported if isinstance(reported, dict) else {}
@@ -136,7 +136,7 @@ class ArtifactAssets:
             if not all_pages or cursor is None:
                 break
             if cursor in seen:
-                raise ClaudeDesignProtocolError("Asset listing repeated its cursor.")
+                raise ArtifactProtocolError("Asset listing repeated its cursor.")
             seen.add(cursor)
         return {
             "backend": "artifact",
@@ -215,7 +215,7 @@ class ArtifactComments:
         value = artifact_id(value)
         result = self.client.request("GET", f"{ARTIFACT_API_PREFIX}comments/{value}?names=1")
         if not isinstance(result, dict) or not isinstance(result.get("threads"), list):
-            raise ClaudeDesignProtocolError("Comment threads are unavailable for this artifact.")
+            raise ArtifactProtocolError("Comment threads are unavailable for this artifact.")
         viewer = result.get("viewer")
         listed = result.get("names")
         names: dict[str, Any] = listed if isinstance(listed, dict) else {}
@@ -279,7 +279,7 @@ class ArtifactComments:
             raise ValueError("A reply is 1–4096 bytes of plain text.")
         row = self._thread(value, thread)
         if not row["activated_for_claude"]:
-            raise ClaudeDesignSafetyError(
+            raise ArtifactSafetyError(
                 "That thread was not sent to Claude. Ask someone who can edit the artifact to use Send to Claude "
                 "or mention @claude on it; nothing was posted."
             )
@@ -307,7 +307,7 @@ class ArtifactComments:
         if row["resolved"]:
             return {"backend": "artifact", "id": value, "thread": thread, "resolved": True, "unchanged": True}
         if not row["activated_for_claude"]:
-            raise ClaudeDesignSafetyError(
+            raise ArtifactSafetyError(
                 "Only threads sent to Claude can be resolved from here; leave it open for a person to resolve."
             )
         version = self.client.versions(value).get("live")
@@ -367,7 +367,7 @@ class ArtifactDatabase:
             **({"requireVersion": True} if write and verb != "str_replace" else {}),
         }
         if write and len(json.dumps(payload, ensure_ascii=False).encode()) > ARTIFACT_DB_MAX_BATCH_BYTES:
-            raise ClaudeDesignSafetyError("A database request is limited to 1 MiB.")
+            raise ArtifactSafetyError("A database request is limited to 1 MiB.")
         result = self.client.request(
             "POST",
             f"{ARTIFACT_API_PREFIX}db/agent",
@@ -377,7 +377,7 @@ class ArtifactDatabase:
             allow_status=DEFINITE_REFUSALS,
         )
         if not isinstance(result, dict):
-            raise ClaudeDesignProtocolError("Database answer is not an object.")
+            raise ArtifactProtocolError("Database answer is not an object.")
         status = result.get("__status__")
         if status is not None:
             code = result.get("code") or "refused"
@@ -385,7 +385,7 @@ class ArtifactDatabase:
             if code == "version_mismatch":
                 raise ArtifactConflict(f"Nothing was written: {detail}.")
             if code == "not_declared" or (verb == "whoami" and status in {400, 403}):
-                raise ClaudeDesignSafetyError(
+                raise ArtifactSafetyError(
                     "The artifact does not declare what this needs (db for documents, user for data/users/me)."
                 )
             if code in {"edit_no_match", "edit_ambiguous", "edit_field_missing", "edit_field_not_string"}:
@@ -400,7 +400,7 @@ class ArtifactDatabase:
         if value not in self._me:
             result = self.call(value, "whoami", {})
             if not isinstance(result.get("id"), str) or DOC_ID.fullmatch(result["id"]) is None:
-                raise ClaudeDesignProtocolError("Database identity reply is malformed.")
+                raise ArtifactProtocolError("Database identity reply is malformed.")
             self._me[value] = result["id"]
         return self._me[value]
 
@@ -479,7 +479,7 @@ class ArtifactDatabase:
         result = self.call(value, verb, args, as_level=as_level)
         docs = result.get("docs")
         if not isinstance(docs, list):
-            raise ClaudeDesignProtocolError("Database listing is incomplete.")
+            raise ArtifactProtocolError("Database listing is incomplete.")
         return self._envelope(
             value,
             result,

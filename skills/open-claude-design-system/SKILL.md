@@ -46,4 +46,4 @@ The system is complete when sources and precedence are named, every recorded val
 - Creating a new screen or flow; use `open-claude-ui-design`
 - Auditing a finished UI without extracting reusable structure; use `open-claude-ui-review`
 - Inventing a brand from scratch when there is no source; establish direction through `open-claude-ui-design`
-- Reading or changing a design system stored in Claude Design; use `open-claude-design` for access, then return here for extraction or for the package shape in `references/claude-design-package.md`
+- Reading or changing a design system stored in Claude Design; use `open-claude-artifacts` for access, then return here for extraction or for the package shape in `references/claude-design-package.md`

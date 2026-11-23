@@ -69,19 +69,19 @@ jobs:
         env:
           RELEASE_VERSION: ${{ inputs.version }}
         run: |
-          PACKAGE_VERSION="$(uv run python -c 'from open_claude_design import __version__; print(__version__)')"
+          PACKAGE_VERSION="$(uv run python -c 'from open_claude_artifacts import __version__; print(__version__)')"
           test "$PACKAGE_VERSION" = "$RELEASE_VERSION"
       - name: Smoke-test built installer
         env:
-          OPEN_CLAUDE_DESIGN_SKIP_LOGIN: "1"
-          UV_TOOL_BIN_DIR: ${{ runner.temp }}/open-claude-design-bin
-          UV_TOOL_DIR: ${{ runner.temp }}/open-claude-design-tools
+          OPEN_CLAUDE_ARTIFACTS_SKIP_LOGIN: "1"
+          UV_TOOL_BIN_DIR: ${{ runner.temp }}/open-claude-artifacts-bin
+          UV_TOOL_DIR: ${{ runner.temp }}/open-claude-artifacts-tools
         run: |
           export PATH="$UV_TOOL_BIN_DIR:$PATH"
-          export OPEN_CLAUDE_DESIGN_PACKAGE
-          OPEN_CLAUDE_DESIGN_PACKAGE="$(find dist -maxdepth 1 -name 'open_claude_design-*-py3-none-any.whl' -print -quit)"
+          export OPEN_CLAUDE_ARTIFACTS_PACKAGE
+          OPEN_CLAUDE_ARTIFACTS_PACKAGE="$(find dist -maxdepth 1 -name 'open_claude_artifacts-*-py3-none-any.whl' -print -quit)"
           sh dist/install.sh --agents=claude-code,codex,opencode --scope=global --yes
-          open-claude-design doctor --agents=claude-code,codex,opencode --scope=global --offline --json
+          open-claude-artifacts doctor --agents=claude-code,codex,opencode --scope=global --offline --json
           sh dist/uninstall.sh --yes
       - name: Attest release artifacts
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
@@ -89,8 +89,8 @@ jobs:
           subject-path: |
             dist/install.sh
             dist/uninstall.sh
-            dist/open-claude-design.tar.gz
-            dist/open_claude_design-*.whl
+            dist/open-claude-artifacts.tar.gz
+            dist/open_claude_artifacts-*.whl
             dist/SHA256SUMS
             dist/CHANGELOG.md
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -99,8 +99,8 @@ jobs:
           path: |
             dist/install.sh
             dist/uninstall.sh
-            dist/open-claude-design.tar.gz
-            dist/open_claude_design-*.whl
+            dist/open-claude-artifacts.tar.gz
+            dist/open_claude_artifacts-*.whl
             dist/SHA256SUMS
             dist/CHANGELOG.md
           if-no-files-found: error
@@ -132,10 +132,10 @@ jobs:
             --target "$RELEASE_COMMIT" \
             dist/install.sh \
             dist/uninstall.sh \
-            dist/open-claude-design.tar.gz \
-            dist/open_claude_design-*.whl \
+            dist/open-claude-artifacts.tar.gz \
+            dist/open_claude_artifacts-*.whl \
             dist/SHA256SUMS \
             --draft \
             --notes-file dist/CHANGELOG.md \
-            --title "Open Claude Design v$RELEASE_VERSION"
+            --title "Open Claude Artifacts v$RELEASE_VERSION"
           gh release edit "v$RELEASE_VERSION" --draft=false

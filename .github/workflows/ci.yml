@@ -45,15 +45,15 @@ jobs:
       - run: bash scripts/build-release.sh
       - name: Smoke-test release archive
         env:
-          UV_TOOL_BIN_DIR: ${{ runner.temp }}/open-claude-design-bin
-          UV_TOOL_DIR: ${{ runner.temp }}/open-claude-design-tools
-          OPEN_CLAUDE_DESIGN_SKIP_LOGIN: "1"
+          UV_TOOL_BIN_DIR: ${{ runner.temp }}/open-claude-artifacts-bin
+          UV_TOOL_DIR: ${{ runner.temp }}/open-claude-artifacts-tools
+          OPEN_CLAUDE_ARTIFACTS_SKIP_LOGIN: "1"
         run: |
           export PATH="$UV_TOOL_BIN_DIR:$PATH"
-          export OPEN_CLAUDE_DESIGN_PACKAGE
-          OPEN_CLAUDE_DESIGN_PACKAGE="$(find dist -maxdepth 1 -name 'open_claude_design-*-py3-none-any.whl' -print -quit)"
+          export OPEN_CLAUDE_ARTIFACTS_PACKAGE
+          OPEN_CLAUDE_ARTIFACTS_PACKAGE="$(find dist -maxdepth 1 -name 'open_claude_artifacts-*-py3-none-any.whl' -print -quit)"
           sh install.sh --agents=claude-code,codex,opencode,cursor,kiro-cli,pi --scope=global --yes
-          open-claude-design doctor --agents=claude-code,codex,opencode,cursor,kiro-cli,pi --scope=global --offline --json
+          open-claude-artifacts doctor --agents=claude-code,codex,opencode,cursor,kiro-cli,pi --scope=global --offline --json
           sh uninstall.sh --yes
 
   package:
@@ -71,10 +71,10 @@ jobs:
       - run: bash scripts/build-release.sh
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: open-claude-design-release
+          name: open-claude-artifacts-release
           path: |
             dist/install.sh
             dist/uninstall.sh
-            dist/open-claude-design.tar.gz
-            dist/open_claude_design-*.whl
+            dist/open-claude-artifacts.tar.gz
+            dist/open_claude_artifacts-*.whl
             dist/SHA256SUMS
